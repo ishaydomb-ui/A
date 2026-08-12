@@ -150,6 +150,24 @@ export function seed(): boolean {
 
   const skills = [
     {
+      key: "party-planning",
+      name: "Event planning",
+      autonomy: "auto",
+      description:
+        "A one-off event needs organising - a birthday party, a big dinner, a trip send-off.",
+      body: `1. Create a tracker for the event's to-do items if one does not exist, with fields
+   for the task, who owns it, cost, and whether it is done.
+2. Call set_focus pointing at that tracker, with the "until" date set to the day after
+   the event so it clears itself afterwards.
+3. Work backwards from the date for the standard beats: guest list and invitations,
+   venue or space, food and cake, decorations, activities or entertainment, gift bags,
+   and anything to return or clean up afterwards.
+4. Put dated items in the calendar and cost items in the budget under gifts and events.
+5. Check query_schedule for clashes on the day, and for who is on shift.
+
+Keep the list short and real. A party needs about a dozen items, not forty.`,
+    },
+    {
       key: "budget-intake",
       name: "Budget intake",
       autonomy: "auto",
@@ -311,7 +329,8 @@ export function seed(): boolean {
       trigger_type: "schedule",
       trigger_config: { cron: "45 6 * * *" },
       action_type: "run_skill",
-      action_config: { skill: "daily-brief", deliver: ["dashboard", "email"] },
+      // Delivered in the app, never emailed - this system does not send mail.
+      action_config: { skill: "daily-brief", deliver: ["dashboard"] },
     },
     {
       name: "Coupon sweep",

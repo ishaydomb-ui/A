@@ -6,6 +6,8 @@ import { requestApproval } from "../approvals";
 import { searchProducts } from "../grocery/prices";
 import { buildGroceryList } from "../grocery/list";
 import { rememberFact, recallFacts, expiringFacts } from "../facts";
+import { createDraft, listDrafts } from "../drafts";
+import { setFocus, activeFocus, clearFocus } from "../focus";
 import {
   pendingDeliveries,
   staleDeliveries,
@@ -833,6 +835,115 @@ tool(
   (input) => expiringFacts(input.within_days),
 );
 
+// ------------------------------------------------------------------ drafting
+
+tool(
+  {
+    name: "draft_email",
+    description:
+      "Write an email for Ishay or Liran to send THEMSELVES. This system never sends mail - " +
+      "it produces a draft they open, check and send from their own account. " +
+      "Use for any outward correspondence: an escalation to the municipality, a reply to a " +
+      "school, a query to an insurer. Write it complete and ready to send, in the language " +
+      "of the recipient. Say plainly afterwards that it is a draft and has not been sent.",
+    input_schema: {
+      type: "object",
+      properties: {
+        to: { type: "array", items: { type: "string" } },
+        cc: { type: "array", items: { type: "string" } },
+        subject: { type: "string" },
+        body: { type: "string", description: "The full email, ready to send" },
+        language: { type: "string", enum: ["he", "en"] },
+        case_id: { type: "number", description: "Attach to an open case if relevant" },
+      },
+      required: ["body"],
+    },
+  },
+  (input, ctx) =>
+    createDraft({
+      to: input.to,
+      cc: input.cc,
+      subject: input.subject,
+      body: input.body,
+      language: input.language,
+      caseId: input.case_id,
+      skillKey: ctx.skillKey,
+      actor: ctx.actor,
+    }),
+);
+
+tool(
+  {
+    name: "list_drafts",
+    description: "Drafts waiting for a human to review and send.",
+    input_schema: { type: "object", properties: {} },
+  },
+  () => listDrafts("draft"),
+);
+
+// ------------------------------------------------------------------ focus
+
+tool(
+  {
+    name: "set_focus",
+    description:
+      "Pin something to the top of the dashboard as the current priority - a birthday party " +
+      "next week, a house move, an ongoing medical thing. Use when they say something is the " +
+      "focus right now, or when a big one-off event is approaching. " +
+      "ALWAYS set `until` so it clears itself; a focus with no end stops being a focus.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        note: { type: "string", description: "One line of context" },
+        entity_type: {
+          type: "string",
+          enum: ["tracker", "case", "document", "task", "url"],
+        },
+        entity_ref: {
+          type: "string",
+          description: "Tracker key, case id, or a Drive/sheet URL",
+        },
+        url: { type: "string" },
+        until: { type: "string", description: "YYYY-MM-DD - when it stops being the focus" },
+      },
+      required: ["title"],
+    },
+  },
+  (input, ctx) =>
+    setFocus({
+      title: input.title,
+      note: input.note,
+      entityType: input.entity_type,
+      entityRef: input.entity_ref,
+      url: input.url,
+      until: input.until,
+      actor: ctx.actor,
+    }),
+);
+
+tool(
+  {
+    name: "get_focus",
+    description: "What is currently pinned as the priority.",
+    input_schema: { type: "object", properties: {} },
+  },
+  () => activeFocus(),
+);
+
+tool(
+  {
+    name: "clear_focus",
+    description: "Unpin a focus once it is over.",
+    input_schema: {
+      type: "object",
+      properties: { id: { type: "number" } },
+      required: ["id"],
+    },
+  },
+  (input, ctx) => ({ cleared: clearFocus(input.id, ctx.actor) }),
+);
+
 // ------------------------------------------------------------------ deliveries
 
 tool(
@@ -914,15 +1025,19 @@ tool(
   {
     name: "request_approval",
     description:
-      "Queue an action that needs a human yes/no: sending an email on our behalf, booking " +
+      "Queue an action that needs a human yes/no: filling a shopping basket, booking " +
       "something that costs money, submitting an official form. Describe exactly what will " +
-      "happen. Never take these actions directly.",
+      "happen. Never take these actions directly. " +
+      "NOT for email or messages - those are never sent by this system at all; use draft_email.",
     input_schema: {
       type: "object",
       properties: {
         kind: {
           type: "string",
-          enum: ["send_email", "fill_cart", "book", "pay", "submit_form", "other"],
+          enum: ["fill_cart", "book", "pay", "submit_form", "other"],
+          description:
+            "Never 'send_email' or any sending kind - use draft_email instead. " +
+            "This system has no way to transmit anything.",
         },
         title: { type: "string" },
         summary: { type: "string" },

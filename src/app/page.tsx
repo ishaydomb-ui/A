@@ -6,6 +6,8 @@ import { queryItems, listTrackers } from "@/lib/trackers";
 import { pendingDeliveries, staleDeliveries } from "@/lib/deliveries";
 import { Card, Row, Badge, formatDay, formatTime } from "@/components/ui";
 import { QuickAsk } from "@/components/QuickAsk";
+import { FocusBanner } from "@/components/FocusBanner";
+import { listDrafts } from "@/lib/drafts";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +47,7 @@ export default function TodayPage() {
     `SELECT title, meal FROM meal_plan WHERE plan_date = date('now')`,
   );
 
+  const drafts = listDrafts('draft');
   const parcels = pendingDeliveries();
   const stuck = new Set(staleDeliveries(14).map((d) => d.id));
 
@@ -65,7 +68,25 @@ export default function TodayPage() {
         </span>
       </header>
 
+      <FocusBanner />
+
       <QuickAsk />
+
+      {drafts.length > 0 && (
+        <Card
+          title={`Drafts to send (${drafts.length})`}
+          action={{ href: "/approvals", label: "Open" }}
+        >
+          {drafts.slice(0, 3).map((d) => (
+            <Row
+              key={d.id}
+              left={d.subject ?? "(no subject)"}
+              sub={d.to_addr ?? undefined}
+              right="not sent"
+            />
+          ))}
+        </Card>
+      )}
 
       {approvals.length > 0 && (
         <Card title={`Waiting on you (${approvals.length})`} action={{ href: "/approvals", label: "Review" }}>

@@ -1,10 +1,13 @@
 import { listApprovals } from "@/lib/approvals";
 import { ApprovalList } from "@/components/ApprovalList";
+import { DraftList } from "@/components/DraftList";
+import { listDrafts } from "@/lib/drafts";
 
 export const dynamic = "force-dynamic";
 
 export default function ApprovalsPage() {
   const pending = listApprovals("pending");
+  const drafts = listDrafts("draft");
   const recent = [...listApprovals("done"), ...listApprovals("rejected")].slice(0, 10);
 
   return (
@@ -16,6 +19,27 @@ export default function ApprovalsPage() {
           waits here. Nothing below has happened yet.
         </p>
       </header>
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold tracking-wide text-[--color-muted] uppercase">
+          Drafts to send yourself
+        </h2>
+        <p className="text-sm text-[--color-muted]">
+          This system never sends mail. These are written and ready — open one in your own
+          mail app and press send.
+        </p>
+        <DraftList
+          drafts={drafts.map((d) => ({
+            id: d.id,
+            to_addr: d.to_addr,
+            cc_addr: d.cc_addr,
+            subject: d.subject,
+            body: d.body,
+            composeUrl: d.composeUrl,
+            created_at: d.created_at,
+          }))}
+        />
+      </section>
 
       <ApprovalList
         approvals={pending.map((a) => ({

@@ -1,6 +1,7 @@
 import { all, run, json, logActivity } from "./db";
 import { ask } from "./agent";
 import { sweepExpired } from "./trackers";
+import { sweepFocus } from "./focus";
 
 /**
  * Trigger -> action rules.
@@ -43,6 +44,7 @@ export async function runDueAutomations(): Promise<{
 
   // Housekeeping next so anything downstream sees an accurate picture.
   const swept = sweepExpired();
+  sweepFocus();
   if (swept.archived || swept.flagged) {
     logActivity({
       actor: "automation",

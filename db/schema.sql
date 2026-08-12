@@ -526,3 +526,45 @@ CREATE TABLE IF NOT EXISTS deliveries (
   UNIQUE(vendor, order_ref)
 );
 CREATE INDEX IF NOT EXISTS idx_deliveries_status ON deliveries(status, last_update);
+
+-- ---------------------------------------------------------------- drafts
+-- The system NEVER sends anything outward. It writes a draft; a human opens it
+-- and presses send. There is deliberately no transport, no SMTP config and no
+-- executor path that could transmit - the capability is absent, not merely
+-- disabled, so no prompt injection or future edit can quietly enable it.
+CREATE TABLE IF NOT EXISTS drafts (
+  id          INTEGER PRIMARY KEY,
+  channel     TEXT NOT NULL DEFAULT 'email',   -- email | whatsapp | letter
+  to_addr     TEXT,
+  cc_addr     TEXT,
+  subject     TEXT,
+  body        TEXT NOT NULL,
+  language    TEXT DEFAULT 'he',
+  case_id     INTEGER REFERENCES cases(id),
+  -- 'sent' is only ever set by a human saying they sent it. Nothing here can
+  -- set it by itself.
+  status      TEXT NOT NULL DEFAULT 'draft',   -- draft | sent | discarded
+  skill_key   TEXT,
+  created_by  TEXT NOT NULL DEFAULT 'agent',
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_drafts_status ON drafts(status, created_at DESC);
+
+-- ---------------------------------------------------------------- focus
+-- "This matters most right now." A birthday party next week, a house move, a
+-- medical thing. Pins one item to the top of the dashboard, above everything
+-- routine, and clears itself once the date passes so old focuses don't linger.
+CREATE TABLE IF NOT EXISTS focus (
+  id          INTEGER PRIMARY KEY,
+  title       TEXT NOT NULL,
+  note        TEXT,
+  -- What it points at. Any may be null: a focus can be a bare heading with a link.
+  entity_type TEXT,                 -- tracker | case | document | task | url
+  entity_ref  TEXT,                 -- tracker key, case id, drive url...
+  url         TEXT,
+  until       TEXT,                 -- auto-clears after this date
+  position    INTEGER NOT NULL DEFAULT 0,
+  created_by  TEXT NOT NULL DEFAULT 'agent',
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);

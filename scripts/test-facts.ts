@@ -6,7 +6,11 @@
  * anyone who gets hold of the database file.
  */
 process.env.CREDENTIALS_KEY ||= "0".repeat(64);
-process.env.DATABASE_PATH ||= "/tmp/facts-test.sqlite";
+// Fixed path, assigned unconditionally: this file DELETES the database it points
+// at, so it must never inherit DATABASE_PATH from the environment. Honouring an
+// inherited value would let `DATABASE_PATH=/data/beitenu.sqlite npm test` wipe the
+// real household.
+process.env.DATABASE_PATH = "/tmp/beitenu-test-facts.sqlite";
 
 import fs from "node:fs";
 fs.rmSync(process.env.DATABASE_PATH!, { force: true });

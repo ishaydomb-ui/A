@@ -5,7 +5,8 @@
  * as much weight as the positive ones: an airline booking and a credit-card
  * statement both look like "order" mail and neither is a parcel.
  */
-process.env.DATABASE_PATH ||= "/tmp/deliveries-test.sqlite";
+// Assigned unconditionally - this file deletes the database it points at.
+process.env.DATABASE_PATH = "/tmp/beitenu-test-deliveries.sqlite";
 
 import fs from "node:fs";
 for (const suffix of ["", "-wal", "-shm"]) {

@@ -8,6 +8,31 @@ The AI is the front door. The widgets are just the readable state it maintains.
 
 ---
 
+## Three things it does
+
+Ishay's framing, and it holds up well:
+
+| | | Where it lives |
+|---|---|---|
+| **Do** | Fill a basket, build a trip checklist, file documents, chase a parcel, run a skill | Approvals · Food · Deliveries · Skills |
+| **Plan** | Shared calendar and everything that falls out of it — who does pickup, meal plans, open cases | Today · Food · Cases |
+| **Know** | Any factual question: ID numbers, door codes, where things are kept, renewals, last blood test | Facts · Trackers · Documents |
+
+The navigation is currently organised by feature rather than by these three. It
+would map cleanly onto Do / Plan / Know tabs if that reads better in daily use —
+worth deciding once it's actually being used rather than in advance.
+
+## Two rules that override everything
+
+**It never sends anything.** Not email, not messages, not ever. It writes drafts
+and a human presses send in their own account. This is enforced by absence, not
+policy: there is no transport in the project, no SMTP setting, and the executor
+keeps a refusal list so a crafted "send" request fails even if approved. See
+`scripts/test-no-send.ts`.
+
+**It never checks out or pays.** The supermarket adapter interface has no method
+for it. Runs stop at a filled basket.
+
 ## The idea in one paragraph
 
 Most "AI assistants" answer from memory and get things subtly wrong. This one can't:
@@ -119,6 +144,16 @@ Edit one on the Skills page and behaviour changes on the next message. No deploy
 
 ---
 
+## Focus
+
+Most of the dashboard is standing furniture. Now and then one thing dominates —
+a birthday party next week, a house move. `set_focus` pins it to the top of the
+dashboard, above everything routine, pointing at a tracker, a case, or just a
+link to a spreadsheet in Drive.
+
+Focuses carry an end date and clear themselves. A focus that never ends isn't a
+focus.
+
 ## Trackers
 
 Coupons, watchlist, gift ideas, home maintenance ship seeded. To add a new one, just
@@ -210,7 +245,6 @@ These need accounts or credentials rather than code:
 
 - **Hosting** — anywhere with a persistent volume (Railway, Fly)
 - **STT endpoint** — for voice notes
-- **SMTP** — the executor preserves approved email drafts but doesn't send yet
 - **Store credentials** — then set `BROWSER_WORKER_ENABLED=1`
 - **Live price sync** — `discover()` per chain will likely need adjusting on first real run
 - **Gmail and Drive** — the scopes are anticipated in `oauth.ts`; adding them later

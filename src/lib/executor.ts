@@ -37,12 +37,39 @@ export async function executeApproval(approval: Approval): Promise<ExecutionResu
   }
 }
 
+/**
+ * Kinds this executor must never grow a handler for.
+ *
+ * The household rule is that nothing is transmitted on anyone's behalf: email
+ * leaves only when Ishay or Liran presses send in their own mail client. This
+ * list is a tripwire — if some future change adds a sending path, or a crafted
+ * approval arrives asking for one, it is refused here rather than relying on
+ * the model having been told not to.
+ */
+const NEVER_EXECUTE = new Set([
+  "send_email",
+  "send_message",
+  "send_whatsapp",
+  "send_sms",
+  "reply",
+  "post",
+  "publish",
+]);
+
 async function dispatch(approval: Approval): Promise<ExecutionResult> {
+  if (NEVER_EXECUTE.has(approval.kind)) {
+    return {
+      ok: false,
+      summary:
+        `Refused: this system never sends anything outward. "${approval.kind}" has no ` +
+        `executor by design. The content is saved as a draft — open it, check it, and send ` +
+        `it yourself.`,
+    };
+  }
+
   switch (approval.kind) {
     case "fill_cart":
       return fillCart(approval);
-    case "send_email":
-      return sendEmail(approval);
     default:
       // Everything else is recorded as done-by-hand rather than silently ignored.
       return {
@@ -128,34 +155,5 @@ async function fillCart(approval: Approval): Promise<ExecutionResult> {
       (missed.length ? `, ${missed.length} not found (${missed.slice(0, 5).join(", ")})` : "") +
       `. Estimated ${result.estimatedTotal.toFixed(0)} ILS. Open the cart to review and check out.`,
     detail: result,
-  };
-}
-
-// ------------------------------------------------------------------ email
-
-async function sendEmail(approval: Approval): Promise<ExecutionResult> {
-  const payload = approval.payload as {
-    to?: string[];
-    cc?: string[];
-    subject?: string;
-    body?: string;
-  };
-
-  if (!process.env.SMTP_URL) {
-    return {
-      ok: false,
-      summary:
-        "No SMTP configured, so the email was not sent. The approved draft is stored and can be " +
-        "copied out, or set SMTP_URL to enable sending.",
-      detail: payload,
-    };
-  }
-
-  // Intentionally not implemented with a hard dependency yet - wire your SMTP
-  // library of choice here. The draft is preserved either way.
-  return {
-    ok: false,
-    summary: "SMTP transport not wired up yet; draft preserved for manual sending.",
-    detail: payload,
   };
 }
