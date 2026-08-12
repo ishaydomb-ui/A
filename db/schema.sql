@@ -284,6 +284,10 @@ CREATE TABLE IF NOT EXISTS conversations (
   title       TEXT,
   channel     TEXT NOT NULL DEFAULT 'web',
   person_id   INTEGER REFERENCES people(id),
+  -- 'direct' = one person talking to the assistant.
+  -- 'room'   = the shared "think together" thread both of them post into.
+  kind        TEXT NOT NULL DEFAULT 'direct',
+  room_key    TEXT UNIQUE,
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );

@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { all, run, json } from "../db";
+import { all, one, run, json } from "../db";
 import { buildSystemPrompt } from "./prompt";
 import { toolSpecs, runTool, type ToolContext } from "./tools";
 
@@ -112,19 +112,39 @@ function startConversation(actor: string, channel: string): number {
  * message log. This keeps every request cheap and fast.
  */
 function loadHistory(conversationId: number, limit = 20): Anthropic.MessageParam[] {
-  const rows = all<{ role: string; content: string | null }>(
-    `SELECT role, content FROM messages
-     WHERE conversation_id = ? AND role IN ('user','assistant') AND content IS NOT NULL
-     ORDER BY id DESC LIMIT ?`,
+  const rows = all<{ role: string; content: string | null; speaker: string | null }>(
+    `SELECT m.role, m.content, p.name AS speaker
+     FROM messages m LEFT JOIN people p ON p.id = m.person_id
+     WHERE m.conversation_id = ? AND m.role IN ('user','assistant') AND m.content IS NOT NULL
+     ORDER BY m.id DESC LIMIT ?`,
     [conversationId, limit],
   ).reverse();
 
-  return rows
-    .filter((r) => r.content && r.content.trim())
-    .map((r) => ({
-      role: r.role === "user" ? ("user" as const) : ("assistant" as const),
-      content: r.content!,
-    }));
+  // In the shared room two different people are talking, so their turns are
+  // labelled. Without this the model reads a single voice contradicting itself.
+  const isRoom = Boolean(
+    one<{ kind: string }>(`SELECT kind FROM conversations WHERE id = ?`, [conversationId])
+      ?.kind === "room",
+  );
+
+  const messages: Anthropic.MessageParam[] = [];
+  for (const row of rows) {
+    if (!row.content?.trim()) continue;
+    const role = row.role === "user" ? ("user" as const) : ("assistant" as const);
+    const content =
+      isRoom && role === "user" && row.speaker ? `${row.speaker}: ${row.content}` : row.content;
+
+    // The API rejects two turns in the same role back to back, which happens
+    // constantly in a room when the two of them talk without involving the
+    // assistant. Merge consecutive same-role turns instead.
+    const previous = messages[messages.length - 1];
+    if (previous && previous.role === role && typeof previous.content === "string") {
+      previous.content = `${previous.content}\n${content}`;
+    } else {
+      messages.push({ role, content });
+    }
+  }
+  return messages;
 }
 
 export function listConversations(limit = 20) {

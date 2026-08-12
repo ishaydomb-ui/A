@@ -1,3 +1,5 @@
+import { heWord as he, isHebrew } from "../hebrew";
+
 /**
  * Turning raw calendar entries into answerable facts.
  *
@@ -48,20 +50,6 @@ export interface PersonRef {
   nameHe?: string | null;
   email?: string | null;
   role: string;
-}
-
-/**
- * Hebrew-safe whole-word matcher.
- *
- * JavaScript's \b is defined over ASCII word characters only, so /\bחוג\b/
- * never matches — the boundary assertion fails on both sides because Hebrew
- * letters aren't \w. Match against real delimiters instead, and allow the
- * single-letter prefixes Hebrew glues onto words (ל, ב, ה, מ, ש, ו, כ) so
- * "לחוג" still reads as "חוג".
- */
-const HE_EDGE = `[\\s\\-־,.:;"'()\\[\\]/]`;
-function he(word: string): RegExp {
-  return new RegExp(`(^|${HE_EDGE})[בלמהשוכ]?${word}(${HE_EDGE}|$)`);
 }
 
 /** Ordered: the first matching rule wins, so put specific before general. */
@@ -195,8 +183,8 @@ function peopleMentioned(text: string, people: PersonRef[]): PersonRef[] {
  * boundaries to avoid matching inside longer words.
  */
 function matchesName(text: string, name: string): boolean {
+  if (isHebrew(name)) return he(name).test(text);
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  if (/[֐-׿]/.test(name)) return he(escaped).test(text);
   return new RegExp(`\\b${escaped}\\b`, "i").test(text);
 }
 

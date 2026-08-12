@@ -16,7 +16,7 @@ export const viewport: Viewport = {
 const nav = [
   { href: "/", label: "Today", icon: "🏠" },
   { href: "/chat", label: "Ask", icon: "💬" },
-  { href: "/trackers", label: "Trackers", icon: "🎟️" },
+  { href: "/together", label: "Together", icon: "💭" },
   { href: "/food", label: "Food", icon: "🛒" },
   { href: "/approvals", label: "Approvals", icon: "✅" },
   { href: "/skills", label: "Skills", icon: "📘" },
@@ -24,7 +24,12 @@ const nav = [
 
 // Reachable from the desktop rail; kept off the phone tab bar, which only has
 // room for the screens used mid-errand.
-const secondaryNav = [{ href: "/settings", label: "Settings", icon: "⚙️" }];
+const secondaryNav = [
+  { href: "/trackers", label: "Trackers", icon: "🎟️" },
+  { href: "/cases", label: "Cases", icon: "📂" },
+  { href: "/facts", label: "What we know", icon: "🧠" },
+  { href: "/settings", label: "Settings", icon: "⚙️" },
+];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

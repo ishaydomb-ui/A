@@ -11,7 +11,7 @@
     "db:seed": "tsx scripts/seed.ts",
     "prices:sync": "tsx scripts/sync-prices.ts",
     "calendar:sync": "tsx scripts/sync-calendar.ts",
-    "test": "tsx scripts/test-classify.ts && tsx scripts/test-session.ts && tsx scripts/test-facts.ts && tsx scripts/test-deliveries.ts && tsx scripts/test-no-send.ts && tsx scripts/smoke.ts",
+    "test": "tsx scripts/test-classify.ts && tsx scripts/test-session.ts && tsx scripts/test-facts.ts && tsx scripts/test-deliveries.ts && tsx scripts/test-no-send.ts && tsx scripts/test-room.ts && tsx scripts/smoke.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

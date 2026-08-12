@@ -21,9 +21,33 @@ export function db(): Database.Database {
 
   const schemaPath = path.join(process.cwd(), "db", "schema.sql");
   conn.exec(fs.readFileSync(schemaPath, "utf8"));
+  migrate(conn);
 
   _db = conn;
   return conn;
+}
+
+/**
+ * Columns added to tables that already exist in someone's database.
+ *
+ * `CREATE TABLE IF NOT EXISTS` covers new installs but does nothing for a
+ * database created before a column existed, and SQLite has no
+ * `ADD COLUMN IF NOT EXISTS` — running a bare ALTER on every boot would throw
+ * "duplicate column". So each addition is checked against the live table first.
+ * Adding a column here AND to schema.sql keeps both paths correct.
+ */
+function migrate(conn: Database.Database) {
+  const additions: Array<{ table: string; column: string; definition: string }> = [
+    { table: "conversations", column: "kind", definition: "TEXT NOT NULL DEFAULT 'direct'" },
+    { table: "conversations", column: "room_key", definition: "TEXT" },
+  ];
+
+  for (const { table, column, definition } of additions) {
+    const columns = conn.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    if (!columns.length) continue; // table itself doesn't exist yet
+    if (columns.some((c) => c.name === column)) continue;
+    conn.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
 }
 
 export function all<T = Record<string, unknown>>(sql: string, params: unknown[] = []): T[] {
