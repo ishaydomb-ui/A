@@ -131,6 +131,18 @@ function isDue(row: AutomationRow): boolean {
     );
   }
 
+  if (row.trigger_type === "delivery_stale") {
+    const days = (config.afterDays as number) ?? 14;
+    return (
+      all<{ n: number }>(
+        `SELECT COUNT(*) AS n FROM deliveries
+         WHERE status IN ('ordered','shipped','in_transit','ready_for_pickup')
+           AND julianday('now') - julianday(last_update) >= ?`,
+        [days],
+      )[0]?.n > 0
+    );
+  }
+
   if (row.trigger_type === "tracker_expiring") {
     const days = (config.withinDays as number) ?? 14;
     return (

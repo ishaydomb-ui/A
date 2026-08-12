@@ -6,6 +6,13 @@ import { requestApproval } from "../approvals";
 import { searchProducts } from "../grocery/prices";
 import { buildGroceryList } from "../grocery/list";
 import { rememberFact, recallFacts, expiringFacts } from "../facts";
+import {
+  pendingDeliveries,
+  staleDeliveries,
+  recentlyDelivered,
+  recordDelivery,
+  setStatus as setDeliveryStatus,
+} from "../deliveries";
 
 /**
  * The agent's hands.
@@ -824,6 +831,81 @@ tool(
     },
   },
   (input) => expiringFacts(input.within_days),
+);
+
+// ------------------------------------------------------------------ deliveries
+
+tool(
+  {
+    name: "list_deliveries",
+    description:
+      "What is currently in transit, built from order and shipping emails. Use for " +
+      "'what am I waiting for', 'any packages coming', 'did the thing from iHerb arrive'. " +
+      "stale=true returns orders that have gone quiet and may never have arrived.",
+    input_schema: {
+      type: "object",
+      properties: {
+        stale: { type: "boolean", description: "Only orders with no update for a while" },
+        stale_days: { type: "number" },
+        recently_delivered: { type: "boolean" },
+      },
+    },
+  },
+  (input) => {
+    if (input.stale) return staleDeliveries(input.stale_days ?? 14);
+    if (input.recently_delivered) return recentlyDelivered();
+    return pendingDeliveries();
+  },
+);
+
+tool(
+  {
+    name: "track_delivery",
+    description:
+      "Start tracking an order the email parser missed, or one mentioned in conversation " +
+      "('I ordered a lamp from Ivory, should come next week').",
+    input_schema: {
+      type: "object",
+      properties: {
+        vendor: { type: "string" },
+        order_ref: { type: "string" },
+        description: { type: "string" },
+        expected_at: { type: "string", description: "YYYY-MM-DD" },
+        tracking_url: { type: "string" },
+      },
+      required: ["vendor"],
+    },
+  },
+  (input, ctx) =>
+    recordDelivery({
+      vendor: input.vendor,
+      orderRef: input.order_ref,
+      description: input.description,
+      expectedAt: input.expected_at,
+      trackingUrl: input.tracking_url,
+      actor: ctx.actor,
+    }),
+);
+
+tool(
+  {
+    name: "update_delivery",
+    description:
+      "Change a parcel's state - usually to mark it arrived when someone says so before " +
+      "the vendor email lands.",
+    input_schema: {
+      type: "object",
+      properties: {
+        id: { type: "number" },
+        status: {
+          type: "string",
+          enum: ["ordered", "shipped", "in_transit", "ready_for_pickup", "delivered", "cancelled"],
+        },
+      },
+      required: ["id", "status"],
+    },
+  },
+  (input, ctx) => setDeliveryStatus(input.id, input.status, ctx.actor),
 );
 
 // ------------------------------------------------------------------ approvals

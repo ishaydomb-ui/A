@@ -497,3 +497,32 @@ CREATE TABLE IF NOT EXISTS facts (
 CREATE INDEX IF NOT EXISTS idx_facts_subject ON facts(subject, label);
 CREATE INDEX IF NOT EXISTS idx_facts_expiry ON facts(valid_until);
 CREATE INDEX IF NOT EXISTS idx_facts_occurred ON facts(subject, label, occurred_on);
+
+-- ---------------------------------------------------------------- deliveries
+-- "What's in transit right now" - assembled from order and shipping emails.
+-- Keyed on vendor + order reference so the four emails a single order generates
+-- (confirmed, shipped, out for delivery, delivered) collapse into one row that
+-- moves through its states rather than four separate entries.
+CREATE TABLE IF NOT EXISTS deliveries (
+  id            INTEGER PRIMARY KEY,
+  vendor        TEXT NOT NULL,
+  order_ref     TEXT,
+  description   TEXT,
+  -- ordered | shipped | in_transit | ready_for_pickup | delivered | cancelled
+  status        TEXT NOT NULL DEFAULT 'ordered',
+  carrier       TEXT,
+  tracking_url  TEXT,
+  amount        REAL,
+  currency      TEXT DEFAULT 'ILS',
+  ordered_at    TEXT,
+  expected_at   TEXT,
+  delivered_at  TEXT,
+  last_update   TEXT NOT NULL DEFAULT (datetime('now')),
+  -- gmail message id the latest state came from, so a wrong call is traceable
+  source_ref    TEXT,
+  source        TEXT DEFAULT 'email',
+  person_id     INTEGER REFERENCES people(id),
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(vendor, order_ref)
+);
+CREATE INDEX IF NOT EXISTS idx_deliveries_status ON deliveries(status, last_update);

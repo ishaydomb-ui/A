@@ -273,7 +273,10 @@ export function seed(): boolean {
   6. Renewals due - call expiring_facts with within_days=30. Name what is due and when,
      never the value itself: a brief should say "driving licence due 14/9", not a licence
      number.
-  7. Food expiring within 3 days, and tonight's planned meal.
+  7. Anything ready for collection, and any parcel that has gone quiet -
+     call list_deliveries. Mention a delivery only when it needs action; a parcel
+     quietly in transit is not news.
+  8. Food expiring within 3 days, and tonight's planned meal.
 
   If a section is empty, omit it entirely rather than writing "nothing". Lead with whatever is
   most time-critical, not the list order above.`,
@@ -338,6 +341,19 @@ export function seed(): boolean {
       trigger_config: { cron: "0 9 * * 5" },
       action_type: "run_skill",
       action_config: { skill: "meal-planning" },
+    },
+    {
+      name: "Chase missing parcels",
+      description:
+        "Flag orders that have gone quiet - nobody notices the parcel that simply never came.",
+      trigger_type: "delivery_stale",
+      trigger_config: { afterDays: 14 },
+      action_type: "agent_prompt",
+      action_config: {
+        prompt:
+          "Call list_deliveries with stale=true. For each one, create a task to chase the " +
+          "vendor, unless a task for it already exists.",
+      },
     },
     {
       name: "Renewals watch",

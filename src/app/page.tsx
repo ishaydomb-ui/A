@@ -3,6 +3,7 @@ import { all } from "@/lib/db";
 import { today, upcoming } from "@/lib/schedule";
 import { listApprovals } from "@/lib/approvals";
 import { queryItems, listTrackers } from "@/lib/trackers";
+import { pendingDeliveries, staleDeliveries } from "@/lib/deliveries";
 import { Card, Row, Badge, formatDay, formatTime } from "@/components/ui";
 import { QuickAsk } from "@/components/QuickAsk";
 
@@ -43,6 +44,9 @@ export default function TodayPage() {
   const tonight = all<{ title: string; meal: string }>(
     `SELECT title, meal FROM meal_plan WHERE plan_date = date('now')`,
   );
+
+  const parcels = pendingDeliveries();
+  const stuck = new Set(staleDeliveries(14).map((d) => d.id));
 
   const activity = all<{ summary: string; actor: string; created_at: string }>(
     `SELECT summary, actor, created_at FROM activity ORDER BY id DESC LIMIT 6`,
@@ -133,6 +137,25 @@ export default function TodayPage() {
           <Link href="/food" className="mt-2 inline-block text-xs text-[--color-accent] hover:underline">
             Plan the week →
           </Link>
+        </Card>
+
+        <Card title="On its way" empty={parcels.length === 0}>
+          {parcels.slice(0, 6).map((d) => (
+            <Row
+              key={d.id}
+              left={d.vendor}
+              sub={d.description ?? (d.order_ref ? `#${d.order_ref}` : undefined)}
+              right={
+                d.status === "ready_for_pickup" ? (
+                  <Badge tone="ok">collect</Badge>
+                ) : stuck.has(d.id) ? (
+                  <Badge tone="high">no update</Badge>
+                ) : (
+                  d.status.replace(/_/g, " ")
+                )
+              }
+            />
+          ))}
         </Card>
 
         <Card title="Recent activity" empty={activity.length === 0}>
