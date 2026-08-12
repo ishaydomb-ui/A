@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #0f172a;
+  --color-muted: #64748b;
+  --color-line: #e2e8f0;
+  --color-surface: #ffffff;
+  --color-canvas: #f8fafc;
+  --color-accent: #2563eb;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  @theme {
+    --color-ink: #e2e8f0;
+    --color-muted: #94a3b8;
+    --color-line: #1e293b;
+    --color-surface: #0f172a;
+    --color-canvas: #020617;
+  }
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Hebrew content appears throughout; let the browser resolve direction per string
+   rather than forcing the whole document one way. */
+[dir="auto"],
+.bidi {
+  unicode-bidi: plaintext;
+}

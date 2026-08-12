@@ -1,0 +1,22 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# Local data + secrets — never commit
+.env
+.env.local
+data/
+*.sqlite
+*.sqlite-journal
+*.db
+
+# Browser automation artifacts
+worker/sessions/
+worker/screenshots/
+
+.DS_Store
+*.log
