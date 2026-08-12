@@ -22,6 +22,10 @@ const nav = [
   { href: "/skills", label: "Skills", icon: "📘" },
 ];
 
+// Reachable from the desktop rail; kept off the phone tab bar, which only has
+// room for the screens used mid-errand.
+const secondaryNav = [{ href: "/settings", label: "Settings", icon: "⚙️" }];
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
@@ -31,7 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <aside className="hidden shrink-0 border-e border-[--color-line] p-4 sm:block sm:w-48">
             <div className="mb-6 px-2 text-lg font-semibold">Beitenu</div>
             <nav className="flex flex-col gap-1">
-              {nav.map((item) => (
+              {[...nav, ...secondaryNav].map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}

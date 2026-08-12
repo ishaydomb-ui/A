@@ -28,10 +28,30 @@ npm run db:seed           # people, budget categories, starter skills & trackers
 npm run dev               # http://localhost:3000
 ```
 
-Verify the data layer independently of the model:
+Run the tests — none of them need an API key or a network:
 
 ```bash
-npx tsx scripts/smoke.ts
+npm test                  # event classification + data layer
+npx tsx scripts/test-session.ts
+```
+
+### Turning on sign-in
+
+Until `GOOGLE_CLIENT_ID` is set the app runs **open**, with every action attributed
+to Ishay. That's fine locally and wrong in production. To close it:
+
+1. Google Cloud Console → **APIs & Services → Credentials → Create OAuth client ID →
+   Web application**.
+2. Add `GOOGLE_REDIRECT_URI` to *Authorised redirect URIs*.
+3. Enable the **Google Calendar API** for the project.
+4. Set `AUTH_SECRET` to a random 32+ char string.
+
+Sign-in is an **allowlist**: only emails on an adult row in `people` can get in.
+Everyone else is refused at the callback before a session is issued. One consent
+covers both signing in and reading the calendar.
+
+```bash
+npm run calendar:sync     # first sync, after someone has signed in
 ```
 
 ---
@@ -49,6 +69,11 @@ Voice   ──┘                 │                    │
 | Piece | File | What it does |
 |---|---|---|
 | Schema | `db/schema.sql` | The whole data model, commented |
+| Session primitives | `src/lib/session.ts` | Edge-safe cookie signing — no DB import, so middleware can use it |
+| Auth | `src/lib/auth.ts` | Allowlist and current-person lookup |
+| Google OAuth | `src/lib/google/oauth.ts` | Consent, token refresh, encrypted storage |
+| Calendar sync | `src/lib/google/calendar.ts` | Incremental sync with syncToken |
+| Event classification | `src/lib/google/classify.ts` | Turns titles into answerable facts |
 | Agent loop | `src/lib/agent/index.ts` | One loop for every channel |
 | Tools | `src/lib/agent/tools.ts` | Everything the agent can read or do |
 | System prompt | `src/lib/agent/prompt.ts` | Assembled live from the DB, not hardcoded |
@@ -156,13 +181,32 @@ before you say yes.
 
 ---
 
+## Event classification
+
+A Google event is just a title and a time. *"Which days am I picking up the kids"*
+is only answerable because something decided, once at sync time, that
+`לאסוף את ינאי וברי` is a **pickup** owned by whoever created it. Every synced event
+gets a `kind`, a `subject` (which child) and an `owner` (which parent).
+
+Rules are explicit rather than model-inferred: classification runs over every event
+on every sync, it must be deterministic, and a wrong label silently corrupts every
+answer built on top of it. `scripts/test-classify.ts` covers 21 real titles from the
+household calendar.
+
+One trap worth knowing: JavaScript's `\b` is ASCII-only, so `/\bחוג\b/` never matches
+a Hebrew word. The `he()` helper matches on real delimiters and allows the
+single-letter prefixes Hebrew glues onto words.
+
+---
+
 ## Still to wire up
 
 These need accounts or credentials rather than code:
 
-- **Google OAuth** — Calendar/Gmail/Drive sync for a deployed app both of you sign into
 - **Hosting** — anywhere with a persistent volume (Railway, Fly)
 - **STT endpoint** — for voice notes
 - **SMTP** — the executor preserves approved email drafts but doesn't send yet
 - **Store credentials** — then set `BROWSER_WORKER_ENABLED=1`
 - **Live price sync** — `discover()` per chain will likely need adjusting on first real run
+- **Gmail and Drive** — the scopes are anticipated in `oauth.ts`; adding them later
+  forces a re-consent

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { handleIntake } from "@/lib/intake";
+import { actorKey } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
         mimeType: file.type || "audio/webm",
       },
       channel: "voice",
-      from: (form.get("actor") as string) ?? "ishay",
+      from: await actorKey(),
     });
     return NextResponse.json(reply);
   } catch (err) {

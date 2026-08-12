@@ -28,7 +28,20 @@ export async function runDueAutomations(): Promise<{
   const ran: Array<{ name: string; result: string }> = [];
   let skipped = 0;
 
-  // Housekeeping first so anything downstream sees an accurate picture.
+  // Pull calendars first: every downstream rule reasons about the schedule,
+  // so stale events would make the whole tick answer yesterday's questions.
+  try {
+    const { syncAll } = await import("./google/calendar");
+    await syncAll();
+  } catch (err) {
+    logActivity({
+      actor: "automation",
+      action: "calendar_sync_failed",
+      summary: `Calendar sync failed: ${(err as Error).message}`,
+    });
+  }
+
+  // Housekeeping next so anything downstream sees an accurate picture.
   const swept = sweepExpired();
   if (swept.archived || swept.flagged) {
     logActivity({

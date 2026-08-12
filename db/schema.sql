@@ -435,3 +435,35 @@ CREATE TABLE IF NOT EXISTS notes (
   pinned     INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- ---------------------------------------------------------------- auth & sync
+-- Added when Google sign-in landed. Applied idempotently like everything above.
+
+-- OAuth tokens per person, per provider. Refresh tokens are long-lived
+-- credentials, so they are encrypted with the same key as store logins and are
+-- never placed in a model prompt.
+CREATE TABLE IF NOT EXISTS oauth_tokens (
+  id                INTEGER PRIMARY KEY,
+  person_id         INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+  provider          TEXT NOT NULL DEFAULT 'google',
+  access_token_enc  TEXT,
+  refresh_token_enc TEXT,
+  expires_at        TEXT,
+  scope             TEXT,
+  updated_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(person_id, provider)
+);
+
+-- Per-calendar incremental sync state, so routine syncs cost one small request
+-- instead of re-reading the year.
+CREATE TABLE IF NOT EXISTS calendar_sync (
+  id           INTEGER PRIMARY KEY,
+  person_id    INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+  calendar_id  TEXT NOT NULL,
+  summary      TEXT,
+  sync_token   TEXT,
+  enabled      INTEGER NOT NULL DEFAULT 1,
+  last_synced  TEXT,
+  last_result  TEXT,
+  UNIQUE(person_id, calendar_id)
+);
