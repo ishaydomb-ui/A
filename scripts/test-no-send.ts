@@ -1,9 +1,10 @@
 /**
- * The system must never send anything. Run with:  npx tsx scripts/test-no-send.ts
+ * Sending boundaries. Run with:  npx tsx scripts/test-no-send.ts
  *
- * This is a rule, not a preference, so it is tested at the level that matters:
- * the capability should be ABSENT, not merely switched off. These checks would
- * fail if someone later added a sending path, however well-intentioned.
+ * Ishay approved mail to themselves - digests, and anything he asks for. So the
+ * rule is not "never send", it is "never send to anyone but us", and that line
+ * has to hold in code rather than in a prompt. The checks that matter are the
+ * ones where something tries to get a message to an outsider anyway.
  */
 // Assigned unconditionally - this file deletes the database it points at.
 process.env.DATABASE_PATH = "/tmp/beitenu-test-nosend.sqlite";
@@ -14,13 +15,20 @@ for (const suffix of ["", "-wal", "-shm"]) {
   fs.rmSync(`${process.env.DATABASE_PATH}${suffix}`, { force: true });
 }
 
-import { db, all } from "../src/lib/db";
+import { db, all, run } from "../src/lib/db";
 import { createDraft, listDrafts, markDraft, composeUrl } from "../src/lib/drafts";
 import { requestApproval, getApproval, decide } from "../src/lib/approvals";
 import { executeApproval } from "../src/lib/executor";
 import { setFocus, activeFocus, clearFocus, sweepFocus } from "../src/lib/focus";
+import { assertHouseholdOnly, householdAddresses, NotHouseholdError } from "../src/lib/mail";
 
 db();
+// The allowlist is derived from these rows. Without emails here the refusal
+// checks below would pass for the wrong reason - everything is refused when
+// nobody is allowed.
+run(`INSERT OR IGNORE INTO people (key, name, role, email) VALUES ('ishay','Ishay','adult','ishaydomb@gmail.com')`);
+run(`INSERT OR IGNORE INTO people (key, name, role, email) VALUES ('liran','Liran','adult','lirikor@gmail.com')`);
+run(`INSERT OR IGNORE INTO people (key, name, role, email) VALUES ('yanai','Yanai','child',NULL)`);
 
 let failures = 0;
 function check(label: string, ok: boolean, detail?: unknown) {
@@ -48,24 +56,87 @@ async function main() {
 
   const sources = srcFiles.map((f) => ({ file: f, text: fs.readFileSync(f, "utf8") }));
 
-  // A mail transport library would be the obvious way this rule gets broken.
-  const transports = sources.filter((s) =>
-    /require\(['"]nodemailer|from ['"]nodemailer|createTransport|smtp:\/\//i.test(s.text),
+  // There must be exactly ONE place that can transmit, so there is exactly one
+  // place the allowlist has to hold.
+  const senders = sources.filter((s) =>
+    /messages\/send|createTransport|from ['"]nodemailer/i.test(s.text) &&
+    !s.file.endsWith("mail.ts"),
   );
-  check("no mail transport library is used", transports.length === 0, transports.map((t) => t.file));
+  check("only lib/mail.ts can transmit", senders.length === 0, senders.map((s) => s.file));
 
   const smtpRefs = sources.filter((s) => /process\.env\.SMTP/i.test(s.text));
-  check("no SMTP configuration is read anywhere", smtpRefs.length === 0, smtpRefs.map((s) => s.file));
+  check("no SMTP credentials anywhere", smtpRefs.length === 0, smtpRefs.map((s) => s.file));
 
-  // The Gmail send endpoint, as opposed to drafts.create which does not send.
-  const gmailSend = sources.filter((s) => /gmail\.googleapis\.com.*\/messages\/send|messages\.send/i.test(s.text));
-  check("no Gmail send endpoint is called", gmailSend.length === 0, gmailSend.map((s) => s.file));
+  const mail = fs.readFileSync("src/lib/mail.ts", "utf8");
+  check("the allowlist runs before composing", mail.indexOf("assertHouseholdOnly") < mail.indexOf("gmail.googleapis.com"));
+  check(
+    "there is no override option in the send signature",
+    !/\b(force|bypass|skipAllowlist|allowExternal)\s*[:?=]/i.test(mail),
+  );
 
   const executor = fs.readFileSync("src/lib/executor.ts", "utf8");
-  check("the executor has no sendEmail function", !/function sendEmail/.test(executor));
-  check("the executor keeps an explicit refusal list", /NEVER_EXECUTE/.test(executor));
+  check("the executor keeps an outward-send refusal list", /NEVER_EXECUTE/.test(executor));
 
-  console.log("\n— A crafted 'send' approval is refused —");
+  console.log("\n— Mail to ourselves is allowed —");
+
+  const us = householdAddresses();
+  check("the household allowlist is the two of them", us.length === 2, us);
+  let ok = true;
+  try {
+    assertHouseholdOnly(["ishaydomb@gmail.com", "lirikor@gmail.com"]);
+  } catch {
+    ok = false;
+  }
+  check("both of them pass", ok);
+
+  let named = true;
+  try {
+    assertHouseholdOnly(["Liran <lirikor@gmail.com>"]);
+  } catch {
+    named = false;
+  }
+  check("a display-name address still resolves", named);
+
+  console.log("\n— Mail to anyone else is refused —");
+
+  const outsiders: Array<[string[], string]> = [
+    [["r.shapira@education.gov.il"], "the ministry"],
+    [["someone@evil.com"], "a stranger"],
+    [["ishaydomb@gmail.com", "someone@evil.com"], "an outsider smuggled alongside us"],
+    [["ishaydomb@gmail.com.evil.com"], "a lookalike domain"],
+    [["Ishay <attacker@evil.com>"], "our name over their address"],
+  ];
+  for (const [recipients, what] of outsiders) {
+    let refused = false;
+    try {
+      assertHouseholdOnly(recipients);
+    } catch (err) {
+      refused = err instanceof NotHouseholdError;
+    }
+    check(`refuses ${what}`, refused, recipients);
+  }
+
+  console.log("\n— Header injection cannot smuggle a recipient —");
+
+  // A newline in a subject line lets an attacker append arbitrary headers.
+  // "Bcc: evil@example.com" would reach an outsider while every *recipient*
+  // still passed the allowlist, so sanitising headers is part of the boundary.
+  const mailSrc = fs.readFileSync("src/lib/mail.ts", "utf8");
+  check("headers are sanitised", /sanitizeHeader/.test(mailSrc));
+  check(
+    "the subject is passed through the sanitiser",
+    /sanitizeHeader\(input\.subject\)/.test(mailSrc),
+  );
+  check(
+    "recipients are sanitised too",
+    /recipients\.map\(sanitizeHeader\)/.test(mailSrc),
+  );
+  check(
+    "CR and LF are what gets stripped",
+    /replace\(\/\[\\r\\n\]\+\/g/.test(mailSrc),
+  );
+
+  console.log("\n— A crafted outward 'send' approval is still refused —");
 
   // Simulates the dangerous case: something manages to queue a send request.
   const sneaky = requestApproval({
@@ -77,7 +148,11 @@ async function main() {
   decide(sneaky.approvalId, "approved", "ishay");
   const result = await executeApproval(getApproval(sneaky.approvalId)!);
   check("approving it still does not send", result.ok === false, result);
-  check("and the refusal says why", /never sends/i.test(result.summary), result.summary);
+  check(
+    "and the refusal says why",
+    /outside the household/i.test(result.summary),
+    result.summary,
+  );
 
   for (const kind of ["send_message", "send_whatsapp", "post", "publish"]) {
     const req = requestApproval({ kind, title: `try ${kind}`, payload: {}, risk: "high" });

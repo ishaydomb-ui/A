@@ -15,8 +15,11 @@ export const SCOPES = [
   "email",
   "profile",
   "https://www.googleapis.com/auth/calendar.readonly",
-  // Gmail and Drive scopes go here when those syncs land; adding them later
-  // forces a re-consent, so it is worth deciding the full set up front.
+  // Sending is restricted in code to household addresses only (see lib/mail.ts).
+  // This scope cannot email anyone else, because the allowlist runs first.
+  "https://www.googleapis.com/auth/gmail.send",
+  // Drive and gmail.readonly go here when those syncs land; adding a scope
+  // later forces a re-consent, so it is worth deciding the full set up front.
 ];
 
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";

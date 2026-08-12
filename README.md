@@ -24,11 +24,14 @@ worth deciding once it's actually being used rather than in advance.
 
 ## Two rules that override everything
 
-**It never sends anything.** Not email, not messages, not ever. It writes drafts
-and a human presses send in their own account. This is enforced by absence, not
-policy: there is no transport in the project, no SMTP setting, and the executor
-keeps a refusal list so a crafted "send" request fails even if approved. See
-`scripts/test-no-send.ts`.
+**It only ever emails us.** Digests and anything Ishay asks for go to Ishay and
+Liran — approved, no confirmation needed. Mail to *anyone else* is impossible:
+recipients are checked against the household in code before a message is
+composed, there is no override parameter, and the one function that can
+transmit lives in `src/lib/mail.ts`. Correspondence with the outside world —
+the municipality, a school, an insurer — stops at a draft with a `mailto:` link
+that a human sends themselves. Headers are sanitised so a newline in a subject
+can't smuggle a `Bcc` past the allowlist. See `scripts/test-no-send.ts`.
 
 **It never checks out or pays.** The supermarket adapter interface has no method
 for it. Runs stop at a filled basket.

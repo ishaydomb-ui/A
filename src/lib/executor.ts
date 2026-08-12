@@ -40,14 +40,14 @@ export async function executeApproval(approval: Approval): Promise<ExecutionResu
 /**
  * Kinds this executor must never grow a handler for.
  *
- * The household rule is that nothing is transmitted on anyone's behalf: email
- * leaves only when Ishay or Liran presses send in their own mail client. This
- * list is a tripwire — if some future change adds a sending path, or a crafted
- * approval arrives asking for one, it is refused here rather than relying on
- * the model having been told not to.
+ * Mail to Ishay and Liran themselves is allowed (see lib/mail.ts, which
+ * enforces the household allowlist). Everything aimed at anyone else is not,
+ * and never gets an executor: correspondence with the outside world stops at a
+ * draft that a human sends. This list is a tripwire, so a crafted approval is
+ * refused here rather than relying on the model having been told not to.
  */
 const NEVER_EXECUTE = new Set([
-  "send_email",
+  "send_email", // outward mail — use email_us for ourselves, draft_email for others
   "send_message",
   "send_whatsapp",
   "send_sms",
@@ -61,9 +61,9 @@ async function dispatch(approval: Approval): Promise<ExecutionResult> {
     return {
       ok: false,
       summary:
-        `Refused: this system never sends anything outward. "${approval.kind}" has no ` +
-        `executor by design. The content is saved as a draft — open it, check it, and send ` +
-        `it yourself.`,
+        `Refused: this system does not send to anyone outside the household. ` +
+        `"${approval.kind}" has no executor by design. Mail to Ishay or Liran goes through ` +
+        `email_us; anything for someone else is saved as a draft to send yourself.`,
     };
   }
 

@@ -329,8 +329,7 @@ Keep the list short and real. A party needs about a dozen items, not forty.`,
       trigger_type: "schedule",
       trigger_config: { cron: "45 6 * * *" },
       action_type: "run_skill",
-      // Delivered in the app, never emailed - this system does not send mail.
-      action_config: { skill: "daily-brief", deliver: ["dashboard"] },
+      action_config: { skill: "daily-brief", deliver: ["dashboard", "email"] },
     },
     {
       name: "Coupon sweep",

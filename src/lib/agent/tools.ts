@@ -7,6 +7,7 @@ import { searchProducts } from "../grocery/prices";
 import { buildGroceryList } from "../grocery/list";
 import { rememberFact, recallFacts, expiringFacts } from "../facts";
 import { createDraft, listDrafts } from "../drafts";
+import { sendToHousehold } from "../mail";
 import { setFocus, activeFocus, clearFocus } from "../focus";
 import {
   pendingDeliveries,
@@ -879,6 +880,37 @@ tool(
     input_schema: { type: "object", properties: {} },
   },
   () => listDrafts("draft"),
+);
+
+tool(
+  {
+    name: "email_us",
+    description:
+      "Email Ishay and/or Liran. Approved for digests and for anything they ask you to send " +
+      "them - a shopping list, a summary, a checklist. Recipients are restricted to the two " +
+      "of them in code; there is no way to email anyone else with this. " +
+      "For correspondence with ANYONE outside the household, use draft_email instead.",
+    input_schema: {
+      type: "object",
+      properties: {
+        to: {
+          type: "array",
+          items: { type: "string" },
+          description: "Household addresses. Omit to send to both of them.",
+        },
+        subject: { type: "string" },
+        body: { type: "string", description: "Plain text" },
+      },
+      required: ["subject", "body"],
+    },
+  },
+  (input, ctx) =>
+    sendToHousehold({
+      to: input.to,
+      subject: input.subject,
+      body: input.body,
+      actor: ctx.actor,
+    }),
 );
 
 // ------------------------------------------------------------------ focus
