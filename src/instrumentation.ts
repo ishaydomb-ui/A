@@ -7,7 +7,11 @@
  * laptop to run this.
  */
 export async function register() {
-  // Next also invokes this for the edge runtime, which has no filesystem.
+  // Next compiles this file for BOTH runtimes when middleware exists, and the
+  // edge one has no filesystem. This guard makes the node-only work unreachable
+  // there. The build still prints "a Node.js module is loaded" warnings for the
+  // traced imports below — expected, and the build exits 0. Don't remove the
+  // guard to silence them; it is the thing keeping the edge bundle inert.
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
   const { db, logActivity } = await import("./lib/db");

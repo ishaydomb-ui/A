@@ -270,7 +270,10 @@ export function seed(): boolean {
   3. Pending approvals waiting on a human.
   4. Cases that have gone quiet past their chase_after date.
   5. Coupons expiring within 14 days - call query_tracker with expiring_within_days=14.
-  6. Food expiring within 3 days, and tonight's planned meal.
+  6. Renewals due - call expiring_facts with within_days=30. Name what is due and when,
+     never the value itself: a brief should say "driving licence due 14/9", not a licence
+     number.
+  7. Food expiring within 3 days, and tonight's planned meal.
 
   If a section is empty, omit it entirely rather than writing "nothing". Lead with whatever is
   most time-critical, not the list order above.`,
@@ -335,6 +338,20 @@ export function seed(): boolean {
       trigger_config: { cron: "0 9 * * 5" },
       action_type: "run_skill",
       action_config: { skill: "meal-planning" },
+    },
+    {
+      name: "Renewals watch",
+      description:
+        "Raise a task when a licence, passport, policy or warranty is coming up for renewal.",
+      trigger_type: "fact_expiring",
+      trigger_config: { withinDays: 30 },
+      action_type: "agent_prompt",
+      action_config: {
+        prompt:
+          "Call expiring_facts for the next 30 days. For anything due that has no open task " +
+          "already, create one with the renewal date as the due date. Never put the stored " +
+          "value in the task title.",
+      },
     },
     {
       name: "Food expiry watch",

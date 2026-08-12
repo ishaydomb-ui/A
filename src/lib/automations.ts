@@ -118,6 +118,19 @@ function isDue(row: AutomationRow): boolean {
     );
   }
 
+  if (row.trigger_type === "fact_expiring") {
+    const days = (config.withinDays as number) ?? 30;
+    return (
+      all<{ n: number }>(
+        `SELECT COUNT(*) AS n FROM facts
+         WHERE valid_until IS NOT NULL
+           AND date(valid_until) >= date('now')
+           AND date(valid_until) <= date('now', '+' || ? || ' days')`,
+        [days],
+      )[0]?.n > 0
+    );
+  }
+
   if (row.trigger_type === "tracker_expiring") {
     const days = (config.withinDays as number) ?? 14;
     return (

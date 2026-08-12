@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { all } from "@/lib/db";
 import { currentPerson } from "@/lib/auth";
 import { isConfigured } from "@/lib/google/oauth";
@@ -96,6 +97,20 @@ export default async function SettingsPage() {
           &ldquo;which days am I picking up the kids&rdquo; an exact query rather than a guess. If
           something is labelled wrongly, tell the assistant and it can correct the event.
         </p>
+      </Card>
+
+      <Card title="What we know">
+        <p className="text-sm text-[--color-muted]">
+          ID numbers, door codes, where things are kept, renewal dates, and when things last
+          happened. Normally you just tell the assistant and it remembers — this page is for
+          reviewing or correcting what it has.
+        </p>
+        <Link
+          href="/facts"
+          className="mt-2 inline-block text-sm text-[--color-accent] hover:underline"
+        >
+          Open →
+        </Link>
       </Card>
 
       {me && (

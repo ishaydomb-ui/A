@@ -5,6 +5,7 @@ import * as schedule from "../schedule";
 import { requestApproval } from "../approvals";
 import { searchProducts } from "../grocery/prices";
 import { buildGroceryList } from "../grocery/list";
+import { rememberFact, recallFacts, expiringFacts } from "../facts";
 
 /**
  * The agent's hands.
@@ -720,6 +721,109 @@ tool(
        WHERE n.body LIKE ? OR n.topic LIKE ? ORDER BY n.pinned DESC, n.created_at DESC LIMIT 30`,
       [`%${input.query}%`, `%${input.query}%`],
     ),
+);
+
+// ------------------------------------------------------------------ household facts
+
+tool(
+  {
+    name: "remember_fact",
+    description:
+      "Store a durable household fact: an ID number, a door code, where something is kept, " +
+      "a renewal date, or that something happened on a date. Do this WITHOUT being asked " +
+      "whenever one is mentioned in passing - 'Yanai's ID is 123456789', 'the drill is on " +
+      "the top shelf in the garage', 'licence expires in March'. " +
+      "Set occurred_on for things that happened ('blood test today') so 'when was the last " +
+      "time' works. Set valid_until for anything that expires, and a reminder follows. " +
+      "ID numbers, codes and passwords are encrypted automatically.",
+    input_schema: {
+      type: "object",
+      properties: {
+        subject: {
+          type: "string",
+          description: "Who or what it concerns: 'yanai', 'mum', 'garage', 'car', 'flat'",
+        },
+        label: { type: "string", description: "e.g. 'ID number', 'building code', 'location'" },
+        value: { type: "string" },
+        category: {
+          type: "string",
+          enum: [
+            "identity",
+            "access",
+            "location",
+            "medical",
+            "vehicle",
+            "admin",
+            "contact",
+            "other",
+          ],
+        },
+        sensitive: {
+          type: "boolean",
+          description: "Encrypt at rest. Defaults true for identity and access.",
+        },
+        occurred_on: { type: "string", description: "YYYY-MM-DD, for a dated occurrence" },
+        valid_until: { type: "string", description: "YYYY-MM-DD, for anything that expires" },
+      },
+      required: ["subject", "label", "value"],
+    },
+  },
+  (input, ctx) =>
+    rememberFact({
+      subject: input.subject,
+      label: input.label,
+      value: input.value,
+      category: input.category,
+      sensitive: input.sensitive,
+      occurredOn: input.occurred_on,
+      validUntil: input.valid_until,
+      source: ctx.channel,
+      actor: ctx.actor,
+    }),
+);
+
+tool(
+  {
+    name: "recall_facts",
+    description:
+      "Look up household facts. Use for 'what is Yanai's ID', 'what's mum's building code', " +
+      "'where did we put the drill', 'when do I renew my licence', 'when was the last blood " +
+      "test'. Set latest_only=true for 'when was the last time' questions. " +
+      "ALWAYS call this before saying you don't know something factual about the household.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Free text matched against subject and label" },
+        subject: { type: "string" },
+        category: { type: "string" },
+        latest_only: {
+          type: "boolean",
+          description: "Only the most recent occurrence per subject+label",
+        },
+      },
+    },
+  },
+  (input) =>
+    recallFacts({
+      query: input.query,
+      subject: input.subject,
+      category: input.category,
+      latestOnly: input.latest_only,
+    }),
+);
+
+tool(
+  {
+    name: "expiring_facts",
+    description:
+      "Renewals and expiries coming up - licences, passports, policies, warranties. " +
+      "Values are withheld here; this answers what is due, not what the secret is.",
+    input_schema: {
+      type: "object",
+      properties: { within_days: { type: "number" } },
+    },
+  },
+  (input) => expiringFacts(input.within_days),
 );
 
 // ------------------------------------------------------------------ approvals

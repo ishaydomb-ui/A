@@ -467,3 +467,33 @@ CREATE TABLE IF NOT EXISTS calendar_sync (
   last_result  TEXT,
   UNIQUE(person_id, calendar_id)
 );
+
+-- ---------------------------------------------------------------- household facts
+-- The "what's Yanai's ID number / where did we put the drill / when is the
+-- licence due" store. One table covers three shapes of question:
+--   * a standing fact      -> value only          ("mum's building code")
+--   * a dated occurrence   -> occurred_on set     ("last blood test")
+--   * an expiring fact     -> valid_until set     ("driving licence")
+-- Keeping them together means one capture path and one lookup path, instead of
+-- three half-used features.
+CREATE TABLE IF NOT EXISTS facts (
+  id            INTEGER PRIMARY KEY,
+  -- what/who this is about: 'yanai', 'mum', 'garage', 'car', 'flat'
+  subject       TEXT NOT NULL,
+  label         TEXT NOT NULL,          -- 'ID number', 'building code', 'location'
+  -- Plaintext, or AES-256-GCM ciphertext when sensitive = 1.
+  value         TEXT NOT NULL,
+  sensitive     INTEGER NOT NULL DEFAULT 0,
+  category      TEXT,                   -- identity | access | location | medical
+                                        -- | vehicle | admin | contact | other
+  occurred_on   TEXT,                   -- set => a dated occurrence
+  valid_until   TEXT,                   -- set => expires and should remind
+  remind_days_before INTEGER NOT NULL DEFAULT 30,
+  person_id     INTEGER REFERENCES people(id),
+  source        TEXT DEFAULT 'agent',   -- agent | manual | whatsapp | email
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_facts_subject ON facts(subject, label);
+CREATE INDEX IF NOT EXISTS idx_facts_expiry ON facts(valid_until);
+CREATE INDEX IF NOT EXISTS idx_facts_occurred ON facts(subject, label, occurred_on);
