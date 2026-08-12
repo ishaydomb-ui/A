@@ -19,7 +19,12 @@ procedures so the same job is done the same way every time) and **Trackers**
 
 ---
 
-## Getting started
+## Deploying
+
+**[DEPLOY.md](./DEPLOY.md)** — Railway, from a phone browser, no computer needed.
+The app seeds itself on first boot, so there are no setup commands to run.
+
+## Getting started (local)
 
 ```bash
 npm install

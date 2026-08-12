@@ -1,0 +1,26 @@
+node_modules
+.next
+out
+build
+dist
+
+# Never bake local data or secrets into an image
+.env
+.env.*
+!.env.example
+data
+*.sqlite
+*.sqlite-*
+*.db
+
+.git
+.gitignore
+*.log
+.DS_Store
+
+worker/sessions
+worker/screenshots
+
+# Not needed at runtime
+README.md
+DEPLOY.md
