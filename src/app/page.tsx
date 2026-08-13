@@ -59,7 +59,7 @@ export default function TodayPage() {
     <div className="space-y-4">
       <header className="flex items-baseline justify-between">
         <h1 className="text-2xl font-semibold">Today</h1>
-        <span className="text-sm text-[--color-muted]">
+        <span className="text-sm text-[var(--color-muted)]">
           {new Date().toLocaleDateString("en-GB", {
             weekday: "long",
             day: "numeric",
@@ -155,7 +155,7 @@ export default function TodayPage() {
           {tonight.map((m, i) => (
             <Row key={i} left={m.title} sub={m.meal} />
           ))}
-          <Link href="/food" className="mt-2 inline-block text-xs text-[--color-accent] hover:underline">
+          <Link href="/food" className="mt-2 inline-block text-xs text-[var(--color-accent)] hover:underline">
             Plan the week →
           </Link>
         </Card>

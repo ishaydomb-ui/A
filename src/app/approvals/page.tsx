@@ -14,17 +14,17 @@ export default function ApprovalsPage() {
     <div className="space-y-4">
       <header>
         <h1 className="text-2xl font-semibold">Approvals</h1>
-        <p className="mt-1 text-sm text-[--color-muted]">
+        <p className="mt-1 text-sm text-[var(--color-muted)]">
           Anything that spends money, goes to someone outside the house, or can&rsquo;t be undone
           waits here. Nothing below has happened yet.
         </p>
       </header>
 
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold tracking-wide text-[--color-muted] uppercase">
+        <h2 className="text-sm font-semibold tracking-wide text-[var(--color-muted)] uppercase">
           Drafts to send yourself
         </h2>
-        <p className="text-sm text-[--color-muted]">
+        <p className="text-sm text-[var(--color-muted)]">
           This system never sends mail. These are written and ready — open one in your own
           mail app and press send.
         </p>
@@ -54,17 +54,17 @@ export default function ApprovalsPage() {
 
       {recent.length > 0 && (
         <section>
-          <h2 className="mb-2 text-sm font-semibold tracking-wide text-[--color-muted] uppercase">
+          <h2 className="mb-2 text-sm font-semibold tracking-wide text-[var(--color-muted)] uppercase">
             Recently decided
           </h2>
-          <div className="rounded-2xl border border-[--color-line] bg-[--color-surface] p-4">
+          <div className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] p-4">
             {recent.map((a) => (
               <div
                 key={a.id}
-                className="flex justify-between gap-3 border-b border-[--color-line] py-2 text-sm last:border-0"
+                className="flex justify-between gap-3 border-b border-[var(--color-line)] py-2 text-sm last:border-0"
               >
                 <span dir="auto">{a.title}</span>
-                <span className="shrink-0 text-xs text-[--color-muted]">
+                <span className="shrink-0 text-xs text-[var(--color-muted)]">
                   {a.status} · {a.decided_by}
                 </span>
               </div>

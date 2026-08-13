@@ -39,7 +39,7 @@ export function ApprovalList({ approvals }: { approvals: Approval[] }) {
 
   if (approvals.length === 0) {
     return (
-      <div className="rounded-2xl border border-[--color-line] bg-[--color-surface] p-6 text-center text-sm text-[--color-muted]">
+      <div className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] p-6 text-center text-sm text-[var(--color-muted)]">
         Nothing waiting on you.
       </div>
     );
@@ -48,14 +48,14 @@ export function ApprovalList({ approvals }: { approvals: Approval[] }) {
   return (
     <div className="space-y-3">
       {approvals.map((a) => (
-        <div key={a.id} className="rounded-2xl border border-[--color-line] bg-[--color-surface] p-4">
+        <div key={a.id} className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h3 className="font-medium" dir="auto">
                 {a.title}
               </h3>
               {a.summary && (
-                <p className="mt-1 text-sm text-[--color-muted]" dir="auto">
+                <p className="mt-1 text-sm text-[var(--color-muted)]" dir="auto">
                   {a.summary}
                 </p>
               )}
@@ -73,7 +73,7 @@ export function ApprovalList({ approvals }: { approvals: Approval[] }) {
 
           <button
             onClick={() => setOpen(open === a.id ? null : a.id)}
-            className="mt-2 text-xs text-[--color-accent] hover:underline"
+            className="mt-2 text-xs text-[var(--color-accent)] hover:underline"
           >
             {open === a.id ? "Hide" : "See exactly what will happen"}
           </button>
@@ -92,14 +92,14 @@ export function ApprovalList({ approvals }: { approvals: Approval[] }) {
               <button
                 onClick={() => decide(a.id, "approved")}
                 disabled={busy === a.id}
-                className="rounded-xl bg-[--color-accent] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+                className="rounded-xl bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
               >
                 {busy === a.id ? "…" : "Approve"}
               </button>
               <button
                 onClick={() => decide(a.id, "rejected")}
                 disabled={busy === a.id}
-                className="rounded-xl border border-[--color-line] px-3 py-1.5 text-sm disabled:opacity-40"
+                className="rounded-xl border border-[var(--color-line)] px-3 py-1.5 text-sm disabled:opacity-40"
               >
                 Reject
               </button>

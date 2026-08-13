@@ -33,14 +33,14 @@ export default function CasesPage() {
     <div className="space-y-4">
       <header>
         <h1 className="text-2xl font-semibold">Cases</h1>
-        <p className="mt-1 text-sm text-[--color-muted]">
+        <p className="mt-1 text-sm text-[var(--color-muted)]">
           Open threads with the outside world, each with its next step and how long it has been
           quiet.
         </p>
       </header>
 
       {cases.length === 0 && (
-        <div className="rounded-2xl border border-[--color-line] bg-[--color-surface] p-6 text-center text-sm text-[--color-muted]">
+        <div className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] p-6 text-center text-sm text-[var(--color-muted)]">
           No open cases. Ask the assistant to open one when something starts.
         </div>
       )}
@@ -53,7 +53,7 @@ export default function CasesPage() {
                 {c.title}
               </h3>
               {c.summary && (
-                <p className="mt-1 text-sm text-[--color-muted]" dir="auto">
+                <p className="mt-1 text-sm text-[var(--color-muted)]" dir="auto">
                   {c.summary}
                 </p>
               )}

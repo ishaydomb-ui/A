@@ -12,18 +12,18 @@ export function Card({
   empty?: boolean;
 }) {
   return (
-    <section className="rounded-2xl border border-[--color-line] bg-[--color-surface] p-4">
+    <section className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] p-4">
       <header className="mb-3 flex items-baseline justify-between gap-2">
-        <h2 className="text-sm font-semibold tracking-wide text-[--color-muted] uppercase">
+        <h2 className="text-sm font-semibold tracking-wide text-[var(--color-muted)] uppercase">
           {title}
         </h2>
         {action && (
-          <Link href={action.href} className="text-xs text-[--color-accent] hover:underline">
+          <Link href={action.href} className="text-xs text-[var(--color-accent)] hover:underline">
             {action.label}
           </Link>
         )}
       </header>
-      {empty ? <p className="text-sm text-[--color-muted]">Nothing here.</p> : children}
+      {empty ? <p className="text-sm text-[var(--color-muted)]">Nothing here.</p> : children}
     </section>
   );
 }
@@ -38,14 +38,14 @@ export function Row({
   sub?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 border-b border-[--color-line] py-2 last:border-0">
+    <div className="flex items-start justify-between gap-3 border-b border-[var(--color-line)] py-2 last:border-0">
       <div className="min-w-0">
         <div className="truncate text-sm" dir="auto">
           {left}
         </div>
-        {sub && <div className="mt-0.5 text-xs text-[--color-muted]">{sub}</div>}
+        {sub && <div className="mt-0.5 text-xs text-[var(--color-muted)]">{sub}</div>}
       </div>
-      {right && <div className="shrink-0 text-xs text-[--color-muted]">{right}</div>}
+      {right && <div className="shrink-0 text-xs text-[var(--color-muted)]">{right}</div>}
     </div>
   );
 }

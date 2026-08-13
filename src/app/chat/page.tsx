@@ -50,7 +50,7 @@ export default function ChatPage() {
 
       <div className="flex-1 space-y-3 overflow-y-auto pb-4">
         {messages.length === 0 && (
-          <p className="text-sm text-[--color-muted]">
+          <p className="text-sm text-[var(--color-muted)]">
             Everything routes through here — questions, instructions, or a thought you want
             captured. It reads and writes the real household data, so answers are exact.
           </p>
@@ -60,8 +60,8 @@ export default function ChatPage() {
             key={i}
             className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
               m.role === "user"
-                ? "ms-auto bg-[--color-accent] text-white"
-                : "border border-[--color-line] bg-[--color-surface]"
+                ? "ms-auto bg-[var(--color-accent)] text-white"
+                : "border border-[var(--color-line)] bg-[var(--color-surface)]"
             }`}
             dir="auto"
           >
@@ -71,23 +71,23 @@ export default function ChatPage() {
             )}
           </div>
         ))}
-        {busy && <div className="text-sm text-[--color-muted]">thinking…</div>}
+        {busy && <div className="text-sm text-[var(--color-muted)]">thinking…</div>}
         <div ref={endRef} />
       </div>
 
-      <div className="flex gap-2 border-t border-[--color-line] pt-3">
+      <div className="flex gap-2 border-t border-[var(--color-line)] pt-3">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
           placeholder="Message…"
           dir="auto"
-          className="flex-1 rounded-xl border border-[--color-line] bg-[--color-surface] px-3 py-2 text-sm outline-none"
+          className="flex-1 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 text-sm outline-none"
         />
         <button
           onClick={send}
           disabled={busy}
-          className="rounded-xl bg-[--color-accent] px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+          className="rounded-xl bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
         >
           Send
         </button>

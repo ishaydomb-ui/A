@@ -97,7 +97,7 @@ export function Room({ initial, me }: { initial: Msg[]; me: string }) {
     <>
       <div className="flex-1 space-y-2 overflow-y-auto pb-3">
         {messages.length === 0 && (
-          <p className="text-sm text-[--color-muted]">
+          <p className="text-sm text-[var(--color-muted)]">
             Nothing here yet. Start thinking out loud — the assistant stays quiet until you
             bring it in.
           </p>
@@ -111,17 +111,17 @@ export function Room({ initial, me }: { initial: Msg[]; me: string }) {
               key={m.id}
               className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
                 isAssistant
-                  ? "border border-dashed border-[--color-line] bg-[--color-surface]"
+                  ? "border border-dashed border-[var(--color-line)] bg-[var(--color-surface)]"
                   : isMe
-                    ? "ms-auto bg-[--color-accent] text-white"
-                    : "border border-[--color-line] bg-[--color-surface]"
+                    ? "ms-auto bg-[var(--color-accent)] text-white"
+                    : "border border-[var(--color-line)] bg-[var(--color-surface)]"
               }`}
               dir="auto"
             >
               {!isMe && (
                 <div
                   className={`mb-0.5 text-[11px] font-medium ${
-                    isAssistant ? "text-[--color-muted]" : ""
+                    isAssistant ? "text-[var(--color-muted)]" : ""
                   }`}
                   style={!isAssistant && m.color ? { color: m.color } : undefined}
                 >
@@ -133,11 +133,11 @@ export function Room({ initial, me }: { initial: Msg[]; me: string }) {
           );
         })}
 
-        {thinking && <div className="text-sm text-[--color-muted]">assistant is thinking…</div>}
+        {thinking && <div className="text-sm text-[var(--color-muted)]">assistant is thinking…</div>}
         <div ref={endRef} />
       </div>
 
-      <div className="space-y-2 border-t border-[--color-line] pt-2">
+      <div className="space-y-2 border-t border-[var(--color-line)] pt-2">
         <div className="flex gap-2">
           <input
             value={input}
@@ -146,12 +146,12 @@ export function Room({ initial, me }: { initial: Msg[]; me: string }) {
             placeholder="Say something…"
             dir="auto"
             disabled={busy}
-            className="flex-1 rounded-xl border border-[--color-line] bg-[--color-surface] px-3 py-2 text-sm outline-none"
+            className="flex-1 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 text-sm outline-none"
           />
           <button
             onClick={() => send(false)}
             disabled={busy || !input.trim()}
-            className="rounded-xl bg-[--color-accent] px-3 py-2 text-sm font-medium text-white disabled:opacity-40"
+            className="rounded-xl bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white disabled:opacity-40"
           >
             Post
           </button>
@@ -159,7 +159,7 @@ export function Room({ initial, me }: { initial: Msg[]; me: string }) {
             onClick={() => send(true)}
             disabled={busy || !input.trim()}
             title="Post and make the assistant answer"
-            className="rounded-xl border border-[--color-line] px-3 py-2 text-sm disabled:opacity-40"
+            className="rounded-xl border border-[var(--color-line)] px-3 py-2 text-sm disabled:opacity-40"
           >
             Ask
           </button>
@@ -168,7 +168,7 @@ export function Room({ initial, me }: { initial: Msg[]; me: string }) {
         <button
           onClick={summarise}
           disabled={busy || messages.length === 0}
-          className="text-xs text-[--color-accent] hover:underline disabled:opacity-40"
+          className="text-xs text-[var(--color-accent)] hover:underline disabled:opacity-40"
         >
           Turn this discussion into tasks →
         </button>

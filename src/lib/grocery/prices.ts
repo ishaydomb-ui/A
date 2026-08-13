@@ -13,16 +13,17 @@ import { all, run } from "../db";
  * action handled by the browser worker.
  */
 
+/**
+ * Basket-automation maturity is NOT duplicated here - it lives on the adapter
+ * (src/lib/grocery/adapters/) and the UI reads it from there. Keeping a second
+ * copy is how the Food page ended up advertising Tiv Taam as "experimental"
+ * while the adapter was actually unsupported.
+ */
 export interface ChainConfig {
   key: string;
   label: string;
   /** Publisher portal for the mandated price files. */
   portal: string;
-  /**
-   * Whether we have a working basket-automation adapter for this chain.
-   * See src/lib/grocery/adapters/ for the current state of each.
-   */
-  cartAutomation: "supported" | "experimental" | "unsupported";
   notes: string;
 }
 
@@ -31,7 +32,6 @@ export const CHAINS: Record<string, ChainConfig> = {
     key: "shufersal",
     label: "שופרסל",
     portal: "https://prices.shufersal.co.il/",
-    cartAutomation: "supported",
     notes:
       "Public web storefront with a conventional login/search/cart flow. Well-trodden " +
       "automation path. Note the robotic-fulfilment cutoff: baskets for next-day delivery " +
@@ -41,7 +41,6 @@ export const CHAINS: Record<string, ChainConfig> = {
     key: "tivtaam",
     label: "טיב טעם",
     portal: "https://url.publishedprices.co.il/",
-    cartAutomation: "experimental",
     notes:
       "Ordering is app-first (SelfPoint 'טיב טעם בקליק'); the web storefront is thinner and " +
       "there is no established automation path. Prices still come from the public feed, so " +

@@ -18,7 +18,7 @@ export default function FactsPage() {
     <div className="space-y-4">
       <header>
         <h1 className="text-2xl font-semibold">What we know</h1>
-        <p className="mt-1 text-sm text-[--color-muted]">
+        <p className="mt-1 text-sm text-[var(--color-muted)]">
           ID numbers, door codes, where things live, renewal dates, and when things last
           happened. Easiest way to add one is just to tell the assistant — it stores these as
           you mention them.
@@ -50,9 +50,9 @@ export default function FactsPage() {
         }))}
       />
 
-      <p className="text-xs text-[--color-muted]">
+      <p className="text-xs text-[var(--color-muted)]">
         Sensitive values are encrypted on disk and are kept out of digests and emails.{" "}
-        <Link href="/settings" className="text-[--color-accent] hover:underline">
+        <Link href="/settings" className="text-[var(--color-accent)] hover:underline">
           Settings
         </Link>
       </p>

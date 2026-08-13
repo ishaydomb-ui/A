@@ -1,26 +1,46 @@
 @import "tailwindcss";
 
-@theme {
+/*
+ * Theme tokens.
+ *
+ * Deliberately plain CSS custom properties on :root rather than Tailwind's
+ * `@theme`. `@theme` emits its values straight onto :root with no media query,
+ * so a nested `@theme` inside `prefers-color-scheme` does not do what it looks
+ * like it does — the dark values simply overwrite the light ones and the app is
+ * dark for everyone, forever. That is exactly what happened here.
+ *
+ * Light is the base. Dark overrides only the values, so components never need
+ * to know which theme is active.
+ */
+:root {
+  color-scheme: light dark;
+
+  --color-canvas: #f8fafc;
+  --color-surface: #ffffff;
   --color-ink: #0f172a;
   --color-muted: #64748b;
   --color-line: #e2e8f0;
-  --color-surface: #ffffff;
-  --color-canvas: #f8fafc;
   --color-accent: #2563eb;
 }
 
-:root {
-  color-scheme: light dark;
-}
-
 @media (prefers-color-scheme: dark) {
-  @theme {
+  :root:not([data-theme="light"]) {
+    --color-canvas: #020617;
+    --color-surface: #0f172a;
     --color-ink: #e2e8f0;
     --color-muted: #94a3b8;
     --color-line: #1e293b;
-    --color-surface: #0f172a;
-    --color-canvas: #020617;
+    --color-accent: #3b82f6;
   }
+}
+
+:root[data-theme="dark"] {
+  --color-canvas: #020617;
+  --color-surface: #0f172a;
+  --color-ink: #e2e8f0;
+  --color-muted: #94a3b8;
+  --color-line: #1e293b;
+  --color-accent: #3b82f6;
 }
 
 body {

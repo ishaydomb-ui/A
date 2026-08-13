@@ -36,11 +36,11 @@ export function SyncButton() {
 
   return (
     <div className="flex items-center gap-3">
-      {msg && <span className="text-xs text-[--color-muted]">{msg}</span>}
+      {msg && <span className="text-xs text-[var(--color-muted)]">{msg}</span>}
       <button
         onClick={sync}
         disabled={busy}
-        className="rounded-xl bg-[--color-accent] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+        className="rounded-xl bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
       >
         {busy ? "Syncing…" : "Sync now"}
       </button>

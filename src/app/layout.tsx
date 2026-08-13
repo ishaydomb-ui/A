@@ -37,7 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-dvh pb-20 sm:pb-0">
         <div className="mx-auto flex max-w-5xl flex-col sm:flex-row">
           {/* Desktop rail */}
-          <aside className="hidden shrink-0 border-e border-[--color-line] p-4 sm:block sm:w-48">
+          <aside className="hidden shrink-0 border-e border-[var(--color-line)] p-4 sm:block sm:w-48">
             <div className="mb-6 px-2 text-lg font-semibold">Beitenu</div>
             <nav className="flex flex-col gap-1">
               {[...nav, ...secondaryNav].map((item) => (
@@ -57,7 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </div>
 
         {/* Phone tab bar - this is mostly used one-handed, mid-errand. */}
-        <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t border-[--color-line] bg-[--color-surface] sm:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t border-[var(--color-line)] bg-[var(--color-surface)] sm:hidden">
           {nav.map((item) => (
             <Link
               key={item.href}

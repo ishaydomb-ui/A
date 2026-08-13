@@ -34,7 +34,7 @@ export default async function SettingsPage() {
     <div className="space-y-4">
       <header>
         <h1 className="text-2xl font-semibold">Settings</h1>
-        <p className="mt-1 text-sm text-[--color-muted]">
+        <p className="mt-1 text-sm text-[var(--color-muted)]">
           {me ? `Signed in as ${me.name}.` : "Not signed in — sign-in isn't configured yet."}
         </p>
       </header>
@@ -56,7 +56,7 @@ export default async function SettingsPage() {
           );
         })}
         {!configured && (
-          <p className="mt-3 text-xs text-[--color-muted]">
+          <p className="mt-3 text-xs text-[var(--color-muted)]">
             Google sign-in isn&rsquo;t configured, so the dashboard is currently open and every
             action is attributed to Ishay. Set the Google environment variables to close this.
           </p>
@@ -65,7 +65,7 @@ export default async function SettingsPage() {
 
       <Card title="Calendar sync">
         {calendars.length === 0 ? (
-          <p className="text-sm text-[--color-muted]">
+          <p className="text-sm text-[var(--color-muted)]">
             No calendars yet. They appear once someone signs in with Google.
           </p>
         ) : (
@@ -83,7 +83,7 @@ export default async function SettingsPage() {
           ))
         )}
         <div className="mt-3 flex items-center justify-between gap-3">
-          <span className="text-xs text-[--color-muted]">
+          <span className="text-xs text-[var(--color-muted)]">
             {eventCount.n} events stored · {eventCount.classified ?? 0} classified
           </span>
           {me && <SyncButton />}
@@ -91,7 +91,7 @@ export default async function SettingsPage() {
       </Card>
 
       <Card title="How classification works">
-        <p className="text-sm text-[--color-muted]">
+        <p className="text-sm text-[var(--color-muted)]">
           Every synced event is labelled once — pickup, class, on-call, appointment, travel — along
           with which child it concerns and which parent is responsible. That&rsquo;s what makes
           &ldquo;which days am I picking up the kids&rdquo; an exact query rather than a guess. If
@@ -100,14 +100,14 @@ export default async function SettingsPage() {
       </Card>
 
       <Card title="What we know">
-        <p className="text-sm text-[--color-muted]">
+        <p className="text-sm text-[var(--color-muted)]">
           ID numbers, door codes, where things are kept, renewal dates, and when things last
           happened. Normally you just tell the assistant and it remembers — this page is for
           reviewing or correcting what it has.
         </p>
         <Link
           href="/facts"
-          className="mt-2 inline-block text-sm text-[--color-accent] hover:underline"
+          className="mt-2 inline-block text-sm text-[var(--color-accent)] hover:underline"
         >
           Open →
         </Link>
@@ -117,7 +117,7 @@ export default async function SettingsPage() {
         <form action="/api/auth/logout" method="post">
           <button
             type="submit"
-            className="rounded-xl border border-[--color-line] px-3 py-1.5 text-sm"
+            className="rounded-xl border border-[var(--color-line)] px-3 py-1.5 text-sm"
           >
             Sign out
           </button>

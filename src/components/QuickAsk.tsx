@@ -78,7 +78,7 @@ export function QuickAsk() {
   }
 
   return (
-    <div className="rounded-2xl border border-[--color-line] bg-[--color-surface] p-3">
+    <div className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] p-3">
       <div className="flex items-center gap-2">
         <input
           value={text}
@@ -87,7 +87,7 @@ export function QuickAsk() {
           placeholder="Ask or tell me anything…"
           dir="auto"
           disabled={busy}
-          className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm outline-none placeholder:text-[--color-muted]"
+          className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm outline-none placeholder:text-[var(--color-muted)]"
         />
         <button
           onMouseDown={startRecording}
@@ -105,14 +105,14 @@ export function QuickAsk() {
         <button
           onClick={() => send(text)}
           disabled={busy || !text.trim()}
-          className="rounded-xl bg-[--color-accent] px-3 py-2 text-sm font-medium text-white disabled:opacity-40"
+          className="rounded-xl bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white disabled:opacity-40"
         >
           {busy ? "…" : "Send"}
         </button>
       </div>
 
       {reply && (
-        <p className="mt-3 border-t border-[--color-line] pt-3 text-sm whitespace-pre-wrap" dir="auto">
+        <p className="mt-3 border-t border-[var(--color-line)] pt-3 text-sm whitespace-pre-wrap" dir="auto">
           {reply}
         </p>
       )}
@@ -128,7 +128,7 @@ export function QuickAsk() {
             key={s}
             onClick={() => send(s)}
             disabled={busy}
-            className="rounded-full border border-[--color-line] px-2.5 py-1 text-[11px] text-[--color-muted] hover:bg-black/5 disabled:opacity-40 dark:hover:bg-white/5"
+            className="rounded-full border border-[var(--color-line)] px-2.5 py-1 text-[11px] text-[var(--color-muted)] hover:bg-black/5 disabled:opacity-40 dark:hover:bg-white/5"
           >
             {s}
           </button>

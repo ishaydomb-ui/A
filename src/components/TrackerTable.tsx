@@ -61,7 +61,7 @@ export function TrackerTable({
   return (
     <div className="space-y-3">
       {/* Quick add - the same fields the agent writes to. */}
-      <div className="rounded-2xl border border-[--color-line] bg-[--color-surface] p-3">
+      <div className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] p-3">
         <div className="flex flex-wrap gap-2">
           {fields.map((f) => (
             <input
@@ -71,28 +71,28 @@ export function TrackerTable({
               placeholder={f.label}
               type={f.type === "date" ? "date" : f.type === "number" || f.type === "money" ? "number" : "text"}
               dir="auto"
-              className="min-w-28 flex-1 rounded-lg border border-[--color-line] bg-transparent px-2 py-1.5 text-sm outline-none"
+              className="min-w-28 flex-1 rounded-lg border border-[var(--color-line)] bg-transparent px-2 py-1.5 text-sm outline-none"
             />
           ))}
           <button
             onClick={add}
             disabled={busy}
-            className="rounded-lg bg-[--color-accent] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+            className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
           >
             Add
           </button>
         </div>
       </div>
 
-      <label className="flex items-center gap-2 text-xs text-[--color-muted]">
+      <label className="flex items-center gap-2 text-xs text-[var(--color-muted)]">
         <input type="checkbox" checked={showUsed} onChange={(e) => setShowUsed(e.target.checked)} />
         Show used / expired / archived
       </label>
 
-      <div className="overflow-x-auto rounded-2xl border border-[--color-line] bg-[--color-surface]">
+      <div className="overflow-x-auto rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)]">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[--color-line] text-left text-xs text-[--color-muted]">
+            <tr className="border-b border-[var(--color-line)] text-left text-xs text-[var(--color-muted)]">
               {fields.map((f) => (
                 <th key={f.name} className="px-3 py-2 font-medium">
                   {f.label}
@@ -105,7 +105,7 @@ export function TrackerTable({
           <tbody>
             {visible.length === 0 && (
               <tr>
-                <td colSpan={fields.length + 2} className="px-3 py-6 text-center text-[--color-muted]">
+                <td colSpan={fields.length + 2} className="px-3 py-6 text-center text-[var(--color-muted)]">
                   Nothing here yet.
                 </td>
               </tr>
@@ -113,7 +113,7 @@ export function TrackerTable({
             {visible.map((item) => (
               <tr
                 key={item.id}
-                className={`border-b border-[--color-line] last:border-0 ${
+                className={`border-b border-[var(--color-line)] last:border-0 ${
                   expired(item) ? "opacity-50" : ""
                 }`}
               >
@@ -122,7 +122,7 @@ export function TrackerTable({
                     {renderValue(item.data[f.name], f)}
                   </td>
                 ))}
-                <td className="px-3 py-2 text-xs text-[--color-muted]">
+                <td className="px-3 py-2 text-xs text-[var(--color-muted)]">
                   {expired(item) ? "expired" : item.status}
                 </td>
                 <td className="px-3 py-2 text-right">
@@ -130,7 +130,7 @@ export function TrackerTable({
                     <button
                       onClick={() => setStatus(item.id, "used")}
                       disabled={busy}
-                      className="text-xs text-[--color-accent] hover:underline"
+                      className="text-xs text-[var(--color-accent)] hover:underline"
                     >
                       Mark used
                     </button>
@@ -146,10 +146,10 @@ export function TrackerTable({
 }
 
 function renderValue(value: unknown, field: TrackerField) {
-  if (value == null || value === "") return <span className="text-[--color-muted]">—</span>;
+  if (value == null || value === "") return <span className="text-[var(--color-muted)]">—</span>;
   if (field.type === "url") {
     return (
-      <a href={String(value)} target="_blank" rel="noreferrer" className="text-[--color-accent] hover:underline">
+      <a href={String(value)} target="_blank" rel="noreferrer" className="text-[var(--color-accent)] hover:underline">
         link
       </a>
     );

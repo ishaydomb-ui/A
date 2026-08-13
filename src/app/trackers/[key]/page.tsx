@@ -19,7 +19,7 @@ export default async function TrackerPage({ params }: { params: Promise<{ key: s
           {tracker.name}
         </h1>
         {tracker.description && (
-          <p className="mt-1 text-sm text-[--color-muted]">{tracker.description}</p>
+          <p className="mt-1 text-sm text-[var(--color-muted)]">{tracker.description}</p>
         )}
       </header>
 

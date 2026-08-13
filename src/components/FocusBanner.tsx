@@ -56,7 +56,7 @@ export function FocusBanner() {
         );
 
         const className =
-          "block rounded-2xl bg-[--color-accent] p-4 text-white transition hover:brightness-110";
+          "block rounded-2xl bg-[var(--color-accent)] p-4 text-white transition hover:brightness-110";
 
         return href ? (
           <Link key={item.id} href={href} className={className}>
