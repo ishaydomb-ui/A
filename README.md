@@ -20,6 +20,27 @@
 הקוד נכתב בלי גישה לחשבון שופרסל אמיתי או לטוקן בוט טלגרם, אז שני
 הדברים האלה הם צעדים חד-פעמיים שרק אתה יכול להשלים (ראו למטה).
 
+## שלב 0: להעביר את העבודה לשרת Contabo
+
+כל העבודה עד כה נעשתה ב-Claude Code cloud session, שלא יכול לגעת
+באינטרנט האמיתי (חסום ל-shufersal.co.il ול-api.telegram.org) וגם זמני
+מטבעו. הצעד הבא הוא לפתוח session של Claude Code **ישירות על שרת
+ה-Contabo** (למשל דרך אפליקציית SSH באייפון) — משם יש גישה רגילה
+לאינטרנט, וה-session נשאר "מחובר" (persistent) כל עוד השרת דלוק,
+בדיוק כמו sessions אחרים שרצים לכם על אותו שרת.
+
+```bash
+ssh <user>@<contabo-ip>
+git clone <repo-url> grocery-automation   # אם עוד לא משוכפל שם
+cd grocery-automation
+git checkout claude/online-grocery-automation-b7pq4g
+claude   # אם Claude Code כבר מותקן שם מפרויקטים קודמים
+```
+
+ה-session החדש קורא אוטומטית את [`CLAUDE.md`](./CLAUDE.md) ו-
+[`GOALS.md`](./GOALS.md) ומקבל את כל ההקשר — אין צורך להסביר שוב
+כלום. משם ממשיכים ישירות לצעדי ההתקנה וה-login החד-פעמי למטה.
+
 ## התקנה
 
 ```bash
