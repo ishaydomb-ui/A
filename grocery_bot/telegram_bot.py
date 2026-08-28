@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -156,9 +156,29 @@ class GroceryBot:
             await query.edit_message_text(f"לא הצלחתי להוסיף את '{chosen_label}' (status: {status}).")
 
 
+async def _register_bot_metadata(application: Application) -> None:
+    """Keep BotFather's command list/description in sync with the code.
+
+    Runs once on every startup so the command list never drifts out of
+    sync with the handlers below — no manual BotFather step needed after
+    the first setup.
+    """
+    await application.bot.set_my_commands(
+        [
+            BotCommand("start", "הצגת הוראות שימוש"),
+            BotCommand("start_order", "הרצת מחזור קנייה (ממלא עגלה אמיתית)"),
+            BotCommand("list", "הצגת רשימת הבסיס הפעילה"),
+        ]
+    )
+    await application.bot.set_my_description(
+        "בוט קניות אישי — ממלא עגלה אמיתית בשופרסל לפי רשימת בסיס + בקשות "
+        "אד-הוק. שולחים כל בקשה כטקסט חופשי; /start_order מריץ מחזור קנייה."
+    )
+
+
 def build_application(config: Config, storage: Storage) -> Application:
     bot = GroceryBot(config, storage)
-    application = Application.builder().token(config.telegram_bot_token).build()
+    application = Application.builder().token(config.telegram_bot_token).post_init(_register_bot_metadata).build()
     application.add_handler(CommandHandler("start", bot.start))
     application.add_handler(CommandHandler("start_order", bot.start_order))
     application.add_handler(CommandHandler("list", bot.list_base_items))
