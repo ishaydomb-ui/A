@@ -66,12 +66,19 @@ Don't re-derive these from scratch — they're already known:
 1. **No headless login exists.** The supermarket sites require a
    one-time *interactive* device/browser login (including any OTP) —
    there is no way to authenticate headlessly with just a
-   username/password. Automation needs a real, already-authenticated
-   browser session (see `scripts/login_helper.py` and the README
-   section "שלב חד-פעמי 2"). If a lower-friction way to get that session
-   onto the server still doesn't exist when you pick this up, a
-   noVNC-based remote desktop on the server (reachable from a phone
-   browser) is the fallback option to build — it has not been built yet.
+   username/password. The production host is a headless Contabo VPS
+   (no monitor), reached via SSH from the user's phone. The fix built
+   for this: `scripts/setup_remote_desktop.sh` starts a throwaway
+   virtual desktop (Xvfb + fluxbox + x11vnc + noVNC, all bound to
+   localhost) that the user views via an SSH-tunneled noVNC page in
+   their phone browser, then runs `scripts/login_helper.py` with
+   `DISPLAY=:99` so the login browser window renders there — see README
+   "שלב חד-פעמי 2" for the exact steps. **This has only been
+   syntax-checked, never run on a real VPS** — no Claude Code cloud
+   session can reach the Contabo box (no registered environment, no SSH
+   access), so a session running *on* that server still needs to
+   actually execute it once and fix whatever's wrong (apt package names,
+   Chromium availability on that distro, etc.).
 2. **Selectors are unverified guesses.** The CSS selectors and URLs in
    `grocery_bot/adapters/shufersal.py` were written without access to
    the real site. Treat them as *wrong until proven otherwise* by a live

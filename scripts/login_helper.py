@@ -1,12 +1,19 @@
 """One-time interactive login capture.
 
-This is the one step that genuinely needs a real display (a phone browser
-can't drive Playwright), so it is NOT meant to run on the headless server.
-Run it once on any machine that has Python + `pip install playwright` +
-`playwright install chromium` — your own laptop, a friend's computer, or a
-throwaway cloud desktop — then copy the resulting storage_state.json file
-onto the server at the path configured in SHUFERSAL_STORAGE_STATE_PATH /
-TIVTAAM_STORAGE_STATE_PATH.
+This is the one step that genuinely needs a real display. On a headless
+server (no monitor attached — e.g. the Contabo VPS), the way to get one is
+scripts/setup_remote_desktop.sh: it starts a virtual display + noVNC you can
+view from your phone's browser over an SSH tunnel, then you run this script
+with DISPLAY set to that virtual display so the browser window shows up
+there for you to log into by hand:
+
+    ./scripts/setup_remote_desktop.sh
+    DISPLAY=:99 python3 scripts/login_helper.py shufersal data/sessions/shufersal_storage_state.json
+
+If you instead have a machine with a real monitor handy (laptop, etc.), you
+can run this directly there (no DISPLAY override needed, no remote desktop
+setup) and copy the resulting storage_state.json onto the server at the
+path configured in SHUFERSAL_STORAGE_STATE_PATH / TIVTAAM_STORAGE_STATE_PATH.
 
 Usage:
     python scripts/login_helper.py shufersal ./shufersal_storage_state.json

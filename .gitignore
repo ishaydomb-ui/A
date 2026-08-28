@@ -6,3 +6,4 @@ venv/
 data/*.sqlite3
 data/sessions/*.json
 !data/sessions/.gitkeep
+.remote_desktop/
