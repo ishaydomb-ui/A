@@ -1,0 +1,56 @@
+"""One-time interactive login capture.
+
+This is the one step that genuinely needs a real display (a phone browser
+can't drive Playwright), so it is NOT meant to run on the headless server.
+Run it once on any machine that has Python + `pip install playwright` +
+`playwright install chromium` — your own laptop, a friend's computer, or a
+throwaway cloud desktop — then copy the resulting storage_state.json file
+onto the server at the path configured in SHUFERSAL_STORAGE_STATE_PATH /
+TIVTAAM_STORAGE_STATE_PATH.
+
+Usage:
+    python scripts/login_helper.py shufersal ./shufersal_storage_state.json
+    python scripts/login_helper.py tiv_taam ./tivtaam_storage_state.json
+
+The script opens a real (headed) browser window pointed at the store's
+login page, waits for you to log in by hand (including any OTP/captcha),
+and saves the resulting cookies/local storage once you press Enter in this
+terminal. After that, the server-side adapters reuse this file indefinitely
+without asking you to log in again, until the store invalidates the
+session.
+"""
+from __future__ import annotations
+
+import sys
+
+LOGIN_URLS = {
+    "shufersal": "https://www.shufersal.co.il/online/he/login",
+    "tiv_taam": "https://www.tivtaam.co.il/",  # TODO(Phase 2): confirm actual login URL
+}
+
+
+def main() -> None:
+    if len(sys.argv) != 3 or sys.argv[1] not in LOGIN_URLS:
+        print(f"Usage: python {sys.argv[0]} <{'|'.join(LOGIN_URLS)}> <output_path.json>")
+        raise SystemExit(1)
+
+    store, output_path = sys.argv[1], sys.argv[2]
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=False)
+        context = browser.new_context()
+        page = context.new_page()
+        page.goto(LOGIN_URLS[store])
+        input(
+            f"A browser window opened at the {store} login page.\n"
+            "Log in by hand (including OTP if asked), make sure you land on "
+            "your logged-in account page, then press Enter here to save the session..."
+        )
+        context.storage_state(path=output_path)
+        browser.close()
+    print(f"Saved session to {output_path}. Copy this file to the server at the configured path.")
+
+
+if __name__ == "__main__":
+    main()

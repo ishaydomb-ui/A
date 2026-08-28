@@ -1,0 +1,22 @@
+# Example base (recurring) shopping list.
+#
+# Copy relevant items into your real list via:
+#   python -c "from grocery_bot.storage import Storage; from grocery_bot.config import Config; \
+#              Storage(Config.from_env().db_path).import_base_list_from_yaml('data/base_list.yaml')"
+#
+# search_terms lets you override the search query per store when the
+# generic `name` doesn't match well (e.g. brand naming differs).
+
+- name: חלב 3%
+  default_quantity: 2
+  tags: [חלבי]
+
+- name: לחם אחיד פרוס
+  default_quantity: 1
+  tags: [מאפה]
+
+- name: טונה בשמן
+  default_quantity: 3
+  tags: [שימורים]
+  search_terms:
+    shufersal: "טונה סטארקיסט בשמן"
