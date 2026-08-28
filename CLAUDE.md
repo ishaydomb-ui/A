@@ -78,3 +78,20 @@ Don't re-derive these from scratch — they're already known:
    run with `PLAYWRIGHT_HEADLESS=false`, not as "probably fine." Fixing
    them against the real site is expected, planned work — not a sign
    something else broke.
+3. **This Claude Code cloud session cannot reach the internet needed to
+   run or test this bot at all — confirmed, not a guess.** Its outbound
+   proxy returns a 403 policy denial for both `shufersal.co.il` and
+   `api.telegram.org` (checked via
+   `curl http://127.0.0.1:45145/__agentproxy/status`); only an allowlist
+   (PyPI, npm, GitHub, etc.) is reachable. Per that proxy's own rules, a
+   403 policy denial is to be reported, not routed around — don't retry
+   it, don't look for a tunnel/workaround. Separately, even without that
+   block, this container is ephemeral and gets reclaimed after
+   inactivity, so it can't host an always-on Telegram bot regardless.
+   **Practical consequence:** all live testing — the one-time Shufersal
+   login, selector tuning against the real site, running the Telegram
+   bot itself — has to happen on the real always-on host the user
+   deploys this to, never inside a Claude Code cloud session. If a
+   session here is ever handed real credentials, don't attempt to use
+   them against the live site from inside this sandbox; say so instead
+   of trying and silently failing.
