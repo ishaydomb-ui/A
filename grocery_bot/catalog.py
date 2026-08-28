@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from .models import BaseListItem
+from .models import AdHocRequest, BaseListItem
 from .prices import PricedProduct, PromotionItem, fetch_branch_snapshot
 from .storage import Storage
 
@@ -57,6 +57,35 @@ def format_search_answer(
         )
     lines = [f"*{query}*"]
     lines += [format_product_line(product, deal) for product, deal in results]
+    return "\n".join(lines)
+
+
+def format_full_list(
+    base_items: list[BaseListItem], adhoc_items: list[AdHocRequest]
+) -> str:
+    """The whole current shopping picture, in one message.
+
+    Both halves are shown together because that is the question people
+    actually ask ("what's on the list?") — the split between standing
+    items and this-week's additions is an implementation detail, so it's
+    a heading rather than two separate commands.
+    """
+    if not base_items and not adhoc_items:
+        return "הרשימה ריקה כרגע. פשוט תכתבו לי מה צריך ואוסיף."
+
+    lines: list[str] = []
+    if base_items:
+        lines.append(f"*רשימת הבסיס* ({len(base_items)})")
+        lines += [f"• {item.describe()}" for item in base_items]
+    if adhoc_items:
+        if lines:
+            lines.append("")
+        lines.append(f"*נוסף לפעם הבאה* ({len(adhoc_items)})")
+        lines += [
+            f"• {item.describe()}"
+            + (f"  _{item.requested_by}_" if item.requested_by else "")
+            for item in adhoc_items
+        ]
     return "\n".join(lines)
 
 

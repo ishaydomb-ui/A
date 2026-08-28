@@ -23,14 +23,26 @@ from .adapters.shufersal import ShufersalAdapter
 from .catalog import (
     find_deals_for_base_list,
     format_deals_report,
+    format_full_list,
     format_search_answer,
     refresh_catalog,
 )
 from .config import Config
+from .nlu import ParsedItem, build_meal_plan, expand_recipe, parse_message
 from .orchestrator import format_report_summary, run_order_cycle
 from .storage import Storage
 
 logger = logging.getLogger(__name__)
+
+
+def _describe_parsed(item: ParsedItem) -> str:
+    parts = [item.name]
+    if item.amount and item.unit:
+        parts.append(f"{item.amount:g} {item.unit}")
+    elif item.amount:
+        parts.append(f"x{item.amount:g}")
+    line = " ".join(parts)
+    return f"{line} ({item.brand})" if item.brand else line
 
 ADAPTER_CLASSES: dict[str, type[StoreAdapter]] = {
     "shufersal": ShufersalAdapter,
@@ -68,25 +80,22 @@ class GroceryBot:
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(
-            "היי! שלחו לי כל דבר בטקסט חופשי כדי להוסיף אותו לרשימת הקנייה הבאה.\n\n"
-            "*מחירים ומבצעים* (עובד כבר עכשיו):\n"
-            "/price חלב — מחיר נוכחי ומבצע אמיתי, אם יש\n"
-            "/deals — מבצעים על פריטי רשימת הבסיס\n"
-            "/refresh_prices — משיכת מחירים עדכניים מהסניף\n\n"
-            "*רשימה והזמנה*:\n"
-            "/list — רשימת הבסיס הפעילה\n"
-            "/start_order — מחזור קנייה שממלא עגלה אמיתית "
-            "(חסום כרגע — האתר של שופרסל חוסם גישה מחוץ לישראל)",
+            "היי! פשוט דברו איתי רגיל, בלי פקודות. למשל:\n\n"
+            "• *תוסיף 300 גרם פסטרמה* — מוסיף לרשימה עם משקל\n"
+            "• *צריך טונה סטארקיסט 4 יחידות* — שומר גם את היצרן\n"
+            "• *תוריד את הטונה* — מוריד מהרשימה\n"
+            "• *מה יש ברשימה* — הרשימה המלאה והמעודכנת\n"
+            "• *כמה עולה קוטג* — מחיר נוכחי בסניף + מבצע אם יש\n"
+            "• *מה יש במבצע* — מבצעים אמיתיים על מה שאתם קונים\n"
+            "• *מתכון לפאי תפוחים* — מפרק למצרכים ומוסיף לרשימה\n"
+            "• *תכנן לי תפריט שבועי* — 5 ארוחות + רשימת קניות מאוחדת\n\n"
+            "_מילוי עגלה אוטומטי בשופרסל עדיין חסום — האתר חוסם גישה "
+            "מחוץ לישראל._",
             parse_mode="Markdown",
         )
 
     async def list_base_items(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        items = self.storage.list_active_base_items()
-        if not items:
-            await update.message.reply_text("רשימת הבסיס ריקה כרגע.")
-            return
-        lines = [f"• {item.name} (x{item.default_quantity})" for item in items]
-        await update.message.reply_text("\n".join(lines))
+        await self._do_show_list(update, context, None, "")
 
     async def price(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/price <item> — current shelf price + any real promotion.
@@ -141,15 +150,153 @@ class GroceryBot:
             f"{meta.get('branch', '?')}.\nמקור: {meta.get('price_file', '?')}"
         )
 
-    async def capture_adhoc(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Route a free-text message by what it actually means.
+
+        The first version filed every message verbatim as an item, so
+        "תוסיף גבינה בולגרית" was stored under that whole sentence and
+        "מה" became groceries. Everything now goes through the NLU layer
+        first; understanding takes several seconds, hence the typing
+        indicator.
+        """
         if not _authorized(self.config, update):
             return
         text = (update.message.text or "").strip()
         if not text:
             return
+
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+        parsed = await asyncio.to_thread(parse_message, text)
         requested_by = update.effective_user.first_name if update.effective_user else "unknown"
-        self.storage.add_adhoc_request(text=text, requested_by=requested_by)
-        await update.message.reply_text(f"נוסף לרשימה לפעם הבאה: {text}")
+
+        handler = {
+            "add_item": self._do_add,
+            "remove_item": self._do_remove,
+            "price_query": self._do_price,
+            "deals": self._do_deals,
+            "show_list": self._do_show_list,
+            "recipe": self._do_recipe,
+            "meal_plan": self._do_meal_plan,
+        }.get(parsed.intent)
+
+        if handler is None:  # unclear / smalltalk
+            await update.message.reply_text(
+                parsed.reply
+                or "לא הבנתי מה צריך. אפשר למשל: 'תוסיף 300 גרם פסטרמה', "
+                "'כמה עולה קוטג', 'מה יש במבצע', 'מתכון לפאי תפוחים'."
+            )
+            return
+        await handler(update, context, parsed, requested_by)
+
+    async def _do_add(self, update, context, parsed, requested_by: str) -> None:
+        if not parsed.items:
+            await update.message.reply_text("מה להוסיף?")
+            return
+        added = []
+        for item in parsed.items:
+            self.storage.add_adhoc_request(
+                text=item.name,
+                requested_by=requested_by,
+                amount=item.amount,
+                unit=item.unit,
+                brand=item.brand,
+            )
+            added.append(_describe_parsed(item))
+        await update.message.reply_text("נוסף לרשימה: " + ", ".join(added))
+
+    async def _do_remove(self, update, context, parsed, requested_by: str) -> None:
+        if not parsed.items:
+            await update.message.reply_text("מה להוריד?")
+            return
+        removed, missing = [], []
+        for item in parsed.items:
+            # Ad-hoc first: a just-added request is the likelier target of
+            # "תוריד את X" than a long-standing base-list entry.
+            hit = self.storage.remove_adhoc_by_name(item.name)
+            if hit is None:
+                hit = self.storage.deactivate_base_item_by_name(item.name)
+            (removed if hit else missing).append(hit or item.name)
+        parts = []
+        if removed:
+            parts.append("הורדתי: " + ", ".join(removed))
+        if missing:
+            parts.append("לא מצאתי ברשימה: " + ", ".join(missing))
+        await update.message.reply_text("\n".join(parts))
+
+    async def _do_price(self, update, context, parsed, requested_by: str) -> None:
+        query = parsed.query or (parsed.items[0].name if parsed.items else "")
+        if not query:
+            await update.message.reply_text("איזה מוצר לבדוק?")
+            return
+        if self.storage.catalog_meta().get("product_count") == "0":
+            await update.message.reply_text("הקטלוג ריק — רגע, תבקשו ממני 'תרענן מחירים'.")
+            return
+        results = await asyncio.to_thread(self.storage.search_with_deals, query, 6)
+        await update.message.reply_text(
+            format_search_answer(query, results), parse_mode="Markdown"
+        )
+
+    async def _do_deals(self, update, context, parsed, requested_by: str) -> None:
+        items = self.storage.list_active_base_items()
+        if not items:
+            await update.message.reply_text("רשימת הבסיס ריקה, אז אין על מה לחפש מבצעים.")
+            return
+        found = await asyncio.to_thread(find_deals_for_base_list, self.storage, items)
+        await update.message.reply_text(format_deals_report(found), parse_mode="Markdown")
+
+    async def _do_show_list(self, update, context, parsed, requested_by: str) -> None:
+        await update.message.reply_text(
+            format_full_list(
+                self.storage.list_active_base_items(), self.storage.list_pending_adhoc()
+            ),
+            parse_mode="Markdown",
+        )
+
+    async def _do_recipe(self, update, context, parsed, requested_by: str) -> None:
+        dish = parsed.query or (parsed.items[0].name if parsed.items else "")
+        if not dish:
+            await update.message.reply_text("מתכון למה?")
+            return
+        await update.message.reply_text(f"בונה רשימת מצרכים ל{dish}, רגע...")
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+        recipe = await asyncio.to_thread(expand_recipe, dish)
+        if recipe is None:
+            await update.message.reply_text(f"לא הצלחתי לבנות מצרכים ל'{dish}'. נסו לנסח אחרת.")
+            return
+        for ingredient in recipe.ingredients:
+            self.storage.add_adhoc_request(
+                text=ingredient.name,
+                requested_by=f"{requested_by} (מתכון: {recipe.dish})",
+                amount=ingredient.amount,
+                unit=ingredient.unit,
+            )
+        lines = [f"*{recipe.dish}* — הוספתי {len(recipe.ingredients)} מצרכים לרשימה:"]
+        lines += [f"• {_describe_parsed(i)}" for i in recipe.ingredients]
+        if recipe.note:
+            lines.append(f"\n_{recipe.note}_")
+        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+    async def _do_meal_plan(self, update, context, parsed, requested_by: str) -> None:
+        await update.message.reply_text("בונה תפריט שבועי ורשימת קניות, זה ייקח כמה שניות...")
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+        plan = await asyncio.to_thread(build_meal_plan, parsed.query)
+        if plan is None:
+            await update.message.reply_text("לא הצלחתי לבנות תפריט כרגע, נסו שוב.")
+            return
+        for ingredient in plan.ingredients:
+            self.storage.add_adhoc_request(
+                text=ingredient.name,
+                requested_by=f"{requested_by} (תפריט שבועי)",
+                amount=ingredient.amount,
+                unit=ingredient.unit,
+            )
+        lines = ["*תפריט השבוע*"]
+        lines += [f"• {day}: {dish}" if day else f"• {dish}" for day, dish in plan.meals]
+        lines.append(f"\n*הוספתי {len(plan.ingredients)} מצרכים לרשימה:*")
+        lines += [f"• {_describe_parsed(i)}" for i in plan.ingredients]
+        if plan.note:
+            lines.append(f"\n_{plan.note}_")
+        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
     async def start_order(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not _authorized(self.config, update):
@@ -229,19 +376,21 @@ async def _register_bot_metadata(application: Application) -> None:
     sync with the handlers below — no manual BotFather step needed after
     the first setup.
     """
+    # Deliberately short: the bot is meant to be talked to in plain
+    # Hebrew, so the command menu only carries the two things that are
+    # awkward to phrase ("help", "the list") plus the manual order run.
+    # /price, /deals and /refresh_prices still work if typed, but they're
+    # unlisted — asking "כמה עולה קוטג" does the same thing.
     await application.bot.set_my_commands(
         [
-            BotCommand("start", "הצגת הוראות שימוש"),
-            BotCommand("price", "מחיר ומבצע למוצר — למשל /price חלב"),
-            BotCommand("deals", "מבצעים אמיתיים על פריטי רשימת הבסיס"),
-            BotCommand("list", "הצגת רשימת הבסיס הפעילה"),
-            BotCommand("refresh_prices", "רענון המחירים והמבצעים מהפיד הציבורי"),
-            BotCommand("start_order", "הרצת מחזור קנייה (ממלא עגלה אמיתית)"),
+            BotCommand("start", "מה אפשר לבקש ממני"),
+            BotCommand("list", "הרשימה המלאה והמעודכנת"),
+            BotCommand("start_order", "מחזור קנייה (חסום כרגע)"),
         ]
     )
     await application.bot.set_my_description(
-        "בוט קניות אישי — ממלא עגלה אמיתית בשופרסל לפי רשימת בסיס + בקשות "
-        "אד-הוק. שולחים כל בקשה כטקסט חופשי; /start_order מריץ מחזור קנייה."
+        "בוט קניות משפחתי — מדברים איתו רגיל בעברית. מוסיף לרשימה, בודק "
+        "מחירים ומבצעים אמיתיים בסניף, מפרק מתכונים למצרכים ובונה תפריט שבועי."
     )
 
 
@@ -255,5 +404,5 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("deals", bot.deals))
     application.add_handler(CommandHandler("refresh_prices", bot.refresh_prices))
     application.add_handler(CallbackQueryHandler(bot.resolve_ambiguity, pattern=r"^(resolve|skip):"))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bot.capture_adhoc))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bot.handle_message))
     return application

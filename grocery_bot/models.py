@@ -6,7 +6,17 @@ from dataclasses import dataclass, field
 
 @dataclass
 class BaseListItem:
-    """A recurring item from the household's standing shopping list."""
+    """A recurring item from the household's standing shopping list.
+
+    `amount`/`unit` carry what `default_quantity` can't: "300 גרם
+    פסטרמה" is one line on a shopping list, not 300 of something. Both
+    stay optional — plenty of items really are just "2 × milk".
+
+    `brand` is the household's usual pick (טונה סטארקיסט). It's kept
+    separate from `name` rather than baked into it so the deal finder
+    can still search the generic name and surface a cheaper competing
+    brand — the "brand lock-in" pain point this project exists for.
+    """
 
     id: int
     name: str
@@ -14,9 +24,26 @@ class BaseListItem:
     default_quantity: int = 1
     tags: list[str] = field(default_factory=list)
     active: bool = True
+    amount: float | None = None
+    unit: str = ""
+    brand: str = ""
 
     def search_term_for(self, store: str) -> str:
-        return self.search_terms.get(store, self.name)
+        if store in self.search_terms:
+            return self.search_terms[store]
+        return f"{self.name} {self.brand}".strip() if self.brand else self.name
+
+    def describe(self) -> str:
+        """One-line human description, e.g. 'פסטרמה 300 גרם (תנובה)'."""
+        parts = [self.name]
+        if self.amount and self.unit:
+            parts.append(f"{self.amount:g} {self.unit}")
+        elif self.amount:
+            parts.append(f"x{self.amount:g}")
+        elif self.default_quantity != 1:
+            parts.append(f"x{self.default_quantity}")
+        line = " ".join(parts)
+        return f"{line} ({self.brand})" if self.brand else line
 
 
 @dataclass
@@ -29,6 +56,18 @@ class AdHocRequest:
     created_at: str
     quantity: int = 1
     consumed: bool = False
+    amount: float | None = None
+    unit: str = ""
+    brand: str = ""
+
+    def describe(self) -> str:
+        parts = [self.text]
+        if self.amount and self.unit:
+            parts.append(f"{self.amount:g} {self.unit}")
+        elif self.amount:
+            parts.append(f"x{self.amount:g}")
+        line = " ".join(parts)
+        return f"{line} ({self.brand})" if self.brand else line
 
 
 @dataclass

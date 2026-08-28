@@ -82,13 +82,39 @@ CREATE TABLE IF NOT EXISTS catalog_meta (
 """
 
 
+# Columns added after the first version shipped. SQLite has no
+# "ADD COLUMN IF NOT EXISTS", and the database already holds a real list,
+# so each is added only when missing rather than recreating the table.
+_ADDED_COLUMNS = {
+    "base_list_items": {
+        "amount": "REAL",
+        "unit": "TEXT NOT NULL DEFAULT ''",
+        "brand": "TEXT NOT NULL DEFAULT ''",
+    },
+    "adhoc_requests": {
+        "amount": "REAL",
+        "unit": "TEXT NOT NULL DEFAULT ''",
+        "brand": "TEXT NOT NULL DEFAULT ''",
+    },
+}
+
+
 class Storage:
     def __init__(self, db_path: str):
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._db_path = db_path
         with closing(self._connect()) as conn:
             conn.executescript(SCHEMA)
+            self._migrate(conn)
             conn.commit()
+
+    @staticmethod
+    def _migrate(conn: sqlite3.Connection) -> None:
+        for table, columns in _ADDED_COLUMNS.items():
+            existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+            for column, definition in columns.items():
+                if column not in existing:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path)
@@ -103,20 +129,50 @@ class Storage:
         search_terms: dict[str, str] | None = None,
         default_quantity: int = 1,
         tags: list[str] | None = None,
+        amount: float | None = None,
+        unit: str = "",
+        brand: str = "",
     ) -> int:
         with closing(self._connect()) as conn:
             cur = conn.execute(
-                "INSERT INTO base_list_items (name, search_terms, default_quantity, tags) "
-                "VALUES (?, ?, ?, ?)",
+                "INSERT INTO base_list_items "
+                "(name, search_terms, default_quantity, tags, amount, unit, brand) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     name,
                     json.dumps(search_terms or {}, ensure_ascii=False),
                     default_quantity,
                     json.dumps(tags or [], ensure_ascii=False),
+                    amount,
+                    unit,
+                    brand,
                 ),
             )
             conn.commit()
             return cur.lastrowid
+
+    def deactivate_base_item_by_name(self, name: str) -> str | None:
+        """Drop an item from the standing list by (fuzzy) name.
+
+        Matched loosely because the request arrives as speech — "תוריד
+        את הטונה" should find "טונה". Returns the name actually removed
+        so the bot can confirm *what* it did, rather than claiming
+        success for something the user didn't mean.
+        """
+        needle = name.strip()
+        if not needle:
+            return None
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                "SELECT id, name FROM base_list_items WHERE active = 1 AND "
+                "(name = ? OR name LIKE ? OR ? LIKE '%' || name || '%') ORDER BY LENGTH(name) LIMIT 1",
+                (needle, f"%{needle}%", needle),
+            ).fetchone()
+            if row is None:
+                return None
+            conn.execute("UPDATE base_list_items SET active = 0 WHERE id = ?", (row["id"],))
+            conn.commit()
+            return row["name"]
 
     def list_active_base_items(self) -> list[BaseListItem]:
         with closing(self._connect()) as conn:
@@ -148,6 +204,7 @@ class Storage:
 
     @staticmethod
     def _row_to_base_item(row: sqlite3.Row) -> BaseListItem:
+        keys = row.keys()
         return BaseListItem(
             id=row["id"],
             name=row["name"],
@@ -155,19 +212,56 @@ class Storage:
             default_quantity=row["default_quantity"],
             tags=json.loads(row["tags"]),
             active=bool(row["active"]),
+            amount=row["amount"] if "amount" in keys else None,
+            unit=(row["unit"] if "unit" in keys else "") or "",
+            brand=(row["brand"] if "brand" in keys else "") or "",
         )
 
     # -- ad-hoc queue ----------------------------------------------------
 
-    def add_adhoc_request(self, text: str, requested_by: str, quantity: int = 1) -> int:
+    def add_adhoc_request(
+        self,
+        text: str,
+        requested_by: str,
+        quantity: int = 1,
+        amount: float | None = None,
+        unit: str = "",
+        brand: str = "",
+    ) -> int:
         with closing(self._connect()) as conn:
             cur = conn.execute(
-                "INSERT INTO adhoc_requests (text, requested_by, quantity, created_at) "
-                "VALUES (?, ?, ?, ?)",
-                (text, requested_by, quantity, datetime.now(timezone.utc).isoformat()),
+                "INSERT INTO adhoc_requests "
+                "(text, requested_by, quantity, created_at, amount, unit, brand) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    text,
+                    requested_by,
+                    quantity,
+                    datetime.now(timezone.utc).isoformat(),
+                    amount,
+                    unit,
+                    brand,
+                ),
             )
             conn.commit()
             return cur.lastrowid
+
+    def remove_adhoc_by_name(self, name: str) -> str | None:
+        """Drop a pending ad-hoc request by fuzzy name; returns what was removed."""
+        needle = name.strip()
+        if not needle:
+            return None
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                "SELECT id, text FROM adhoc_requests WHERE consumed = 0 AND "
+                "(text = ? OR text LIKE ? OR ? LIKE '%' || text || '%') ORDER BY LENGTH(text) LIMIT 1",
+                (needle, f"%{needle}%", needle),
+            ).fetchone()
+            if row is None:
+                return None
+            conn.execute("UPDATE adhoc_requests SET consumed = 1 WHERE id = ?", (row["id"],))
+            conn.commit()
+            return row["text"]
 
     def list_pending_adhoc(self) -> list[AdHocRequest]:
         with closing(self._connect()) as conn:
@@ -182,6 +276,9 @@ class Storage:
                 created_at=row["created_at"],
                 quantity=row["quantity"],
                 consumed=bool(row["consumed"]),
+                amount=row["amount"] if "amount" in row.keys() else None,
+                unit=(row["unit"] if "unit" in row.keys() else "") or "",
+                brand=(row["brand"] if "brand" in row.keys() else "") or "",
             )
             for row in rows
         ]
