@@ -32,9 +32,26 @@ if [ -f "$RUN_DIR/xvfb.pid" ] && kill -0 "$(cat "$RUN_DIR/xvfb.pid")" 2>/dev/nul
   exit 0
 fi
 
-echo "Installing system packages (xvfb, x11vnc, fluxbox, chromium, novnc, websockify)..."
-sudo apt-get update -qq
-sudo apt-get install -y -qq xvfb x11vnc fluxbox chromium novnc websockify >/dev/null
+echo "Checking system packages (xvfb, x11vnc, fluxbox, novnc, websockify)..."
+# Playwright brings its own Chromium (see scripts/login_helper.py), so a
+# system chromium package isn't required here. Only install what's actually
+# missing — apt-get needs sudo, and re-running it unconditionally on a box
+# where everything is already present just fails on a password prompt for
+# no reason.
+MISSING_PKGS=()
+command -v Xvfb >/dev/null || MISSING_PKGS+=(xvfb)
+command -v x11vnc >/dev/null || MISSING_PKGS+=(x11vnc)
+command -v fluxbox >/dev/null || MISSING_PKGS+=(fluxbox)
+command -v websockify >/dev/null || MISSING_PKGS+=(websockify)
+[ -d /usr/share/novnc ] || MISSING_PKGS+=(novnc)
+
+if [ "${#MISSING_PKGS[@]}" -gt 0 ]; then
+  echo "Installing missing packages: ${MISSING_PKGS[*]}"
+  sudo apt-get update -qq
+  sudo apt-get install -y -qq "${MISSING_PKGS[@]}" >/dev/null
+else
+  echo "All required packages already present."
+fi
 
 echo "Starting Xvfb on display :$DISPLAY_NUM..."
 Xvfb ":$DISPLAY_NUM" -screen 0 "$RESOLUTION" >"$RUN_DIR/xvfb.log" 2>&1 &
