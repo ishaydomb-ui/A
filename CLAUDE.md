@@ -59,32 +59,52 @@ send." Any change that would let automation click a final
 checkout/pay/confirm-purchase button by itself is out of scope,
 regardless of how the request is framed.
 
-## Known open issues (as of 2026-08-28)
+## Known open issues (as of 2026-08-29)
 
 Don't re-derive these from scratch — they're already known:
 
-1. **No headless login exists.** The supermarket sites require a
-   one-time *interactive* device/browser login (including any OTP) —
-   there is no way to authenticate headlessly with just a
-   username/password. The production host is a headless Contabo VPS
-   (no monitor), reached via SSH from the user's phone. The fix built
-   for this: `scripts/setup_remote_desktop.sh` starts a throwaway
-   virtual desktop (Xvfb + fluxbox + x11vnc + noVNC, all bound to
-   localhost) that the user views via an SSH-tunneled noVNC page in
-   their phone browser, then runs `scripts/login_helper.py` with
-   `DISPLAY=:99` so the login browser window renders there — see README
-   "שלב חד-פעמי 2" for the exact steps. **This has only been
-   syntax-checked, never run on a real VPS** — no Claude Code cloud
-   session can reach the Contabo box (no registered environment, no SSH
-   access), so a session running *on* that server still needs to
-   actually execute it once and fix whatever's wrong (apt package names,
-   Chromium availability on that distro, etc.).
+0. **THE blocker: Shufersal and Tiv Taam geo-block this server.**
+   Verified on the VPS itself, not inferred. Every path on
+   `www.shufersal.co.il` returns a 444-byte CloudFront placeholder
+   whose image reads "הגישה לאתר פתוחה ממדינות נבחרות בלבד";
+   `www.tivtaam.co.il` returns 403 from a Radware WAF. The Contabo box
+   is in **Lauterbourg, France**, and Contabo has no Israeli region.
+   Proven country-based, not anti-datacenter: via check-host.net,
+   Israeli *datacenter* nodes get a real 404 on
+   `/online/he/<nonsense>` while German/French ones get the block page
+   — so any Israeli IP works, residential or not. Beware: the site
+   soft-404s (200 + real content) on unknown paths at the domain root,
+   so only a path under `/online/he/` distinguishes block from reality.
+   Free routes out, both free and neither yet done: a **Tailscale exit
+   node** on a device at the user's home in Israel (Tailscale is already
+   installed here in userspace mode — see `~/tailscale/`, SOCKS5 on
+   `localhost:1055`, not yet authenticated), or an **Oracle Cloud Always
+   Free** VM in `il-jerusalem-1` used as an SSH `-D` SOCKS proxy. The
+   user has an Android TV box earmarked for the Tailscale route.
+   Whichever lands, point Playwright's `proxy` option at the local SOCKS
+   port — don't reroute the whole server, two other projects' bots run
+   here.
+1. **Headless username/password login probably *does* work** — the
+   opposite of what this file said until 2026-08-29. `eshaham/shufersal-automation`
+   (same author as israeli-bank-scrapers) is a maintained TypeScript
+   library doing exactly that: `createSession(username, password)`, plus
+   cart, orders and delivery slots, with no interactive OTP step. Before
+   investing more in our own Playwright adapter, evaluate whether to
+   drive that library instead. The noVNC remote-desktop flow
+   (`scripts/setup_remote_desktop.sh`, verified working on this box) may
+   turn out to be unnecessary.
 2. **Selectors are unverified guesses.** The CSS selectors and URLs in
    `grocery_bot/adapters/shufersal.py` were written without access to
    the real site. Treat them as *wrong until proven otherwise* by a live
-   run with `PLAYWRIGHT_HEADLESS=false`, not as "probably fine." Fixing
-   them against the real site is expected, planned work — not a sign
-   something else broke.
+   run with `PLAYWRIGHT_HEADLESS=false`, not as "probably fine." They
+   could not be fixed yet because of issue 0 — the site is unreachable
+   from here, so there was nothing real to tune them against.
+2b. **The price/promotion feed is NOT blocked and is already working.**
+   `prices.shufersal.co.il` (the price-transparency feed mandated by
+   Israeli law) is ordinary IIS, not CloudFront, and serves fine from
+   France. `grocery_bot/prices.py` + `catalog.py` build a searchable
+   per-branch catalog from it, powering `/price`, `/deals` and
+   `/refresh_prices` — all live today without any store account.
 3. **This Claude Code cloud session cannot reach the internet needed to
    run or test this bot at all — confirmed, not a guess.** Its outbound
    proxy returns a 403 policy denial for both `shufersal.co.il` and

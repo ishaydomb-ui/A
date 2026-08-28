@@ -1,0 +1,15 @@
+[Unit]
+Description=Refresh the Shufersal price catalog a few times a day
+Documentation=file:/home/codex/grocery-automation/README.md
+
+[Timer]
+# The chain publishes a new PriceFull/PromoFull snapshot several times a
+# day. Three refreshes keep prices current without hammering a public
+# compliance endpoint — each run re-scrapes ~90 listing pages.
+OnCalendar=*-*-* 06,12,18:15:00
+# A missed run (server off, no network) should still refresh once back.
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,35 @@
+[Unit]
+Description=Grocery Telegram bot (shopping list, prices, promotions)
+Documentation=file:/home/codex/grocery-automation/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/grocery-automation
+EnvironmentFile=%h/grocery-automation/.env
+Environment=TZ=Asia/Jerusalem
+ExecStart=%h/grocery-automation/.venv/bin/python -m grocery_bot.main
+
+# Long polling holds an outbound connection open; restart on any drop.
+Restart=always
+RestartSec=10s
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+# The SQLite catalog and the saved store session both live under data/.
+ReadWritePaths=%h/grocery-automation/data
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=grocery-bot
+
+[Install]
+WantedBy=default.target

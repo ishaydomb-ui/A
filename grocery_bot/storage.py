@@ -7,12 +7,14 @@ single-household, low-volume personal tool.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .models import AdHocRequest, BaseListItem
+from .prices import PricedProduct, PromotionItem
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS base_list_items (
@@ -41,6 +43,41 @@ CREATE TABLE IF NOT EXISTS pending_ambiguities (
     candidates TEXT NOT NULL DEFAULT '[]',
     resolved INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
+);
+
+-- Catalog mirrored from the public price feed (see prices.py). Rebuilt
+-- wholesale on each refresh rather than merged: the feed publishes full
+-- snapshots, and a merge would silently keep items the branch has since
+-- delisted.
+CREATE TABLE IF NOT EXISTS catalog_products (
+    item_code TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    manufacturer TEXT NOT NULL DEFAULT '',
+    price REAL NOT NULL,
+    unit_of_measure_price REAL NOT NULL DEFAULT 0,
+    unit_of_measure TEXT NOT NULL DEFAULT '',
+    quantity TEXT NOT NULL DEFAULT '',
+    is_weighted INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS catalog_promotions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    promotion_id TEXT NOT NULL,
+    description TEXT NOT NULL,
+    item_code TEXT NOT NULL,
+    discounted_price REAL NOT NULL DEFAULT 0,
+    min_qty REAL NOT NULL DEFAULT 1,
+    discount_rate REAL NOT NULL DEFAULT 0,
+    starts_at TEXT NOT NULL DEFAULT '',
+    ends_at TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_catalog_promotions_item
+    ON catalog_promotions(item_code);
+
+CREATE TABLE IF NOT EXISTS catalog_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 """
 
@@ -213,3 +250,175 @@ class Storage:
                 "UPDATE pending_ambiguities SET resolved = 1 WHERE id = ?", (ambiguity_id,)
             )
             conn.commit()
+
+    # -- price catalog ----------------------------------------------------
+
+    def replace_catalog(
+        self,
+        products: list[PricedProduct],
+        promotions: list[PromotionItem],
+        meta: dict[str, str] | None = None,
+    ) -> None:
+        """Swap in a freshly downloaded snapshot, atomically.
+
+        Done in one transaction so a failure mid-refresh leaves the
+        previous snapshot intact — answering with slightly stale prices
+        is fine, answering from a half-written catalog is not.
+        """
+        with closing(self._connect()) as conn:
+            with conn:
+                conn.execute("DELETE FROM catalog_products")
+                conn.execute("DELETE FROM catalog_promotions")
+                conn.executemany(
+                    "INSERT OR REPLACE INTO catalog_products "
+                    "(item_code, name, manufacturer, price, unit_of_measure_price, "
+                    " unit_of_measure, quantity, is_weighted) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    [
+                        (
+                            p.item_code,
+                            p.name,
+                            p.manufacturer,
+                            p.price,
+                            p.unit_of_measure_price,
+                            p.unit_of_measure,
+                            p.quantity,
+                            int(p.is_weighted),
+                        )
+                        for p in products
+                    ],
+                )
+                conn.executemany(
+                    "INSERT INTO catalog_promotions "
+                    "(promotion_id, description, item_code, discounted_price, min_qty, "
+                    " discount_rate, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    [
+                        (
+                            r.promotion_id,
+                            r.description,
+                            r.item_code,
+                            r.discounted_price,
+                            r.min_qty,
+                            r.discount_rate,
+                            r.starts_at,
+                            r.ends_at,
+                        )
+                        for r in promotions
+                    ],
+                )
+                for key, value in (meta or {}).items():
+                    conn.execute(
+                        "INSERT OR REPLACE INTO catalog_meta (key, value) VALUES (?, ?)",
+                        (key, value),
+                    )
+                conn.execute(
+                    "INSERT OR REPLACE INTO catalog_meta (key, value) VALUES ('refreshed_at', ?)",
+                    (datetime.now(timezone.utc).isoformat(),),
+                )
+
+    def catalog_meta(self) -> dict[str, str]:
+        with closing(self._connect()) as conn:
+            rows = conn.execute("SELECT key, value FROM catalog_meta").fetchall()
+            count = conn.execute("SELECT COUNT(*) AS n FROM catalog_products").fetchone()["n"]
+        meta = {row["key"]: row["value"] for row in rows}
+        meta["product_count"] = str(count)
+        return meta
+
+    def search_products(self, query: str, limit: int = 8) -> list[PricedProduct]:
+        """Relevance-ranked product search.
+
+        SQL `LIKE` alone is not good enough here: searching חלב returns
+        dozens of שוקולד חלב rows before actual milk. So the shortlist is
+        widened in SQL and ranked in Python, favouring names that *start*
+        with the query, then whole-word matches, then anything else —
+        with shorter names winning ties, since the plain staple ("לחם
+        אחיד") is nearly always what someone means over an elaborate
+        variant.
+        """
+        term = query.strip()
+        if not term:
+            return []
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT * FROM catalog_products WHERE name LIKE ? ORDER BY price LIMIT 400",
+                (f"%{term}%",),
+            ).fetchall()
+
+        def score(name: str) -> tuple[int, int]:
+            if name.startswith(term):
+                rank = 0
+            elif re.search(rf"(?:^|\s){re.escape(term)}(?:\s|$)", name):
+                rank = 1
+            elif re.search(rf"(?:^|\s){re.escape(term)}", name):
+                rank = 2
+            else:
+                rank = 3
+            return rank, len(name)
+
+        ranked = sorted(rows, key=lambda row: score(row["name"]))
+        return [self._row_to_product(row) for row in ranked[:limit]]
+
+    def active_promotions_for(self, item_code: str, now: datetime | None = None) -> list[PromotionItem]:
+        """Promotions currently running for one item.
+
+        The feed keeps long-dead and far-future rows (coupons dated 2014
+        through 2031), so anything not live right now is filtered out —
+        otherwise the bot would advertise deals that don't exist.
+        """
+        moment = (now or datetime.now()).strftime("%Y-%m-%dT%H:%M:%S")
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT * FROM catalog_promotions WHERE item_code = ? "
+                "AND (starts_at = '' OR starts_at <= ?) AND (ends_at = '' OR ends_at >= ?)",
+                (item_code, moment, moment),
+            ).fetchall()
+        return [
+            PromotionItem(
+                promotion_id=row["promotion_id"],
+                description=row["description"],
+                item_code=row["item_code"],
+                discounted_price=row["discounted_price"],
+                min_qty=row["min_qty"],
+                discount_rate=row["discount_rate"],
+                starts_at=row["starts_at"],
+                ends_at=row["ends_at"],
+            )
+            for row in rows
+        ]
+
+    def best_deal_for(
+        self, product: PricedProduct, now: datetime | None = None
+    ) -> PromotionItem | None:
+        """The cheapest genuine promotion on an item, or None.
+
+        Most rows attached to an item are not really discounts. The feed
+        is full of blanket entries — payment-card coupons ("ע. סיבוס
+        קופון"), club perks — that are listed against every product with
+        a "discounted" price equal to the shelf price. Reporting those as
+        deals would make every single item look like it's on sale, which
+        is worse than saying nothing. So a row only counts when it
+        actually beats the shelf price.
+        """
+        candidates = [
+            promo
+            for promo in self.active_promotions_for(product.item_code, now)
+            if 0 < promo.discounted_price < product.price
+        ]
+        return min(candidates, key=lambda p: p.discounted_price) if candidates else None
+
+    def search_with_deals(
+        self, query: str, limit: int = 8, now: datetime | None = None
+    ) -> list[tuple[PricedProduct, PromotionItem | None]]:
+        return [(p, self.best_deal_for(p, now)) for p in self.search_products(query, limit)]
+
+    @staticmethod
+    def _row_to_product(row: sqlite3.Row) -> PricedProduct:
+        return PricedProduct(
+            item_code=row["item_code"],
+            name=row["name"],
+            manufacturer=row["manufacturer"],
+            price=row["price"],
+            unit_of_measure_price=row["unit_of_measure_price"],
+            unit_of_measure=row["unit_of_measure"],
+            quantity=row["quantity"],
+            is_weighted=bool(row["is_weighted"]),
+        )

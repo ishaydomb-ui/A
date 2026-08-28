@@ -22,6 +22,10 @@ class Config:
     tivtaam_storage_state_path: str
     enabled_stores: list[str]
     headless: bool = True
+    # Which branch the public price/promotion feed is read for. Prices and
+    # promotions are per-branch, so this has to name a real store id from
+    # the dropdown at prices.shufersal.co.il.
+    shufersal_price_store_id: str = "9"
 
     @staticmethod
     def from_env() -> "Config":
@@ -45,4 +49,5 @@ class Config:
             ),
             enabled_stores=_split_csv(os.environ.get("ENABLED_STORES", "shufersal")),
             headless=os.environ.get("PLAYWRIGHT_HEADLESS", "true").lower() != "false",
+            shufersal_price_store_id=os.environ.get("SHUFERSAL_PRICE_STORE_ID", "9"),
         )

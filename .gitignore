@@ -7,3 +7,6 @@ data/*.sqlite3
 data/sessions/*.json
 !data/sessions/.gitkeep
 .remote_desktop/
+
+# Personal data: the real base list stays local; the .example file is the template.
+data/base_list.yaml

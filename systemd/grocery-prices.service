@@ -1,0 +1,27 @@
+[Unit]
+Description=Refresh Shufersal price/promotion catalog from the public feed
+Documentation=file:/home/codex/grocery-automation/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/grocery-automation
+EnvironmentFile=%h/grocery-automation/.env
+Environment=TZ=Asia/Jerusalem
+ExecStart=%h/grocery-automation/.venv/bin/python -m grocery_bot.cli refresh-prices
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/grocery-automation/data
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=grocery-prices
