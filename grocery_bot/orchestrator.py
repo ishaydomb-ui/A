@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Callable
 
 from .adapters.base import StoreAdapter
-from .models import OrderCycleReport
+from .models import CartAddResult, OrderCycleReport
 from .storage import Storage
 
 AdapterFactory = Callable[[], StoreAdapter]
@@ -36,6 +36,23 @@ def run_order_cycle(storage: Storage, adapter_factories: dict[str, AdapterFactor
     for store, make_adapter in adapter_factories.items():
         report = OrderCycleReport(store=store)
         with make_adapter() as adapter:
+            # Renew an expired session before spending a whole cycle on it.
+            # Without this every item fails with a redirect-to-login that
+            # looks like broken selectors, and the user gets asked to log in
+            # again -- exactly the manual dependency the project rules out.
+            ensure = getattr(adapter, "ensure_session", None)
+            if ensure is not None and not ensure():
+                report.record(
+                    CartAddResult(
+                        item_name="(session)",
+                        store=store,
+                        status="error",
+                        detail="Session expired and could not be renewed automatically.",
+                    )
+                )
+                reports[store] = report
+                continue
+
             for base_item in base_items:
                 term = base_item.search_term_for(store)
                 result = _add_one(storage, adapter, store, term, base_item.default_quantity)

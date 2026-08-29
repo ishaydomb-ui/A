@@ -77,15 +77,16 @@ MAX_CANDIDATES = 5
 class ShufersalAdapter(StoreAdapter):
     name = "shufersal"
 
-    def __init__(self, storage_state_path: str, headless: bool = True, proxy: str = ""):
+    def __init__(
+        self,
+        storage_state_path: str,
+        headless: bool = True,
+        proxy: str = "",
+        username: str = "",
+        password: str = "",
+    ):
         from playwright.sync_api import sync_playwright  # lazy: only needed here
 
-        state_path = Path(storage_state_path)
-        if not state_path.exists():
-            raise FileNotFoundError(
-                f"No saved Shufersal session at {storage_state_path}. "
-                "Run scripts/login_helper.py once first (see README)."
-            )
         if not proxy:
             raise RuntimeError(
                 "Shufersal blocks non-Israeli IPs and this server is in France, so a "
@@ -94,12 +95,69 @@ class ShufersalAdapter(StoreAdapter):
                 "like broken selectors rather than a blocked request."
             )
 
+        self._storage_state_path = storage_state_path
+        self._proxy = proxy
+        self._headless = headless
+        self._username = username
+        self._password = password
+
+        state_path = Path(storage_state_path)
+        if not state_path.exists():
+            # Credentials make the one-time manual login unnecessary: log in
+            # now rather than failing and waiting for a human.
+            self._login()
+
         self._playwright = sync_playwright().start()
         self._browser = self._playwright.chromium.launch(
             headless=headless, proxy={"server": proxy}
         )
         self._context = self._browser.new_context(storage_state=str(state_path))
         self._page = self._context.new_page()
+
+    def _login(self) -> None:
+        """Create a fresh session file from stored credentials."""
+        from ..login import login_and_save_session
+
+        if not self._username or not self._password:
+            raise FileNotFoundError(
+                f"No saved Shufersal session at {self._storage_state_path} and no "
+                "credentials configured to create one. Either set "
+                "SHUFERSAL_USERNAME/SHUFERSAL_PASSWORD, or run "
+                "scripts/login_helper.py once (see README)."
+            )
+        Path(self._storage_state_path).parent.mkdir(parents=True, exist_ok=True)
+        logger.info("Shufersal: logging in to create a new session")
+        login_and_save_session(
+            username=self._username,
+            password=self._password,
+            output_path=self._storage_state_path,
+            proxy=self._proxy,
+            headless=self._headless,
+        )
+
+    def ensure_session(self) -> bool:
+        """Re-login if the saved session has expired. Returns True if usable.
+
+        This is what keeps the project's "minimum user dependency" promise:
+        a session that expires mid-life gets replaced silently rather than
+        surfacing as "please log in again" on every cycle. Only a genuine
+        credential problem (or an OTP challenge) still needs the user.
+        """
+        if self.is_session_valid():
+            return True
+        if not self._username or not self._password:
+            logger.warning("Shufersal session expired and no credentials to renew it")
+            return False
+        try:
+            self._login()
+        except Exception:
+            logger.exception("Shufersal: re-login failed")
+            return False
+        # Swap in the refreshed cookies without tearing down the browser.
+        self._context.close()
+        self._context = self._browser.new_context(storage_state=self._storage_state_path)
+        self._page = self._context.new_page()
+        return self.is_session_valid()
 
     def is_session_valid(self) -> bool:
         try:

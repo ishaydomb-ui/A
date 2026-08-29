@@ -188,3 +188,57 @@ class _ErroringAdapter(_AlwaysAmbiguousAdapter):
 class _AlwaysAddsAdapter(_AlwaysAmbiguousAdapter):
     def search_and_add(self, term, quantity=1):
         return CartAddResult(item_name=term, store="shufersal", status="added", quantity=quantity)
+
+
+class _ExpiredSessionAdapter(_AlwaysAddsAdapter):
+    """An adapter whose session is dead and cannot be renewed."""
+
+    def __init__(self):
+        super().__init__()
+        self.searched = False
+
+    def ensure_session(self) -> bool:
+        return False
+
+    def search_and_add(self, term, quantity=1):
+        self.searched = True
+        return super().search_and_add(term, quantity)
+
+
+class _RenewedSessionAdapter(_AlwaysAddsAdapter):
+    def ensure_session(self) -> bool:
+        return True
+
+
+class SessionGateTests(unittest.TestCase):
+    """A dead session must abort the cycle, not burn every item on it."""
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.storage = Storage(str(Path(self._tmpdir.name) / "test.sqlite3"))
+        self.storage.add_base_list_item("חלב", default_quantity=1)
+
+    def tearDown(self) -> None:
+        self._tmpdir.cleanup()
+
+    def test_unrenewable_session_reports_error_without_searching(self) -> None:
+        adapter = _ExpiredSessionAdapter()
+        reports = run_order_cycle(self.storage, {"shufersal": lambda: adapter})
+
+        self.assertFalse(adapter.searched, "should not search with a dead session")
+        self.assertEqual(len(reports["shufersal"].errors), 1)
+        self.assertEqual(reports["shufersal"].added, [])
+
+    def test_renewed_session_proceeds_normally(self) -> None:
+        adapter = _RenewedSessionAdapter()
+        reports = run_order_cycle(self.storage, {"shufersal": lambda: adapter})
+
+        self.assertEqual(len(reports["shufersal"].added), 1)
+        self.assertEqual(reports["shufersal"].errors, [])
+
+    def test_adapter_without_ensure_session_still_works(self) -> None:
+        """Older/simpler adapters (and the test fakes) have no such method."""
+        adapter = _AlwaysAddsAdapter()
+        reports = run_order_cycle(self.storage, {"shufersal": lambda: adapter})
+
+        self.assertEqual(len(reports["shufersal"].added), 1)

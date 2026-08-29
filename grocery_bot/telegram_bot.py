@@ -69,8 +69,14 @@ def _build_adapter_factories(config: Config):
             logger.warning("No adapter implemented yet for store %r, skipping", store)
             continue
         state_path = session_paths[store]
-        factories[store] = lambda cls=adapter_cls, path=state_path: cls(
-            path, headless=config.headless, proxy=config.playwright_proxy
+        # Credentials are per-store; only Shufersal has them wired up so far.
+        credentials = (
+            {"username": config.shufersal_username, "password": config.shufersal_password}
+            if store == "shufersal"
+            else {}
+        )
+        factories[store] = lambda cls=adapter_cls, path=state_path, creds=credentials: cls(
+            path, headless=config.headless, proxy=config.playwright_proxy, **creds
         )
     return factories
 

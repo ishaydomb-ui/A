@@ -32,6 +32,12 @@ class Config:
     # promotions are per-branch, so this has to name a real store id from
     # the dropdown at prices.shufersal.co.il.
     shufersal_price_store_id: str = "9"
+    # Store credentials, used only to re-create an expired session without
+    # interrupting the user (the project's "minimum user dependency" rule).
+    # Optional: with them unset the bot still runs, it just can't recover
+    # on its own once the saved session expires.
+    shufersal_username: str = ""
+    shufersal_password: str = ""
 
     @staticmethod
     def from_env() -> "Config":
@@ -57,4 +63,6 @@ class Config:
             headless=os.environ.get("PLAYWRIGHT_HEADLESS", "true").lower() != "false",
             shufersal_price_store_id=os.environ.get("SHUFERSAL_PRICE_STORE_ID", "9"),
             playwright_proxy=os.environ.get("PLAYWRIGHT_PROXY", ""),
+            shufersal_username=os.environ.get("SHUFERSAL_USERNAME", ""),
+            shufersal_password=os.environ.get("SHUFERSAL_PASSWORD", ""),
         )
