@@ -28,11 +28,18 @@ from .catalog import (
     refresh_catalog,
 )
 from .config import Config
+from .connectivity import check_israeli_exit
 from .nlu import ParsedItem, build_meal_plan, expand_recipe, parse_message
 from .orchestrator import format_report_summary, run_order_cycle
 from .storage import Storage
 
 logger = logging.getLogger(__name__)
+
+# How often to check whether the Israeli exit node came back, when a cycle
+# is waiting on it. The exit is a TV box someone switches on and off by
+# hand, so there is nothing to subscribe to — polling is the only option.
+# Two minutes keeps the wait short without hammering the probe endpoint.
+EXIT_POLL_SECONDS = 120
 
 
 def _describe_parsed(item: ParsedItem) -> str:
@@ -303,13 +310,32 @@ class GroceryBot:
     async def start_order(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not _authorized(self.config, update):
             return
-        await update.message.reply_text("מתחיל מחזור קנייה, זה ייקח כמה רגעים...")
         factories = _build_adapter_factories(self.config)
         if not factories:
             await update.message.reply_text(
                 "אין אף רשת מוגדרת/מיושמת (בדקו ENABLED_STORES ואת שלב ה-login החד-פעמי)."
             )
             return
+
+        # Check the Israeli exit *before* starting. Without this the cycle
+        # runs anyway and every single item comes back as an error, which
+        # reads like the bot is broken rather than like the exit node at
+        # home is simply switched off.
+        status = await asyncio.to_thread(check_israeli_exit, self.config.playwright_proxy)
+        if not status.available:
+            self.storage.defer_cycle(
+                chat_id=update.effective_chat.id,
+                requested_by=update.effective_user.full_name if update.effective_user else "",
+            )
+            pending = len(self.storage.list_pending_adhoc())
+            await update.message.reply_text(
+                f"🕒 אין כרגע חיבור לשופרסל ({status.detail}).\n"
+                f"המחזור נשמר בתור ({pending} בקשות ממתינות) ויתחיל אוטומטית "
+                "ברגע שהחיבור יחזור — לא צריך לשלוח שוב."
+            )
+            return
+
+        await update.message.reply_text("מתחיל מחזור קנייה, זה ייקח כמה רגעים...")
         try:
             reports = await asyncio.to_thread(run_order_cycle, self.storage, factories)
         except Exception:
@@ -384,6 +410,64 @@ class GroceryBot:
             )
 
 
+    async def drain_deferred_cycle(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Run a queued cycle once the Israeli exit is reachable again.
+
+        Scheduled on the bot's job queue, so it survives the conversation
+        that requested the cycle being long over. Does nothing (cheaply)
+        when nothing is queued — the probe only runs if there's actually a
+        cycle waiting on it.
+        """
+        pending = self.storage.pending_deferred_cycle()
+        if pending is None:
+            return
+
+        status = await asyncio.to_thread(check_israeli_exit, self.config.playwright_proxy)
+        if not status.available:
+            return
+
+        factories = _build_adapter_factories(self.config)
+        if not factories:
+            return
+
+        chat_id = pending["chat_id"]
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="🟢 החיבור לשופרסל חזר — מריץ עכשיו את מחזור הקנייה שהמתין בתור.",
+        )
+        try:
+            reports = await asyncio.to_thread(run_order_cycle, self.storage, factories)
+        except Exception:
+            logger.exception("Deferred order cycle failed")
+            # Deliberately left un-done so it retries on the next tick: the
+            # failure may well be the exit dropping again mid-cycle, and
+            # silently discarding a queued cycle would lose real requests.
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="המחזור שהמתין בתור נכשל — אנסה שוב אוטומטית. בדקו את הלוגים אם זה חוזר.",
+            )
+            return
+
+        self.storage.mark_deferred_cycle_done(pending["id"])
+        summary = format_report_summary(reports)
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=summary or "לא היה מה להוסיף.",
+            parse_mode="Markdown",
+        )
+        for item in self.storage.list_pending_ambiguities():
+            buttons = [
+                [InlineKeyboardButton(label, callback_data=f"resolve:{item['id']}:{i}")]
+                for i, label in enumerate(item["candidates"])
+            ]
+            buttons.append([InlineKeyboardButton("דלג", callback_data=f"skip:{item['id']}:0")])
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"[{item['store']}] '{item['original_term']}' — כמה תוצאות מתאימות, איזו?",
+                reply_markup=InlineKeyboardMarkup(buttons),
+            )
+
+
 async def _register_bot_metadata(application: Application) -> None:
     """Keep BotFather's command list/description in sync with the code.
 
@@ -420,4 +504,16 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("refresh_prices", bot.refresh_prices))
     application.add_handler(CallbackQueryHandler(bot.resolve_ambiguity, pattern=r"^(resolve|skip):"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bot.handle_message))
+    if application.job_queue is not None:
+        application.job_queue.run_repeating(
+            bot.drain_deferred_cycle,
+            interval=EXIT_POLL_SECONDS,
+            first=EXIT_POLL_SECONDS,
+            name="drain_deferred_cycle",
+        )
+    else:  # pragma: no cover - depends on optional PTB extra
+        logger.warning(
+            "JobQueue unavailable: a cycle requested while the exit node is down "
+            "will stay queued until /start_order is sent again."
+        )
     return application

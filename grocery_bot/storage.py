@@ -93,6 +93,20 @@ CREATE TABLE IF NOT EXISTS preferred_products (
     chosen_at TEXT NOT NULL,
     PRIMARY KEY (store, term)
 );
+
+-- An order cycle asked for while the Israeli exit node was down (the exit
+-- runs on a TV box at home that gets switched off, so this is routine, not
+-- an error). The cycle is held here and run automatically once the exit
+-- comes back, so the user never has to notice the outage or re-issue the
+-- request. chat_id is stored because the report has to reach whoever asked,
+-- in a conversation that may be long over by the time it runs.
+CREATE TABLE IF NOT EXISTS deferred_cycles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id INTEGER NOT NULL,
+    requested_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    done INTEGER NOT NULL DEFAULT 0
+);
 """
 
 
@@ -302,6 +316,41 @@ class Storage:
             conn.execute(
                 "UPDATE adhoc_requests SET consumed = 1 WHERE id = ?", (request_id,)
             )
+            conn.commit()
+
+    # -- order cycles deferred until the Israeli exit is back --------------
+
+    def defer_cycle(self, chat_id: int, requested_by: str) -> int:
+        """Queue an order cycle to run when the exit node is reachable.
+
+        Collapses onto any cycle already waiting rather than stacking:
+        asking twice while the TV box is off means "I want a cycle", not
+        "run two identical cycles back to back" — the second would find an
+        already-filled cart and add everything a second time.
+        """
+        with closing(self._connect()) as conn:
+            existing = conn.execute(
+                "SELECT id FROM deferred_cycles WHERE done = 0 ORDER BY id LIMIT 1"
+            ).fetchone()
+            if existing is not None:
+                return int(existing["id"])
+            cursor = conn.execute(
+                "INSERT INTO deferred_cycles (chat_id, requested_by, created_at) VALUES (?, ?, ?)",
+                (chat_id, requested_by, datetime.now(timezone.utc).isoformat()),
+            )
+            conn.commit()
+            return int(cursor.lastrowid)
+
+    def pending_deferred_cycle(self) -> dict | None:
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                "SELECT * FROM deferred_cycles WHERE done = 0 ORDER BY id LIMIT 1"
+            ).fetchone()
+        return dict(row) if row is not None else None
+
+    def mark_deferred_cycle_done(self, cycle_id: int) -> None:
+        with closing(self._connect()) as conn:
+            conn.execute("UPDATE deferred_cycles SET done = 1 WHERE id = ?", (cycle_id,))
             conn.commit()
 
     # -- pending ambiguity decisions --------------------------------------

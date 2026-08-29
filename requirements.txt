@@ -1,3 +1,7 @@
-python-telegram-bot>=21.0,<22
+# [job-queue] is required, not optional: it supplies the scheduler that
+# retries an order cycle once the Israeli exit node comes back online.
+# Without the extra, telegram.ext.JobQueue still imports but
+# Application.job_queue is None and the retry silently never runs.
+python-telegram-bot[job-queue]>=21.0,<22
 playwright>=1.45,<2
 PyYAML>=6.0,<7
