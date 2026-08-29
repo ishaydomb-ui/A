@@ -289,8 +289,16 @@ class ShufersalAdapter(StoreAdapter):
                 logger.info(
                     "Shufersal: remove click for %r raised; verifying actual state", product_code
                 )
-            self._page.wait_for_timeout(1_000)  # let the removal request settle
-            return article.count() == 0
+            # Wait for the row to actually go, rather than sleeping a fixed
+            # second and hoping. The cart re-renders asynchronously, and a
+            # too-early check reported failure for removals that had in fact
+            # succeeded -- a false negative is worse than a slow answer,
+            # because the caller retries or tells the user it failed.
+            try:
+                article.first.wait_for(state="detached", timeout=15_000)
+                return True
+            except Exception:
+                return article.count() == 0
         except Exception:
             logger.exception("Shufersal: failed to remove %r from cart", product_code)
             return False
