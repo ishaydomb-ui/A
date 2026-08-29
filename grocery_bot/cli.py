@@ -8,6 +8,7 @@ Run with: python -m grocery_bot.cli <command>
     import-base-list <f>  load a YAML base list into the database
     import-history        build the base list from real past orders
                           [--year N] [--min-share F] [--memory-only] [--dry-run]
+    build-stock           derive proposable products, tiers and departments
 
 `refresh-prices` is the one meant for a scheduler — the feed publishes a
 new full snapshot a few times a day, and a stale catalog quietly gives
@@ -73,6 +74,9 @@ def main(argv: list[str] | None = None) -> int:
     if command == "import-history":
         return _import_history(config, storage, rest)
 
+    if command == "build-stock":
+        return _build_stock(config, storage, rest)
+
     return _usage()
 
 
@@ -126,6 +130,38 @@ def _import_history(config: Config, storage: Storage, args: list[str]) -> int:
     if not memory_only:
         count = import_base_list(storage, history, min_share=min_share)
         print(f"imported {count} base-list items (bought in {min_share * 100:.0f}%+ of orders)")
+    return 0
+
+
+def _build_stock(config: Config, storage: Storage, args: list[str]) -> int:
+    """Derive the proposable product set from real order history."""
+    from .adapters.shufersal import ShufersalAdapter
+    from .history import fetch_order_history
+    from .stock import build_from_orders, group_by_department
+
+    store = (config.enabled_stores or ["shufersal"])[0]
+    adapter = ShufersalAdapter(
+        config.shufersal_storage_state_path,
+        headless=config.headless,
+        proxy=config.playwright_proxy,
+        username=config.shufersal_username,
+        password=config.shufersal_password,
+    )
+    try:
+        if not adapter.ensure_session():
+            print("Could not get a valid session.")
+            return 1
+        orders = fetch_order_history(adapter._page, year=_int_flag(args, "--year"))
+    finally:
+        adapter.close()
+
+    items = build_from_orders(orders)
+    storage.replace_stock_items(store, items)
+    departments = group_by_department(items)
+    proposed = sum(len(d.items) for d in departments)
+    print(f"{len(orders)} orders -> {len(items)} products, {proposed} worth proposing")
+    for department in departments:
+        print(f"  {department.name}: {len(department.items)}")
     return 0
 
 

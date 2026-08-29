@@ -107,6 +107,56 @@ CREATE TABLE IF NOT EXISTS deferred_cycles (
     created_at TEXT NOT NULL,
     done INTEGER NOT NULL DEFAULT 0
 );
+
+-- Products the household buys regularly enough to be worth proposing,
+-- with how reliably they appear and which part of the shop they live in.
+-- Rebuilt from purchase history, but carries its own learning columns so
+-- the user's actual choices override what the history inferred.
+--
+-- `store` is on the row rather than assumed, because a second chain is
+-- coming: the same product is bought at whichever shop is cheaper that
+-- week, and tiers have to be able to merge or stay separate per store
+-- without a migration.
+CREATE TABLE IF NOT EXISTS stock_items (
+    store TEXT NOT NULL,
+    product_code TEXT NOT NULL,
+    product_name TEXT NOT NULL,
+    department TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL DEFAULT '',
+    tier TEXT NOT NULL DEFAULT 'C',
+    share REAL NOT NULL DEFAULT 0,
+    default_quantity INTEGER NOT NULL DEFAULT 1,
+    amount REAL,
+    unit TEXT NOT NULL DEFAULT '',
+    -- How often the user kept vs removed this when it was proposed. The
+    -- history cannot see what was bought at the other chain, so these are
+    -- the only signal for "we stopped needing this".
+    picked_count INTEGER NOT NULL DEFAULT 0,
+    skipped_count INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (store, product_code)
+);
+
+-- One round of "here is what I propose to buy" awaiting the user's ticks.
+CREATE TABLE IF NOT EXISTS proposals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open'
+);
+
+CREATE TABLE IF NOT EXISTS proposal_items (
+    proposal_id INTEGER NOT NULL,
+    store TEXT NOT NULL,
+    product_code TEXT NOT NULL,
+    product_name TEXT NOT NULL,
+    department TEXT NOT NULL DEFAULT '',
+    quantity INTEGER NOT NULL DEFAULT 1,
+    amount REAL,
+    unit TEXT NOT NULL DEFAULT '',
+    selected INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (proposal_id, store, product_code)
+);
 """
 
 
@@ -399,6 +449,152 @@ class Storage:
     def mark_deferred_cycle_done(self, cycle_id: int) -> None:
         with closing(self._connect()) as conn:
             conn.execute("UPDATE deferred_cycles SET done = 1 WHERE id = ?", (cycle_id,))
+            conn.commit()
+
+    # -- stock items (what is worth proposing) -----------------------------
+
+    def replace_stock_items(self, store: str, items: list) -> int:
+        """Refresh the proposable set, preserving what the user taught us.
+
+        picked/skipped counts survive a rebuild on purpose: they are the
+        only signal that is not visible in the purchase history (which
+        cannot see the other chain), so a re-derivation must never wipe
+        them.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        with closing(self._connect()) as conn:
+            learned = {
+                row["product_code"]: (row["picked_count"], row["skipped_count"])
+                for row in conn.execute(
+                    "SELECT product_code, picked_count, skipped_count FROM stock_items "
+                    "WHERE store = ?",
+                    (store,),
+                )
+            }
+            conn.execute("DELETE FROM stock_items WHERE store = ?", (store,))
+            conn.executemany(
+                "INSERT INTO stock_items (store, product_code, product_name, department, "
+                "category, tier, share, default_quantity, amount, unit, picked_count, "
+                "skipped_count, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                [
+                    (
+                        store,
+                        item.product_code,
+                        item.product_name,
+                        item.department,
+                        item.category,
+                        item.tier,
+                        item.share,
+                        item.default_quantity,
+                        item.amount,
+                        item.unit,
+                        learned.get(item.product_code, (0, 0))[0],
+                        learned.get(item.product_code, (0, 0))[1],
+                        now,
+                    )
+                    for item in items
+                ],
+            )
+            conn.commit()
+        return len(items)
+
+    def list_stock_items(self, store: str) -> list[dict]:
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT * FROM stock_items WHERE store = ? ORDER BY share DESC", (store,)
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def record_stock_feedback(self, store: str, picked: list[str], skipped: list[str]) -> None:
+        """Remember which proposals the user kept and which they removed."""
+        with closing(self._connect()) as conn:
+            conn.executemany(
+                "UPDATE stock_items SET picked_count = picked_count + 1 "
+                "WHERE store = ? AND product_code = ?",
+                [(store, code) for code in picked],
+            )
+            conn.executemany(
+                "UPDATE stock_items SET skipped_count = skipped_count + 1 "
+                "WHERE store = ? AND product_code = ?",
+                [(store, code) for code in skipped],
+            )
+            conn.commit()
+
+    # -- proposals awaiting the user's ticks --------------------------------
+
+    def create_proposal(self, chat_id: int, items: list[dict]) -> int:
+        with closing(self._connect()) as conn:
+            conn.execute("UPDATE proposals SET status = 'abandoned' WHERE status = 'open'")
+            cursor = conn.execute(
+                "INSERT INTO proposals (chat_id, created_at) VALUES (?, ?)",
+                (chat_id, datetime.now(timezone.utc).isoformat()),
+            )
+            proposal_id = int(cursor.lastrowid)
+            conn.executemany(
+                "INSERT INTO proposal_items (proposal_id, store, product_code, product_name, "
+                "department, quantity, amount, unit, selected) VALUES (?,?,?,?,?,?,?,?,?)",
+                [
+                    (
+                        proposal_id,
+                        item["store"],
+                        item["product_code"],
+                        item["product_name"],
+                        item.get("department", ""),
+                        item.get("quantity", 1),
+                        item.get("amount"),
+                        item.get("unit", ""),
+                        1 if item.get("selected", True) else 0,
+                    )
+                    for item in items
+                ],
+            )
+            conn.commit()
+            return proposal_id
+
+    def open_proposal(self) -> dict | None:
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                "SELECT * FROM proposals WHERE status = 'open' ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+        return dict(row) if row else None
+
+    def proposal_items(self, proposal_id: int, department: str | None = None) -> list[dict]:
+        query = "SELECT * FROM proposal_items WHERE proposal_id = ?"
+        params: tuple = (proposal_id,)
+        if department is not None:
+            query += " AND department = ?"
+            params += (department,)
+        with closing(self._connect()) as conn:
+            rows = conn.execute(query + " ORDER BY rowid", params).fetchall()
+        return [dict(row) for row in rows]
+
+    def toggle_proposal_item(self, proposal_id: int, product_code: str) -> bool:
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                "SELECT selected FROM proposal_items WHERE proposal_id = ? AND product_code = ?",
+                (proposal_id, product_code),
+            ).fetchone()
+            if row is None:
+                return False
+            new_value = 0 if row["selected"] else 1
+            conn.execute(
+                "UPDATE proposal_items SET selected = ? WHERE proposal_id = ? AND product_code = ?",
+                (new_value, proposal_id, product_code),
+            )
+            conn.commit()
+            return bool(new_value)
+
+    def set_department_selection(self, proposal_id: int, department: str, selected: bool) -> None:
+        with closing(self._connect()) as conn:
+            conn.execute(
+                "UPDATE proposal_items SET selected = ? WHERE proposal_id = ? AND department = ?",
+                (1 if selected else 0, proposal_id, department),
+            )
+            conn.commit()
+
+    def close_proposal(self, proposal_id: int, status: str = "confirmed") -> None:
+        with closing(self._connect()) as conn:
+            conn.execute("UPDATE proposals SET status = ? WHERE id = ?", (status, proposal_id))
             conn.commit()
 
     # -- pending ambiguity decisions --------------------------------------

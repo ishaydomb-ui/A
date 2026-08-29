@@ -30,6 +30,7 @@ from .catalog import (
     refresh_catalog,
 )
 from .cartview import MIN_EDIT_INTERVAL_SECONDS, render_final, render_progress
+from .checklist import render_department, render_summary
 from .config import Config
 from .disambiguate import describe_card
 from .connectivity import check_israeli_exit  # noqa: F401  (kept for tests/back-compat)
@@ -91,6 +92,48 @@ def _build_adapter_factories(config: Config):
     return factories
 
 
+def _preticked(row: dict) -> bool:
+    """Pre-ticked unless the user has repeatedly removed it.
+
+    Tier A is shown ticked rather than added silently: the user asked to
+    see everything going in, so a wrong one is one tap from removal
+    instead of a surprise found at checkout.
+    """
+    from .stock import DEMOTE_AFTER_SKIPS
+
+    skipped, picked = row.get("skipped_count", 0), row.get("picked_count", 0)
+    return not (skipped >= DEMOTE_AFTER_SKIPS and skipped > picked)
+
+
+def _department_buttons(proposal_id: int, department: str, rows: list[dict]):
+    """Number buttons per item, then bulk actions.
+
+    Numbers rather than names because Telegram truncates long labels at
+    roughly 24 Hebrew characters, which would hide what distinguishes one
+    product from another.
+    """
+    buttons, row = [], []
+    for position, item in enumerate(rows, start=1):
+        row.append(
+            InlineKeyboardButton(
+                f"{'✅' if item['selected'] else '⬜'}{position}",
+                callback_data=f"ptoggle:{proposal_id}:{department}:{item['product_code']}",
+            )
+        )
+        if len(row) == 5:
+            buttons.append(row)
+            row = []
+    if row:
+        buttons.append(row)
+    buttons.append(
+        [
+            InlineKeyboardButton("סמן הכל", callback_data=f"pall:{proposal_id}:{department}"),
+            InlineKeyboardButton("נקה הכל", callback_data=f"pnone:{proposal_id}:{department}"),
+        ]
+    )
+    return buttons
+
+
 def _authorized(config: Config, update: Update) -> bool:
     if not config.allowed_telegram_user_ids:
         return True  # no allowlist configured -> open (fine for a private single-user bot)
@@ -117,7 +160,8 @@ class GroceryBot:
             "*רשימה מול סל:*\n"
             "• *תוסיף X* — נכנס לרשימה שממתינה למחזור הבא\n"
             "• *תוסיף X לעגלה* — נכנס עכשיו לסל האמיתי בשופרסל\n"
-            "• *מלא את העגלה* — מריץ מחזור מלא על כל מה שברשימה\n\n"
+            "• *מלא את העגלה* — מריץ מחזור מלא על כל מה שברשימה\n"
+            "• */propose* — הצעה לפי מחלקות: הכל מסומן, מורידים מה שלא צריך\n\n"
             "_תמיד עוצר על סל מוכן — הבדיקה והתשלום נשארים אצלכם._",
             parse_mode="Markdown",
         )
@@ -221,6 +265,127 @@ class GroceryBot:
     async def _do_start_order(self, update, context, parsed, requested_by: str) -> None:
         """Let plain Hebrew start a cycle, not just the /start_order command."""
         await self.start_order(update, context)
+
+    # -- proposal checklists ------------------------------------------------
+
+    async def propose_cycle(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Offer what to buy as per-department checklists, pre-ticked."""
+        if not _authorized(self.config, update):
+            return
+        store = (self.config.enabled_stores or ["shufersal"])[0]
+        stock = self.storage.list_stock_items(store)
+        if not stock:
+            await update.message.reply_text(
+                "עדיין אין לי מספיק היסטוריה כדי להציע רשימה. "
+                "הריצו `python -m grocery_bot.cli import-history` בשרת.",
+                parse_mode="Markdown",
+            )
+            return
+
+        proposed = [row for row in stock if row["tier"] in ("A", "B", "C")]
+        items = [
+            {
+                "store": store,
+                "product_code": row["product_code"],
+                "product_name": row["product_name"],
+                "department": row["department"],
+                "quantity": row["default_quantity"],
+                "amount": row["amount"],
+                "unit": row["unit"],
+                "selected": _preticked(row),
+            }
+            for row in proposed
+        ]
+        proposal_id = self.storage.create_proposal(update.effective_chat.id, items)
+        await update.message.reply_text(
+            f"הכנתי הצעה של {len(items)} פריטים ב-{len({i['department'] for i in items})} מחלקות, "
+            "לפי מה שאתם קונים בפועל. עברו מחלקה־מחלקה והורידו מה שלא צריך השבוע."
+        )
+        await self._send_departments(update.effective_chat.id, context, proposal_id)
+
+    async def _send_departments(self, chat_id: int, context, proposal_id: int) -> None:
+        items = self.storage.proposal_items(proposal_id)
+        names = list(dict.fromkeys(item["department"] for item in items))
+        for index, department in enumerate(names, start=1):
+            rows = [item for item in items if item["department"] == department]
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=render_department(department, rows, index, len(names)),
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(_department_buttons(proposal_id, department, rows)),
+            )
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=render_summary([(n, [i for i in items if i["department"] == n]) for n in names]),
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🛒 אישור ומילוי הסל", callback_data=f"pconfirm:{proposal_id}")]]
+            ),
+        )
+
+    async def on_proposal_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        await query.answer()
+        parts = query.data.split(":")
+        action, proposal_id = parts[0], int(parts[1])
+
+        if action == "pconfirm":
+            await self._confirm_proposal(query, context, proposal_id)
+            return
+
+        department = parts[2] if len(parts) > 2 else ""
+        if action == "ptoggle":
+            self.storage.toggle_proposal_item(proposal_id, parts[3])
+        elif action == "pall":
+            self.storage.set_department_selection(proposal_id, department, True)
+        elif action == "pnone":
+            self.storage.set_department_selection(proposal_id, department, False)
+
+        rows = self.storage.proposal_items(proposal_id, department=department)
+        all_items = self.storage.proposal_items(proposal_id)
+        names = list(dict.fromkeys(item["department"] for item in all_items))
+        try:
+            await query.edit_message_text(
+                text=render_department(
+                    department, rows, names.index(department) + 1, len(names)
+                ),
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(
+                    _department_buttons(proposal_id, department, rows)
+                ),
+            )
+        except Exception:
+            logger.debug("Checklist edit failed", exc_info=True)
+
+    async def _confirm_proposal(self, query, context, proposal_id: int) -> None:
+        items = self.storage.proposal_items(proposal_id)
+        chosen = [item for item in items if item["selected"]]
+        if not chosen:
+            await query.edit_message_text("לא נבחר אף פריט — לא מילאתי כלום.")
+            self.storage.close_proposal(proposal_id, status="empty")
+            return
+
+        store = chosen[0]["store"]
+        # The ticks are the only signal the purchase history cannot give,
+        # since it cannot see what was bought at the other chain.
+        self.storage.record_stock_feedback(
+            store,
+            picked=[i["product_code"] for i in chosen],
+            skipped=[i["product_code"] for i in items if not i["selected"]],
+        )
+        self.storage.close_proposal(proposal_id)
+        await query.edit_message_text(f"מתחיל למלא {len(chosen)} פריטים…")
+
+        factories = _build_adapter_factories(self.config)
+        if not factories:
+            return
+        chat_id = query.message.chat_id
+        terms = [(item["product_name"], item["quantity"]) for item in chosen]
+        reports = await self._run_terms_with_live_view(chat_id, context, factories, terms)
+        if reports is None:
+            return
+        await self._send_alternatives(chat_id, context, reports)
+        await self._ask_ambiguities(chat_id, context)
 
     async def _do_add_to_cart(self, update, context, parsed, requested_by: str) -> None:
         """Add named items to the real cart now, not just to the list."""
@@ -495,6 +660,48 @@ class GroceryBot:
         await self._finish_live_view(chat_id, context, view.message_id, results, cart)
         return reports
 
+    async def _run_terms_with_live_view(self, chat_id, context, factories, terms):
+        """Fill the cart with an explicit list, showing the same live view."""
+        loop = asyncio.get_running_loop()
+        view = await context.bot.send_message(
+            chat_id=chat_id, text="🛒 *מתחיל למלא את העגלה…*", parse_mode="Markdown"
+        )
+        collected: list = []
+        last_edit = 0.0
+
+        async def _redraw(text: str) -> None:
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id, message_id=view.message_id, text=text, parse_mode="Markdown"
+                )
+            except Exception:
+                logger.debug("Live cart edit failed", exc_info=True)
+
+        def _on_progress(done: int, total: int, result) -> None:
+            nonlocal last_edit
+            collected.append(result)
+            now = loop.time()
+            if now - last_edit < MIN_EDIT_INTERVAL_SECONDS and done < total:
+                return
+            last_edit = now
+            asyncio.run_coroutine_threadsafe(
+                _redraw(render_progress(list(collected), done, total)), loop
+            )
+
+        try:
+            reports = await asyncio.to_thread(
+                add_terms_to_cart, self.storage, factories, terms, _on_progress
+            )
+        except Exception:
+            logger.exception("Filling the cart from a proposal failed")
+            await _redraw("🛑 המילוי נכשל — בדקו את הלוגים בשרת.")
+            return None
+
+        cart = await asyncio.to_thread(self._read_cart, factories)
+        results = [r for report in reports.values() for r in report.results]
+        await self._finish_live_view(chat_id, context, view.message_id, results, cart)
+        return reports
+
     async def _finish_live_view(self, chat_id, context, message_id, results, cart) -> None:
         buttons = [[InlineKeyboardButton("🛒 פתיחת הסל בשופרסל", url=SHUFERSAL_CART_URL)]]
         try:
@@ -728,7 +935,8 @@ async def _register_bot_metadata(application: Application) -> None:
         [
             BotCommand("start", "מה אפשר לבקש ממני"),
             BotCommand("list", "הרשימה המלאה והמעודכנת"),
-            BotCommand("start_order", "מחזור קנייה (חסום כרגע)"),
+            BotCommand("propose", "הצעת קנייה לפי מחלקות — מסמנים מה צריך"),
+            BotCommand("start_order", "מילוי מהיר של כל הרשימה"),
         ]
     )
     await application.bot.set_my_description(
@@ -746,7 +954,11 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("price", bot.price))
     application.add_handler(CommandHandler("deals", bot.deals))
     application.add_handler(CommandHandler("refresh_prices", bot.refresh_prices))
+    application.add_handler(CommandHandler("propose", bot.propose_cycle))
     application.add_handler(CallbackQueryHandler(bot.resolve_ambiguity, pattern=r"^(resolve|skip):"))
+    application.add_handler(
+        CallbackQueryHandler(bot.on_proposal_button, pattern=r"^(ptoggle|pall|pnone|pconfirm):")
+    )
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bot.handle_message))
     if application.job_queue is not None:
         application.job_queue.run_repeating(
