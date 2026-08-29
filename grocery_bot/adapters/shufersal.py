@@ -44,7 +44,12 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://www.shufersal.co.il"
 SEARCH_URL_TEMPLATE = BASE_URL + "/online/he/search?text={query}"
-ACCOUNT_URL = BASE_URL + "/online/he/myaccount"
+# NOTE: the hyphen matters. "/online/he/myaccount" (no hyphen) soft-404s —
+# it still doesn't contain "login" in the URL, so is_session_valid() was
+# passing against a 404 page rather than a real account page. Found and
+# fixed 2026-08-29 while verifying headless login against a real account.
+ACCOUNT_URL = BASE_URL + "/online/he/my-account"
+CART_URL = BASE_URL + "/online/he/cart/cartsummary"
 
 # --- verified against the live site, 2026-08-29 -------------------------
 # Each product tile is <li class="SEARCH tileBlock miglog-prod ...">
@@ -57,6 +62,13 @@ PRICE_ATTRIBUTE = "data-product-price"
 ADD_TO_CART_SELECTOR = "button.js-add-to-cart"
 # bootstrap-touchspin field holding the chosen quantity
 QUANTITY_INPUT_SELECTOR = "input.js-qty-selector-input"
+# On /online/he/cart/cartsummary, each line item is an
+# article[data-product-code=...]; the global "ניקוי הסל" link
+# (data-miglog-role="cart-remove-overlay-opener") has two DOM copies
+# gated by responsive CSS and neither is ever actually clickable — this
+# per-item (×) button, scoped to one product's article, is what works.
+CART_LINE_ITEM_SELECTOR = 'article[data-product-code="{code}"]'
+CART_ITEM_REMOVE_SELECTOR = 'a[data-miglog-role="cart-item-remover"]'
 # Results render client-side, so the tiles must be waited for explicitly.
 RESULTS_TIMEOUT_MS = 30_000
 MAX_CANDIDATES = 5
@@ -152,6 +164,43 @@ class ShufersalAdapter(StoreAdapter):
                 detail=str(exc),
                 quantity=quantity,
             )
+
+    def remove_item(self, product_code: str) -> bool:
+        """Remove one line item from the real cart by product code.
+
+        Must go through the real cart page — the item isn't necessarily
+        addressable from wherever the caller currently is. Returns False
+        (never raises) if the item wasn't found or the click didn't
+        register, so a caller can decide whether to retry or report it.
+        """
+        try:
+            self._page.goto(CART_URL, wait_until="domcontentloaded", timeout=30_000)
+            article = self._page.locator(CART_LINE_ITEM_SELECTOR.format(code=product_code))
+            # The cart page renders its line items after an async discount
+            # computation ("מחשבים את ההנחות..."); domcontentloaded fires
+            # well before that, so the article isn't in the DOM yet without
+            # this wait.
+            try:
+                article.first.wait_for(state="attached", timeout=15_000)
+            except Exception:
+                return False
+            if article.count() == 0:
+                return False
+            try:
+                article.locator(CART_ITEM_REMOVE_SELECTOR).first.click(timeout=10_000)
+            except Exception:
+                # The click sometimes throws even when it worked: removing
+                # the line item shifts the DOM mid-click and Playwright's
+                # own stability wait can lose the element. Don't trust the
+                # exception either way — check what actually happened.
+                logger.info(
+                    "Shufersal: remove click for %r raised; verifying actual state", product_code
+                )
+            self._page.wait_for_timeout(1_000)  # let the removal request settle
+            return article.count() == 0
+        except Exception:
+            logger.exception("Shufersal: failed to remove %r from cart", product_code)
+            return False
 
     def close(self) -> None:
         try:

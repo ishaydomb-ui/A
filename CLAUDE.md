@@ -140,18 +140,20 @@ Don't re-derive these from scratch — they're already known:
    attributes rather than scraped text, and `button.js-add-to-cart`.
    Search, tile parsing and the not-found path were confirmed against
    real queries before the login work.
-   **Still open:** removing/clearing a cart item programmatically was
-   *not* solved — the real cart page is `/online/he/cart/cartsummary`
-   (not a guess-worthy URL), and its "ניקוי הסל" clear-cart control
-   (`a[data-miglog-role="cart-remove-overlay-opener"]`) rendered but
-   stayed non-visible/non-clickable through several attempts (likely a
-   responsive-layout duplicate-element issue — there are two copies in
-   the DOM gated by viewport-width CSS classes). Deliberately not
-   pursued further since that page is one step from the real checkout
-   flow and the user asked not to be poked around there. A stray test
-   item (milk, ₪7.35) was left in the real cart as a result — harmless
-   (no charge happens without the user completing checkout themselves),
-   but worth knowing about.
+   **Removing a cart item is now also solved, same session.** The
+   global "ניקוי הסל" link (`a[data-miglog-role="cart-remove-overlay-opener"]`)
+   is a dead end — two copies exist in the DOM gated by responsive CSS
+   classes and neither is ever visible/clickable. The working control is
+   the **per-item remove (×) button**: on the real cart page
+   (`/online/he/cart/cartsummary`), each line item is
+   `article[data-product-code="P_..."]`, and inside it
+   `a[data-miglog-role="cart-item-remover"]` removes just that item —
+   scoped by product code, no ambiguity, confirmed working (badge and
+   totals both cleared). The test item (milk, ₪7.35) that was earlier
+   left in the cart has been removed using this; the cart is verified
+   empty again (checked three independent ways: no cart badge, no
+   `43.25`/`7.35` totals in the page text, zero `article[data-product-code]`
+   elements).
    Also confirmed real account data is reachable read-only: name (ישי
    דומב), member number, and four saved lists under `/online/he/wish-lists/main`
    — notably "המוצרים שאני בדרך כלל קונה" (usually-buy, 27 items), a
