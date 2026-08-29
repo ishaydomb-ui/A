@@ -29,6 +29,7 @@ from .catalog import (
     format_search_answer,
     refresh_catalog,
 )
+from .cartview import MIN_EDIT_INTERVAL_SECONDS, render_final, render_progress
 from .config import Config
 from .disambiguate import describe_card
 from .connectivity import check_israeli_exit
@@ -43,6 +44,11 @@ logger = logging.getLogger(__name__)
 # hand, so there is nothing to subscribe to — polling is the only option.
 # Two minutes keeps the wait short without hammering the probe endpoint.
 EXIT_POLL_SECONDS = 120
+
+# Deep link to the real cart. The store's own page is the authoritative
+# view and the place the purchase is completed by hand, so the bot points
+# at it rather than trying to reproduce it.
+SHUFERSAL_CART_URL = "https://www.shufersal.co.il/online/he/cart/cartsummary"
 
 
 def _describe_parsed(item: ParsedItem) -> str:
@@ -356,18 +362,98 @@ class GroceryBot:
             )
             return
 
-        await update.message.reply_text("מתחיל מחזור קנייה, זה ייקח כמה רגעים...")
-        try:
-            reports = await asyncio.to_thread(run_order_cycle, self.storage, factories)
-        except Exception:
-            logger.exception("Order cycle failed")
-            await update.message.reply_text("המחזור נכשל עם שגיאה לא צפויה — בדקו את הלוגים בשרת.")
+        reports = await self._run_cycle_with_live_view(update.effective_chat.id, context, factories)
+        if reports is None:
             return
 
         summary = format_report_summary(reports)
         await update.message.reply_text(summary or "לא היה מה להוסיף.", parse_mode="Markdown")
         await self._send_alternatives(update.effective_chat.id, context, reports)
         await self._send_pending_ambiguities(update, context)
+
+    async def _run_cycle_with_live_view(self, chat_id: int, context, factories):
+        """Run a cycle while keeping one message updated with its progress.
+
+        The cycle runs in a worker thread, so progress arrives off the
+        event loop and is marshalled back with run_coroutine_threadsafe.
+        Edits are throttled (see cartview): Telegram rate-limits repeated
+        edits to one message, and a twenty-item run would blow through it.
+        """
+        loop = asyncio.get_running_loop()
+        view = await context.bot.send_message(
+            chat_id=chat_id, text="🛒 *מתחיל למלא את העגלה…*", parse_mode="Markdown"
+        )
+        # Pinning keeps it reachable during a long run; not every chat
+        # allows it, and failing to pin must not abort the shop.
+        try:
+            await context.bot.pin_chat_message(
+                chat_id=chat_id, message_id=view.message_id, disable_notification=True
+            )
+        except Exception:
+            logger.info("Could not pin the live cart view; continuing without it")
+
+        collected: list = []
+        last_edit = 0.0
+
+        async def _redraw(text: str) -> None:
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id, message_id=view.message_id, text=text, parse_mode="Markdown"
+                )
+            except Exception:
+                # A failed edit (unchanged text, rate limit) is cosmetic.
+                logger.debug("Live cart edit failed", exc_info=True)
+
+        def _on_progress(done: int, total: int, result) -> None:
+            nonlocal last_edit
+            collected.append(result)
+            now = loop.time()
+            if now - last_edit < MIN_EDIT_INTERVAL_SECONDS and done < total:
+                return
+            last_edit = now
+            asyncio.run_coroutine_threadsafe(
+                _redraw(render_progress(list(collected), done, total)), loop
+            )
+
+        try:
+            reports = await asyncio.to_thread(
+                run_order_cycle, self.storage, factories, _on_progress
+            )
+        except Exception:
+            logger.exception("Order cycle failed")
+            await _redraw("🛑 המחזור נכשל עם שגיאה לא צפויה — בדקו את הלוגים בשרת.")
+            return None
+
+        cart = await asyncio.to_thread(self._read_cart, factories)
+        results = [r for report in reports.values() for r in report.results]
+        await self._finish_live_view(chat_id, context, view.message_id, results, cart)
+        return reports
+
+    async def _finish_live_view(self, chat_id, context, message_id, results, cart) -> None:
+        buttons = [[InlineKeyboardButton("🛒 פתיחת הסל בשופרסל", url=SHUFERSAL_CART_URL)]]
+        try:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=render_final(results, cart),
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(buttons),
+            )
+        except Exception:
+            logger.exception("Could not render the final cart view")
+
+    def _read_cart(self, factories) -> dict | None:
+        """Read the authoritative cart total, if the store is reachable."""
+        make_adapter = factories.get("shufersal")
+        if make_adapter is None:
+            return None
+        try:
+            with make_adapter() as adapter:
+                reader = getattr(adapter, "cart_summary", None)
+                return reader() if reader else None
+        except Exception:
+            logger.exception("Could not read the cart for the final view")
+            return None
 
     async def _send_alternatives(self, chat_id: int, context, reports) -> None:
         """Point out cheaper promoted substitutes for what was just added.
@@ -483,7 +569,9 @@ class GroceryBot:
             text="🟢 החיבור לשופרסל חזר — מריץ עכשיו את מחזור הקנייה שהמתין בתור.",
         )
         try:
-            reports = await asyncio.to_thread(run_order_cycle, self.storage, factories)
+            reports = await self._run_cycle_with_live_view(chat_id, context, factories)
+            if reports is None:
+                raise RuntimeError("deferred cycle failed")
         except Exception:
             logger.exception("Deferred order cycle failed")
             # Deliberately left un-done so it retries on the next tick: the
@@ -503,17 +591,7 @@ class GroceryBot:
             parse_mode="Markdown",
         )
         await self._send_alternatives(chat_id, context, reports)
-        for item in self.storage.list_pending_ambiguities():
-            buttons = [
-                [InlineKeyboardButton(label, callback_data=f"resolve:{item['id']}:{i}")]
-                for i, label in enumerate(item["candidates"])
-            ]
-            buttons.append([InlineKeyboardButton("דלג", callback_data=f"skip:{item['id']}:0")])
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"[{item['store']}] '{item['original_term']}' — כמה תוצאות מתאימות, איזו?",
-                reply_markup=InlineKeyboardMarkup(buttons),
-            )
+        await self._ask_ambiguities(chat_id, context)
 
 
 # Telegram truncates a long inline-button label (the client showed roughly

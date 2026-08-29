@@ -20,13 +20,32 @@ logger = logging.getLogger(__name__)
 AdapterFactory = Callable[[], StoreAdapter]
 
 
-def run_order_cycle(storage: Storage, adapter_factories: dict[str, AdapterFactory]) -> dict[str, OrderCycleReport]:
+def run_order_cycle(
+    storage: Storage,
+    adapter_factories: dict[str, AdapterFactory],
+    on_progress=None,
+) -> dict[str, OrderCycleReport]:
     """Run the cycle against every enabled store.
 
     Returns one OrderCycleReport per store. Ambiguous results are also
     persisted via storage.save_pending_ambiguity so the bot can present
     them as follow-up questions after this function returns.
+
+    `on_progress(done, total, result)` is called after each item, so a
+    caller can show progress. A full cycle is minutes of page loads, and
+    without this the user watches an idle chat and cannot tell a slow run
+    from a stuck one. It is called from this worker thread, so a caller
+    on an event loop must marshal back to it; anything it raises is
+    swallowed rather than killing a shopping run over a UI update.
     """
+    def _progress(done: int, total: int, result) -> None:
+        if on_progress is None:
+            return
+        try:
+            on_progress(done, total, result)
+        except Exception:
+            logger.exception("Progress callback failed; continuing the cycle")
+
     base_items = storage.list_active_base_items()
     adhoc_items = storage.list_pending_adhoc()
 
@@ -57,16 +76,23 @@ def run_order_cycle(storage: Storage, adapter_factories: dict[str, AdapterFactor
                 reports[store] = report
                 continue
 
+            total_items = len(base_items) + len(adhoc_items)
+            done = 0
+
             for base_item in base_items:
                 term = base_item.search_term_for(store)
                 result = _add_one(storage, adapter, store, term, base_item.default_quantity)
                 report.record(result)
+                done += 1
+                _progress(done, total_items, result)
 
             for adhoc in adhoc_items:
                 result = _add_one(storage, adapter, store, adhoc.text, adhoc.quantity)
                 report.record(result)
                 if result.status in ("added", "ambiguous", "not_found"):
                     resolved_adhoc.add(adhoc.id)
+                done += 1
+                _progress(done, total_items, result)
 
         reports[store] = report
 

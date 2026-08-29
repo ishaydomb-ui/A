@@ -88,6 +88,11 @@ class CartAddResult:
     # chooser can show what actually distinguishes them. `candidates`
     # keeps only names, which are routinely duplicated across brands.
     candidate_cards: list[dict] = field(default_factory=list)
+    # Shelf price of what was added, as shown on the tile. Used only for a
+    # running estimate while a cycle is in flight: the real total includes
+    # delivery, club discounts and weight adjustments, so it is read back
+    # from the cart itself rather than summed here.
+    price: float | None = None
     # Set when the cycle picked a product without asking, and why
     # ("history" | "exact_name"); shown so an automatic choice is never
     # silent.
@@ -112,3 +117,8 @@ class OrderCycleReport:
             "error": self.errors,
         }[result.status]
         bucket.append(result)
+
+    @property
+    def results(self) -> list[CartAddResult]:
+        """Every outcome, added first — the order a cart view reads in."""
+        return self.added + self.ambiguous + self.not_found + self.errors

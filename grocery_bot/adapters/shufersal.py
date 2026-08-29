@@ -42,6 +42,25 @@ from ..models import CartAddResult
 
 logger = logging.getLogger(__name__)
 
+
+def _first_price(text: str) -> float | None:
+    """First money-looking number in a blob of cart text."""
+    import re
+
+    for raw in re.findall(r"\d[\d,]*\.\d{2}", text or ""):
+        try:
+            return float(raw.replace(",", ""))
+        except ValueError:
+            continue
+    return None
+
+
+def _as_float(value) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
 BASE_URL = "https://www.shufersal.co.il"
 SEARCH_URL_TEMPLATE = BASE_URL + "/online/he/search?text={query}"
 # NOTE: the hyphen matters. "/online/he/myaccount" (no hyphen) soft-404s —
@@ -270,6 +289,57 @@ class ShufersalAdapter(StoreAdapter):
             logger.exception("Shufersal: failed to remove %r from cart", product_code)
             return False
 
+    def cart_summary(self) -> dict:
+        """Read the real cart: line items and the price actually payable.
+
+        Worth the extra page load rather than summing what we added. The
+        cart's total includes delivery, club discounts and the weight the
+        store actually recorded, none of which the tile prices know about,
+        so a locally-summed figure would quietly disagree with what the
+        user is about to pay.
+
+        Never raises: a live cart view failing must not take a cycle with
+        it. An unreadable cart comes back as ok=False.
+        """
+        try:
+            self._page.goto(CART_URL, wait_until="domcontentloaded", timeout=30_000)
+            try:
+                self._page.wait_for_selector(
+                    'article[data-product-code]', timeout=15_000
+                )
+            except Exception:
+                pass  # an empty cart legitimately has no line items
+            items = self._page.eval_on_selector_all(
+                "article[data-product-code]",
+                """els => {
+                    const seen = {};
+                    els.forEach(e => {
+                        const code = e.getAttribute('data-product-code');
+                        if (!code || seen[code]) return;
+                        const nameEl = e.querySelector('.miglog-prod-name');
+                        seen[code] = {
+                            code: code,
+                            qty: e.getAttribute('data-entry-qty') || '',
+                            name: nameEl ? nameEl.innerText.trim() : '',
+                        };
+                    });
+                    return Object.values(seen);
+                }""",
+            )
+            total = None
+            for selector in (".cartSum", ".miglog-cart-summary-total", ".content-total"):
+                node = self._page.locator(selector).first
+                if node.count():
+                    total = _first_price(node.inner_text(timeout=3_000))
+                    if total is not None:
+                        break
+            if total is None:
+                total = _first_price(self._page.inner_text("body"))
+            return {"ok": True, "items": items, "total": total, "url": CART_URL}
+        except Exception:
+            logger.exception("Shufersal: could not read the cart")
+            return {"ok": False, "items": [], "total": None, "url": CART_URL}
+
     def close(self) -> None:
         try:
             self._context.close()
@@ -332,6 +402,7 @@ class ShufersalAdapter(StoreAdapter):
                 status="added",
                 quantity=quantity,
                 product_code=card.get("code", ""),
+                price=_as_float(card.get("price")),
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Shufersal: failed to add %r to cart", name)
