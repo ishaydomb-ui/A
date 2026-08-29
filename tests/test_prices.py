@@ -58,6 +58,20 @@ PROMOS_XML = """<?xml version="1.0" encoding="utf-8"?>
 <Root>
   <Promotions>
     <Promotion>
+      <PromotionID>903</PromotionID>
+      <PromotionDescription>1+1 על חלב</PromotionDescription>
+      <PromotionStartDateTime>2026-08-01T00:00:00.000</PromotionStartDateTime>
+      <PromotionEndDateTime>2026-09-30T23:59:00.000</PromotionEndDateTime>
+      <Groups><Group><PromotionItems>
+        <PromotionItem>
+          <ItemCode>111</ItemCode>
+          <MinQty>1.00</MinQty>
+          <DiscountRate>20</DiscountRate>
+          <DiscountedPrice>5.90</DiscountedPrice>
+        </PromotionItem>
+      </PromotionItems></Group></Groups>
+    </Promotion>
+    <Promotion>
       <PromotionID>900</PromotionID>
       <PromotionDescription>תו זהב 5% הנחה</PromotionDescription>
       <PromotionStartDateTime>2026-08-01T00:00:00.000</PromotionStartDateTime>
@@ -148,8 +162,8 @@ class ParsingTests(unittest.TestCase):
 
     def test_flattens_promotions_to_one_row_per_item(self):
         rows = parse_promotions(PROMOS_XML)
-        self.assertEqual(len(rows), 3)
-        self.assertEqual({r.promotion_id for r in rows}, {"900", "901", "902"})
+        self.assertEqual(len(rows), 4)
+        self.assertEqual({r.promotion_id for r in rows}, {"900", "901", "902", "903"})
         gold = next(r for r in rows if r.promotion_id == "900")
         self.assertEqual(gold.discounted_price, 6.98)
         self.assertEqual(gold.item_code, "111")
@@ -178,8 +192,18 @@ class CatalogTests(unittest.TestCase):
         deal = self.storage.best_deal_for(milk, now=NOW)
         assert deal is not None
         self.assertEqual(
-            deal.promotion_id, "900", "the סיבוס row is not a discount and must not win"
+            deal.promotion_id, "903", "the סיבוס row is not a discount and must not win"
         )
+
+    def test_best_deal_ignores_club_only_promotions(self):
+        """The household has no Shufersal club card.
+
+        A "תו זהב" price is real for members and unreachable for them, so
+        offering it is advice they cannot act on.
+        """
+        milk = self.storage.search_products("חלב")[0]
+        deal = self.storage.best_deal_for(milk, now=NOW)
+        self.assertNotEqual(deal.promotion_id, "900")
 
     def test_best_deal_ignores_expired_promotions(self):
         milk = self.storage.search_products("חלב")[0]

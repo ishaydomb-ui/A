@@ -93,6 +93,10 @@ class CartAddResult:
     # delivery, club discounts and weight adjustments, so it is read back
     # from the cart itself rather than summed here.
     price: float | None = None
+    # Weight/volume actually ordered, for items sold by weight. "×1" is
+    # meaningless for loose produce; half a kilo versus two kilos is not.
+    amount: float | None = None
+    unit: str = ""
     # Set when the cycle picked a product without asking, and why
     # ("history" | "exact_name"); shown so an automatic choice is never
     # silent.

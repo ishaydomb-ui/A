@@ -35,7 +35,7 @@ from .disambiguate import describe_card
 from .connectivity import check_israeli_exit  # noqa: F401  (kept for tests/back-compat)
 from .exitnode import ensure_israeli_exit
 from .nlu import ParsedItem, build_meal_plan, expand_recipe, parse_message
-from .orchestrator import format_report_summary, run_order_cycle
+from .orchestrator import add_terms_to_cart, format_report_summary, run_order_cycle
 from .storage import Storage
 
 logger = logging.getLogger(__name__)
@@ -114,8 +114,11 @@ class GroceryBot:
             "• *מה יש במבצע* — מבצעים אמיתיים על מה שאתם קונים\n"
             "• *מתכון לפאי תפוחים* — מפרק למצרכים ומוסיף לרשימה\n"
             "• *תכנן לי תפריט שבועי* — 5 ארוחות + רשימת קניות מאוחדת\n\n"
-            "_מילוי עגלה אוטומטי בשופרסל עדיין חסום — האתר חוסם גישה "
-            "מחוץ לישראל._",
+            "*רשימה מול סל:*\n"
+            "• *תוסיף X* — נכנס לרשימה שממתינה למחזור הבא\n"
+            "• *תוסיף X לעגלה* — נכנס עכשיו לסל האמיתי בשופרסל\n"
+            "• *מלא את העגלה* — מריץ מחזור מלא על כל מה שברשימה\n\n"
+            "_תמיד עוצר על סל מוכן — הבדיקה והתשלום נשארים אצלכם._",
             parse_mode="Markdown",
         )
 
@@ -203,6 +206,7 @@ class GroceryBot:
             "recipe": self._do_recipe,
             "meal_plan": self._do_meal_plan,
             "start_order": self._do_start_order,
+            "add_to_cart": self._do_add_to_cart,
         }.get(parsed.intent)
 
         if handler is None:  # unclear / smalltalk
@@ -217,6 +221,64 @@ class GroceryBot:
     async def _do_start_order(self, update, context, parsed, requested_by: str) -> None:
         """Let plain Hebrew start a cycle, not just the /start_order command."""
         await self.start_order(update, context)
+
+    async def _do_add_to_cart(self, update, context, parsed, requested_by: str) -> None:
+        """Add named items to the real cart now, not just to the list."""
+        if not parsed.items:
+            # "update the cart" with nothing named means the whole list.
+            await self.start_order(update, context)
+            return
+        if not _authorized(self.config, update):
+            return
+
+        factories = _build_adapter_factories(self.config)
+        if not factories:
+            await update.message.reply_text("אין אף רשת מוגדרת/מיושמת.")
+            return
+
+        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy)
+        if not status.available:
+            # Keep them rather than lose them: they go on the list and the
+            # next cycle picks them up.
+            for item in parsed.items:
+                self.storage.add_adhoc_request(
+                    text=item.name, requested_by=requested_by,
+                    amount=item.amount, unit=item.unit, brand=item.brand,
+                )
+            await update.message.reply_text(
+                f"🕒 אין כרגע חיבור לשופרסל ({status.detail}).\n"
+                "הוספתי אותם לרשימה — הם ייכנסו לסל אוטומטית כשהחיבור יחזור."
+            )
+            return
+
+        terms = [(item.name, int(item.amount or 1)) for item in parsed.items]
+        names = ", ".join(item.name for item in parsed.items)
+        await update.message.reply_text(f"מוסיף לסל: {names}…")
+        try:
+            reports = await asyncio.to_thread(
+                add_terms_to_cart, self.storage, factories, terms
+            )
+        except Exception:
+            logger.exception("add_to_cart failed")
+            await update.message.reply_text("ההוספה לסל נכשלה — בדקו את הלוגים.")
+            return
+
+        await update.message.reply_text(
+            format_report_summary(reports) or "לא היה מה להוסיף.", parse_mode="Markdown"
+        )
+        cart = await asyncio.to_thread(self._read_cart, factories)
+        results = [r for report in reports.values() for r in report.results]
+        await self._send_cart_state(update.effective_chat.id, context, results, cart)
+        await self._send_pending_ambiguities(update, context)
+
+    async def _send_cart_state(self, chat_id, context, results, cart) -> None:
+        buttons = [[InlineKeyboardButton("🛒 פתיחת הסל בשופרסל", url=SHUFERSAL_CART_URL)]]
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=render_final(results, cart),
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(buttons),
+        )
 
     async def _do_add(self, update, context, parsed, requested_by: str) -> None:
         if not parsed.items:

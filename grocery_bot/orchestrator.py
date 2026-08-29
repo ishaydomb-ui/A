@@ -82,6 +82,11 @@ def run_order_cycle(
             for base_item in base_items:
                 term = base_item.search_term_for(store)
                 result = _add_one(storage, adapter, store, term, base_item.default_quantity)
+                # Carry the weight through so the cart view can say "0.5 ק"ג"
+                # rather than a meaningless "×1" for loose produce.
+                if getattr(base_item, "amount", None):
+                    result.amount = base_item.amount
+                    result.unit = base_item.unit
                 report.record(result)
                 done += 1
                 _progress(done, total_items, result)
@@ -99,6 +104,48 @@ def run_order_cycle(
     for adhoc_id in resolved_adhoc:
         storage.mark_adhoc_consumed(adhoc_id)
 
+    return reports
+
+
+def add_terms_to_cart(
+    storage: Storage,
+    adapter_factories: dict[str, AdapterFactory],
+    terms: list[tuple[str, int]],
+    on_progress=None,
+) -> dict[str, OrderCycleReport]:
+    """Put specific items straight into the real cart.
+
+    Distinct from a full cycle on purpose. "תעדכן את העגלה עם קוטג
+    וגבינה" names the things to add; running the whole standing list
+    would drop another dozen products into the cart the user never asked
+    for in that message.
+    """
+    reports: dict[str, OrderCycleReport] = {}
+    for store, make_adapter in adapter_factories.items():
+        report = OrderCycleReport(store=store)
+        with make_adapter() as adapter:
+            ensure = getattr(adapter, "ensure_session", None)
+            if ensure is not None and not ensure():
+                report.record(
+                    CartAddResult(
+                        item_name="(session)",
+                        store=store,
+                        status="error",
+                        detail="Session expired and could not be renewed automatically.",
+                    )
+                )
+                reports[store] = report
+                continue
+
+            for index, (term, quantity) in enumerate(terms, start=1):
+                result = _add_one(storage, adapter, store, term, quantity)
+                report.record(result)
+                if on_progress is not None:
+                    try:
+                        on_progress(index, len(terms), result)
+                    except Exception:
+                        logger.exception("Progress callback failed; continuing")
+        reports[store] = report
     return reports
 
 

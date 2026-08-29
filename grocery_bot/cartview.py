@@ -54,7 +54,13 @@ def _row(result) -> str:
         price = getattr(result, "price", None)
         quantity = getattr(result, "quantity", 1) or 1
         line = f"{icon} {name}"
-        if quantity and quantity != 1:
+        # Loose produce is bought by weight, so "×1" says nothing useful:
+        # what matters is half a kilo versus two kilos.
+        amount = getattr(result, "amount", None)
+        unit = getattr(result, "unit", "") or ""
+        if amount and unit:
+            line += f" · {amount:g} {unit}"
+        elif quantity and quantity != 1:
             line += f" ×{quantity}"
         if price is not None:
             line += f" — {_money(price * quantity)}"

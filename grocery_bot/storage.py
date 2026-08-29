@@ -133,6 +133,30 @@ _ADDED_COLUMNS = {
 }
 
 
+# Promotions that are not open to an ordinary shopper. The feed mixes
+# these in with real price cuts, and they dominate it: of 18,456 rows for
+# one branch, ~83% are meal-voucher gimmicks ("ע. סיבוס קופון"), Shufersal
+# club perks ("תו זהב"), manufacturer coupons, or credit-card offers. The
+# household has no Shufersal club card, so surfacing them is not just
+# noise -- it is advice they cannot act on.
+_CLUB_ONLY_MARKERS = (
+    "תו זהב",
+    "מועדון",
+    "קופון",
+    "סיבוס",
+    "סודקסו",
+    "כ.אשראי",
+    "כרטיס אשראי",
+    "אשראי שופרסל",
+)
+
+
+def is_public_promotion(description: str) -> bool:
+    """True when a promotion applies without club membership or a coupon."""
+    text = description or ""
+    return not any(marker in text for marker in _CLUB_ONLY_MARKERS)
+
+
 class Storage:
     def __init__(self, db_path: str):
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -690,6 +714,7 @@ class Storage:
             promo
             for promo in self.active_promotions_for(product.item_code, now)
             if 0 < promo.discounted_price < product.price
+            and is_public_promotion(promo.description)
         ]
         return min(candidates, key=lambda p: p.discounted_price) if candidates else None
 
