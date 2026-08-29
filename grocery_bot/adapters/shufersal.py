@@ -43,6 +43,12 @@ from ..models import CartAddResult
 logger = logging.getLogger(__name__)
 
 
+def _price_after(text: str, label: str) -> float | None:
+    """First money-looking number appearing after `label`."""
+    index = (text or "").find(label)
+    return _first_price(text[index:]) if index != -1 else None
+
+
 def _first_price(text: str) -> float | None:
     """First money-looking number in a blob of cart text."""
     import re
@@ -327,14 +333,18 @@ class ShufersalAdapter(StoreAdapter):
                 }""",
             )
             total = None
-            for selector in (".cartSum", ".miglog-cart-summary-total", ".content-total"):
+            for selector in (".totalPrice", ".cartSum", ".miglog-cart-summary-total"):
                 node = self._page.locator(selector).first
                 if node.count():
                     total = _first_price(node.inner_text(timeout=3_000))
                     if total is not None:
                         break
             if total is None:
-                total = _first_price(self._page.inner_text("body"))
+                # Anchor on the "amount payable" label rather than scanning
+                # the whole page: the savings line ("סה"כ חסכת") is usually
+                # 0.00 and sits close enough to be picked up first, which
+                # would report a free shop.
+                total = _price_after(self._page.inner_text("body"), "לתשלום")
             return {"ok": True, "items": items, "total": total, "url": CART_URL}
         except Exception:
             logger.exception("Shufersal: could not read the cart")

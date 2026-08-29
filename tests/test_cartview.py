@@ -97,3 +97,24 @@ class ReportResultsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PriceParsingTests(unittest.TestCase):
+    """The savings line is usually 0.00 and sits next to the real total."""
+
+    def test_total_is_read_after_the_payable_label(self) -> None:
+        from grocery_bot.adapters.shufersal import _price_after
+
+        body = 'לתשלום:\n₪\nשקלים חדשים\n119.45\nסה”כ חסכת:₪\nשקלים חדשים\n0.00'
+        self.assertEqual(_price_after(body, "לתשלום"), 119.45)
+
+    def test_an_earlier_zero_does_not_win(self) -> None:
+        from grocery_bot.adapters.shufersal import _price_after
+
+        body = 'סה”כ חסכת: 0.00\nלתשלום: 119.45'
+        self.assertEqual(_price_after(body, "לתשלום"), 119.45)
+
+    def test_a_missing_label_gives_nothing_rather_than_a_wrong_number(self) -> None:
+        from grocery_bot.adapters.shufersal import _price_after
+
+        self.assertIsNone(_price_after("0.00 משהו אחר", "לתשלום"))
