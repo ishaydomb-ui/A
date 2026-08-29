@@ -113,6 +113,22 @@ def format_full_list(
     return "\n".join(lines)
 
 
+def _is_comparable(usual: PricedProduct, candidate: PricedProduct) -> bool:
+    """Is `candidate` the same *kind* of thing as `usual`?
+
+    Name search alone happily offers banana-flavoured snack rings as a
+    substitute for a kilo of fresh bananas — they share a word, so they
+    rank together. Selling shape is what actually separates them: fresh
+    produce is weighed and priced per kilo, a packaged snack is neither.
+    Comparing those two is worse than staying quiet, because a suggestion
+    that misses this obviously erodes trust in the ones that don't.
+    """
+    return (
+        usual.is_weighted == candidate.is_weighted
+        and usual.unit_of_measure == candidate.unit_of_measure
+    )
+
+
 def find_deals_for_base_list(
     storage: Storage, base_items: list[BaseListItem], per_item: int = 6
 ) -> list[tuple[BaseListItem, PricedProduct, PromotionItem]]:
@@ -123,12 +139,29 @@ def find_deals_for_base_list(
     neighbouring brand goes unnoticed. Searching by the item's generic
     name (not the store-specific search term) is deliberate — the whole
     point is to surface alternatives to the usual pick.
+
+    A promotion only counts when it beats what the household actually
+    pays. Most "deals" on a nearby product are on a pricier variant —
+    organic bananas at 19.86 "reduced" from 20.90 are not a saving to
+    someone who buys the 12.90 ones, and listing them turns the deals
+    report into an upsell feed nobody trusts.
     """
     found = []
     for item in base_items:
+        results = storage.search_with_deals(item.name, limit=per_item)
+        if not results:
+            continue
+        # The closest name match stands in for "the kind of thing meant",
+        # so a promoted banana-flavoured snack isn't offered as a deal on
+        # fresh bananas. Same guard as find_cycle_alternatives.
+        reference = results[0][0]
         best: tuple[PricedProduct, PromotionItem] | None = None
-        for product, deal in storage.search_with_deals(item.name, limit=per_item):
+        for product, deal in results:
             if deal is None:
+                continue
+            if not _is_comparable(reference, product):
+                continue
+            if deal.discounted_price >= reference.price:
                 continue
             if best is None or deal.discounted_price < best[1].discounted_price:
                 best = (product, deal)
@@ -151,22 +184,6 @@ def format_deals_report(
             f" — {deal.description}"
         )
     return "\n".join(lines)
-
-
-def _is_comparable(usual: PricedProduct, candidate: PricedProduct) -> bool:
-    """Is `candidate` the same *kind* of thing as `usual`?
-
-    Name search alone happily offers banana-flavoured snack rings as a
-    substitute for a kilo of fresh bananas — they share a word, so they
-    rank together. Selling shape is what actually separates them: fresh
-    produce is weighed and priced per kilo, a packaged snack is neither.
-    Comparing those two is worse than staying quiet, because a suggestion
-    that misses this obviously erodes trust in the ones that don't.
-    """
-    return (
-        usual.is_weighted == candidate.is_weighted
-        and usual.unit_of_measure == candidate.unit_of_measure
-    )
 
 
 def find_cycle_alternatives(

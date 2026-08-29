@@ -194,6 +194,7 @@ class GroceryBot:
             "show_list": self._do_show_list,
             "recipe": self._do_recipe,
             "meal_plan": self._do_meal_plan,
+            "start_order": self._do_start_order,
         }.get(parsed.intent)
 
         if handler is None:  # unclear / smalltalk
@@ -204,6 +205,10 @@ class GroceryBot:
             )
             return
         await handler(update, context, parsed, requested_by)
+
+    async def _do_start_order(self, update, context, parsed, requested_by: str) -> None:
+        """Let plain Hebrew start a cycle, not just the /start_order command."""
+        await self.start_order(update, context)
 
     async def _do_add(self, update, context, parsed, requested_by: str) -> None:
         if not parsed.items:
@@ -219,7 +224,14 @@ class GroceryBot:
                 brand=item.brand,
             )
             added.append(_describe_parsed(item))
-        await update.message.reply_text("נוסף לרשימה: " + ", ".join(added))
+        message = "נוסף לרשימה: " + ", ".join(added)
+        if parsed.used_fallback:
+            # The rule-based fallback files anything it can't classify as an
+            # item, so a whole sentence can land on the list looking like a
+            # product. Say so instead of letting a silent degradation look
+            # like the bot simply misunderstood.
+            message += "\n\n⚠️ _הבנת השפה לא זמינה כרגע, אז ייתכן שפירשתי לא נכון. אפשר לתקן עם 'תוריד ...'._"
+        await update.message.reply_text(message, parse_mode="Markdown")
 
     async def _do_remove(self, update, context, parsed, requested_by: str) -> None:
         if not parsed.items:

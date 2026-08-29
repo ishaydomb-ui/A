@@ -23,9 +23,12 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
+import shutil
 import subprocess
 from dataclasses import dataclass, field
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +42,7 @@ INTENTS = {
     "show_list",
     "recipe",
     "meal_plan",
+    "start_order",
     "smalltalk",
     "unclear",
 }
@@ -46,7 +50,7 @@ INTENTS = {
 _SYSTEM_PROMPT = """אתה מנתח הודעות של בוט קניות משפחתי בעברית. החזר JSON בלבד, בלי טקסט נוסף ובלי הסברים.
 
 שדות:
-- intent: אחד מ- add_item | remove_item | price_query | deals | show_list | recipe | meal_plan | smalltalk | unclear
+- intent: אחד מ- add_item | remove_item | price_query | deals | show_list | recipe | meal_plan | start_order | smalltalk | unclear
 - items: מערך של {"name","amount","unit","brand"} — רק שם המוצר עצמו, בלי פעלים כמו "תוסיף"/"תוריד"/"צריך".
   amount = מספר או null. unit = "גרם"/"קילו"/"יחידות"/"ליטר" או null. brand = שם יצרן אם צוין, אחרת null.
 - query: מחרוזת חיפוש (ל-price_query, ל-recipe שם המנה, ל-meal_plan תיאור)
@@ -58,6 +62,7 @@ _SYSTEM_PROMPT = """אתה מנתח הודעות של בוט קניות משפח
 - מילה בודדת חסרת הקשר או הודעה לא מובנת (למשל "מה") => intent=unclear. עדיף unclear מאשר לנחש.
 - "כמה עולה X" / "מחיר של X" / "יש מבצע על X" => price_query.
 - "מה יש במבצע" => deals. "מה יש ברשימה" / "תראה לי את הרשימה" => show_list.
+- "מלא את העגלה" / "תתחיל הזמנה" / "תתחיל מחזור" / "תזמין" => start_order. זו בקשה להתחיל למלא את הסל בפועל, לא פריט.
 - הודעה שהיא רק פריט ("חלב", "לחם ועגבניות") => add_item.
 - אפשר כמה פריטים בהודעה אחת."""
 
@@ -79,9 +84,31 @@ class ParsedMessage:
     used_fallback: bool = False
 
 
+def _claude_cli() -> str:
+    """Absolute path to the `claude` CLI.
+
+    Never rely on the ambient PATH: as a systemd service the bot gets a
+    minimal PATH without ~/.local/bin, so `claude` was simply not found
+    and *every* message silently fell through to the rule-based
+    fallback — which files anything it doesn't recognise as a shopping
+    item. That turned "תכנן לי תפריט שבועי" into a list entry called
+    "תכנן לי תפריט שבועי", with only a log line to say why.
+
+    Resolution order: explicit override, then PATH, then the standard
+    per-user install location.
+    """
+    override = os.environ.get("CLAUDE_CLI_PATH")
+    if override:
+        return override
+    found = shutil.which("claude")
+    if found:
+        return found
+    return str(Path.home() / ".local" / "bin" / "claude")
+
+
 def _ask_model(message: str) -> str:
     result = subprocess.run(
-        ["claude", "-p", f'{_SYSTEM_PROMPT}\n\nהודעה: "{message}"'],
+        [_claude_cli(), "-p", f'{_SYSTEM_PROMPT}\n\nהודעה: "{message}"'],
         capture_output=True,
         text=True,
         timeout=CLAUDE_TIMEOUT_SECONDS,
@@ -134,6 +161,8 @@ def _fallback_parse(message: str) -> ParsedMessage:
     text = message.strip()
     lowered = text.lower()
 
+    if any(phrase in lowered for phrase in ("מלא את העגלה", "תמלא את העגלה", "תתחיל הזמנה", "תתחיל מחזור", "להתחיל הזמנה")):
+        return ParsedMessage(intent="start_order", used_fallback=True)
     if any(word in lowered for word in ("מבצע", "מבצעים", "הנחות")):
         return ParsedMessage(intent="deals", used_fallback=True)
     if any(phrase in lowered for phrase in ("מה ברשימה", "מה יש ברשימה", "תראה את הרשימה", "הרשימה")):

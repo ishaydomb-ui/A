@@ -89,5 +89,50 @@ class AlternativeTests(unittest.TestCase):
         self.assertEqual(format_cycle_alternatives([]), "")
 
 
+class DealsReportTests(unittest.TestCase):
+    """The deals report must not become an upsell feed."""
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.storage = Storage(str(Path(self._tmpdir.name) / "t.sqlite3"))
+
+    def tearDown(self) -> None:
+        self._tmpdir.cleanup()
+
+    def _items(self, name):
+        from grocery_bot.models import BaseListItem
+        return [BaseListItem(id=1, name=name, search_terms={}, default_quantity=1, tags=[])]
+
+    def test_promotion_on_a_pricier_variant_is_not_a_deal(self) -> None:
+        """Organic bananas cut 20.90 -> 19.86 save nothing at 12.90."""
+        from grocery_bot.catalog import find_deals_for_base_list
+        self.storage.replace_catalog(
+            [_product("1", "בננה", 12.9), _product("2", "בננה אורגנית במשקל", 20.9)],
+            [_promo("2", 19.86)],
+        )
+        self.assertEqual(find_deals_for_base_list(self.storage, self._items("בננה")), [])
+
+    def test_promotion_that_beats_the_usual_price_is_a_deal(self) -> None:
+        from grocery_bot.catalog import find_deals_for_base_list
+        self.storage.replace_catalog(
+            [_product("1", "בצל יבש", 5.9), _product("2", "בצל יבש אדום", 7.9)],
+            [_promo("2", 4.9)],
+        )
+        found = find_deals_for_base_list(self.storage, self._items("בצל יבש"))
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0][1].name, "בצל יבש אדום")
+
+    def test_different_kind_of_product_is_not_a_deal(self) -> None:
+        from grocery_bot.catalog import find_deals_for_base_list
+        self.storage.replace_catalog(
+            [
+                _product("1", "בננה", 12.9),
+                _product("2", "פריפלצת בננה", 5.0, weighted=False, uom="100 גרם"),
+            ],
+            [_promo("2", 4.75)],
+        )
+        self.assertEqual(find_deals_for_base_list(self.storage, self._items("בננה")), [])
+
+
 if __name__ == "__main__":
     unittest.main()
