@@ -32,7 +32,8 @@ from .catalog import (
 from .cartview import MIN_EDIT_INTERVAL_SECONDS, render_final, render_progress
 from .config import Config
 from .disambiguate import describe_card
-from .connectivity import check_israeli_exit
+from .connectivity import check_israeli_exit  # noqa: F401  (kept for tests/back-compat)
+from .exitnode import ensure_israeli_exit
 from .nlu import ParsedItem, build_meal_plan, expand_recipe, parse_message
 from .orchestrator import format_report_summary, run_order_cycle
 from .storage import Storage
@@ -348,7 +349,10 @@ class GroceryBot:
         # runs anyway and every single item comes back as an error, which
         # reads like the bot is broken rather than like the exit node at
         # home is simply switched off.
-        status = await asyncio.to_thread(check_israeli_exit, self.config.playwright_proxy)
+        # Tries the current exit node, then any other that can reach Israel:
+        # the household has several devices offering themselves, and
+        # Tailscale never switches between them on its own.
+        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy)
         if not status.available:
             self.storage.defer_cycle(
                 chat_id=update.effective_chat.id,
@@ -555,7 +559,10 @@ class GroceryBot:
         if pending is None:
             return
 
-        status = await asyncio.to_thread(check_israeli_exit, self.config.playwright_proxy)
+        # Tries the current exit node, then any other that can reach Israel:
+        # the household has several devices offering themselves, and
+        # Tailscale never switches between them on its own.
+        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy)
         if not status.available:
             return
 
