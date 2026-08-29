@@ -27,7 +27,9 @@ class StoreAdapter(ABC):
         """
 
     @abstractmethod
-    def add_specific_product(self, product_label: str, quantity: int = 1) -> CartAddResult:
+    def add_specific_product(
+        self, product_label: str, quantity: int = 1, product_code: str = "", search_term: str = ""
+    ) -> CartAddResult:
         """Add an exact product (one of a previous ambiguous result's candidates)."""
 
     @abstractmethod

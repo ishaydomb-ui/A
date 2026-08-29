@@ -358,17 +358,30 @@ class GroceryBot:
             await query.edit_message_text("הרשת הזו לא מוגדרת יותר, לא ניתן להשלים.")
             return
 
-        def _add() -> str:
+        def _add():
             with make_adapter() as adapter:
-                result = adapter.add_specific_product(chosen_label, pending["quantity"])
-            return result.status
+                return adapter.add_specific_product(
+                    chosen_label, pending["quantity"], search_term=pending["original_term"]
+                )
 
-        status = await asyncio.to_thread(_add)
+        result = await asyncio.to_thread(_add)
         self.storage.mark_ambiguity_resolved(ambiguity_id)
-        if status == "added":
-            await query.edit_message_text(f"נוסף: {chosen_label}")
+        if result.status == "added":
+            # Remember it, so this question is asked once per product and
+            # not on every single cycle.
+            self.storage.remember_choice(
+                store=pending["store"],
+                term=pending["original_term"],
+                product_code=getattr(result, "product_code", "") or "",
+                product_name=chosen_label,
+            )
+            await query.edit_message_text(
+                f"נוסף: {chosen_label}\nאזכור את הבחירה הזו ל'{pending['original_term']}' בפעם הבאה."
+            )
         else:
-            await query.edit_message_text(f"לא הצלחתי להוסיף את '{chosen_label}' (status: {status}).")
+            await query.edit_message_text(
+                f"לא הצלחתי להוסיף את '{chosen_label}' (status: {result.status})."
+            )
 
 
 async def _register_bot_metadata(application: Application) -> None:

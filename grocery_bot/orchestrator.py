@@ -27,43 +27,67 @@ def run_order_cycle(storage: Storage, adapter_factories: dict[str, AdapterFactor
     adhoc_items = storage.list_pending_adhoc()
 
     reports: dict[str, OrderCycleReport] = {}
+    # An ad-hoc request is only used up once some store actually managed
+    # something with it. A transient failure (network blip, changed
+    # markup) must not silently delete a request nobody will think to
+    # re-send.
+    resolved_adhoc: set[int] = set()
 
     for store, make_adapter in adapter_factories.items():
         report = OrderCycleReport(store=store)
         with make_adapter() as adapter:
             for base_item in base_items:
                 term = base_item.search_term_for(store)
-                result = adapter.search_and_add(term, base_item.default_quantity)
+                result = _add_one(storage, adapter, store, term, base_item.default_quantity)
                 report.record(result)
-                if result.status == "ambiguous":
-                    storage.save_pending_ambiguity(
-                        store=store,
-                        original_term=term,
-                        quantity=result.quantity,
-                        candidates=result.candidates,
-                    )
 
             for adhoc in adhoc_items:
-                result = adapter.search_and_add(adhoc.text, adhoc.quantity)
+                result = _add_one(storage, adapter, store, adhoc.text, adhoc.quantity)
                 report.record(result)
-                if result.status == "ambiguous":
-                    storage.save_pending_ambiguity(
-                        store=store,
-                        original_term=adhoc.text,
-                        quantity=result.quantity,
-                        candidates=result.candidates,
-                    )
+                if result.status in ("added", "ambiguous", "not_found"):
+                    resolved_adhoc.add(adhoc.id)
 
         reports[store] = report
 
-    # An ad-hoc request is "consumed" once it's been attempted against every
-    # enabled store, regardless of per-store outcome — an ambiguous or
-    # not-found result is handled through the pending-ambiguity / not-found
-    # summary, not by leaving the request to be retried verbatim next cycle.
-    for adhoc in adhoc_items:
-        storage.mark_adhoc_consumed(adhoc.id)
+    for adhoc_id in resolved_adhoc:
+        storage.mark_adhoc_consumed(adhoc_id)
 
     return reports
+
+
+def _add_one(storage: Storage, adapter: StoreAdapter, store: str, term: str, quantity: int):
+    """Add one term, honouring a previously remembered product choice.
+
+    Without the memory lookup this bot is unusable in practice: a real
+    Shufersal search for an everyday term returns ~20 tiles, so every
+    single item comes back "ambiguous" and the user is asked a dozen
+    questions per cycle. Remembering the choice turns that into a
+    one-time question per product, which is what the project's "focused
+    decision point, only on genuine ambiguity" rule actually asks for.
+    """
+    preferred = storage.preferred_for(store, term)
+    if preferred is not None:
+        result = adapter.add_specific_product(
+            preferred["product_name"],
+            quantity,
+            product_code=preferred["product_code"],
+            search_term=term,
+        )
+        # A remembered product can be delisted or renamed; fall back to a
+        # fresh search rather than reporting a spurious failure.
+        if result.status != "not_found":
+            return result
+        storage.forget_choice(store, term)
+
+    result = adapter.search_and_add(term, quantity)
+    if result.status == "ambiguous":
+        storage.save_pending_ambiguity(
+            store=store,
+            original_term=term,
+            quantity=result.quantity,
+            candidates=result.candidates,
+        )
+    return result
 
 
 def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:

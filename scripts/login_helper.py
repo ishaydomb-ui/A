@@ -42,10 +42,27 @@ def main() -> None:
         raise SystemExit(1)
 
     store, output_path = sys.argv[1], sys.argv[2]
+    import os
+
     from playwright.sync_api import sync_playwright
 
+    # Both chains refuse non-Israeli IPs. Without this the login page is a
+    # geo-block placeholder served with HTTP 200, so the window would just
+    # look broken rather than blocked. The saved session must also be
+    # captured through the same exit the bot will later use.
+    proxy = os.environ.get("PLAYWRIGHT_PROXY", "")
+    launch_kwargs = {"headless": False}
+    if proxy:
+        launch_kwargs["proxy"] = {"server": proxy}
+        print(f"Using proxy {proxy} (required from outside Israel).")
+    else:
+        print(
+            "WARNING: PLAYWRIGHT_PROXY is not set. If this machine is not in "
+            "Israel the store will show a geo-block page instead of the login form."
+        )
+
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(**launch_kwargs)
         context = browser.new_context()
         page = context.new_page()
         page.goto(LOGIN_URLS[store])

@@ -80,6 +80,10 @@ class CartAddResult:
     detail: str = ""
     candidates: list[str] = field(default_factory=list)
     quantity: int = 1
+    # The store's own product id for what was added. Carried back so a
+    # remembered choice can be keyed on the code rather than the display
+    # name, which is neither unique nor stable.
+    product_code: str = ""
 
 
 @dataclass

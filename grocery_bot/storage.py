@@ -79,6 +79,20 @@ CREATE TABLE IF NOT EXISTS catalog_meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- Which concrete product the household picked for a given search term.
+-- Without this, every cycle re-asks: a real search for "חלב 3%" returns
+-- 20 tiles, so *every* item would be "ambiguous" forever and the bot
+-- would fire a dozen questions per run — the opposite of the project's
+-- "minimum user dependency" rule.
+CREATE TABLE IF NOT EXISTS preferred_products (
+    store TEXT NOT NULL,
+    term TEXT NOT NULL,
+    product_code TEXT NOT NULL,
+    product_name TEXT NOT NULL,
+    chosen_at TEXT NOT NULL,
+    PRIMARY KEY (store, term)
+);
 """
 
 
@@ -347,6 +361,62 @@ class Storage:
                 "UPDATE pending_ambiguities SET resolved = 1 WHERE id = ?", (ambiguity_id,)
             )
             conn.commit()
+
+    # -- remembered product choices ----------------------------------------
+
+    def remember_choice(
+        self, store: str, term: str, product_code: str, product_name: str
+    ) -> None:
+        """Record which product a search term should resolve to from now on.
+
+        This is what stops the bot re-asking the same question every
+        cycle. Keyed on the search term rather than the base-list row so
+        an ad-hoc "טונה" benefits from a choice made for the standing
+        "טונה" too.
+        """
+        with closing(self._connect()) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO preferred_products "
+                "(store, term, product_code, product_name, chosen_at) VALUES (?, ?, ?, ?, ?)",
+                (
+                    store,
+                    term.strip(),
+                    product_code,
+                    product_name,
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+            conn.commit()
+
+    def preferred_for(self, store: str, term: str) -> dict | None:
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                "SELECT product_code, product_name FROM preferred_products "
+                "WHERE store = ? AND term = ?",
+                (store, term.strip()),
+            ).fetchone()
+        if row is None:
+            return None
+        return {"product_code": row["product_code"], "product_name": row["product_name"]}
+
+    def list_preferences(self, store: str | None = None) -> list[dict]:
+        query = "SELECT store, term, product_code, product_name FROM preferred_products"
+        params: tuple = ()
+        if store:
+            query += " WHERE store = ?"
+            params = (store,)
+        with closing(self._connect()) as conn:
+            rows = conn.execute(query + " ORDER BY term", params).fetchall()
+        return [dict(row) for row in rows]
+
+    def forget_choice(self, store: str, term: str) -> bool:
+        with closing(self._connect()) as conn:
+            cur = conn.execute(
+                "DELETE FROM preferred_products WHERE store = ? AND term = ?",
+                (store, term.strip()),
+            )
+            conn.commit()
+            return cur.rowcount > 0
 
     # -- price catalog ----------------------------------------------------
 

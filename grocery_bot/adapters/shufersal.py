@@ -119,10 +119,24 @@ class ShufersalAdapter(StoreAdapter):
             )
         return self._add(cards[0], term, quantity)
 
-    def add_specific_product(self, product_label: str, quantity: int = 1) -> CartAddResult:
-        """Add the exact product chosen from a previous ambiguous result."""
+    def add_specific_product(
+        self, product_label: str, quantity: int = 1, product_code: str = "", search_term: str = ""
+    ) -> CartAddResult:
+        """Add one exact product, previously chosen or remembered.
+
+        Matching prefers `product_code`: names are not unique and the
+        chain re-words them, so a remembered choice keyed only on the
+        label would quietly start matching a different tub of cottage
+        cheese. `search_term` lets a remembered choice be re-found by the
+        original query, since searching the full product name sometimes
+        returns nothing.
+        """
         try:
-            cards = self._search(product_label)
+            cards = self._search(search_term or product_label)
+            if product_code:
+                for card in cards:
+                    if card["code"] == product_code:
+                        return self._add(card, card["name"] or product_label, quantity)
             for card in cards:
                 if card["name"] == product_label:
                     return self._add(card, product_label, quantity)
@@ -185,7 +199,11 @@ class ShufersalAdapter(StoreAdapter):
             tile.locator(ADD_TO_CART_SELECTOR).first.click(timeout=15_000)
             self._page.wait_for_timeout(1_000)  # let the cart request settle
             return CartAddResult(
-                item_name=name, store=self.name, status="added", quantity=quantity
+                item_name=name,
+                store=self.name,
+                status="added",
+                quantity=quantity,
+                product_code=card.get("code", ""),
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Shufersal: failed to add %r to cart", name)
