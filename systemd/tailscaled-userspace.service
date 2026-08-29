@@ -1,0 +1,29 @@
+[Unit]
+Description=Tailscale (userspace) providing a SOCKS5 proxy for store access
+Documentation=file:/home/codex/grocery-automation/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Userspace networking on purpose: this must NOT become the server's
+# default route. Two other projects' bots run on this box and have to
+# keep using the normal connection — only the grocery bot's browser is
+# pointed at the SOCKS5 port below. Userspace mode also means no root
+# and no TUN device.
+ExecStart=%h/tailscale/tailscaled \
+  --tun=userspace-networking \
+  --socks5-server=localhost:1055 \
+  --outbound-http-proxy-listen=localhost:1056 \
+  --socket=%h/.config/tailscale/tailscaled.sock \
+  --statedir=%h/.config/tailscale
+
+Restart=always
+RestartSec=10s
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tailscaled-userspace
+
+[Install]
+WantedBy=default.target
