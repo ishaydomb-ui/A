@@ -36,10 +36,10 @@ site), but never in your own commentary to the user.
 
 If something is unverified, untested, or you're genuinely not sure —
 say so explicitly. Don't present a guess as a settled fact. This
-especially applies to anything about the live supermarket sites: we
-don't have a verified login or verified selectors yet (see Known open
-issues), so claims about what works there are guesses until proven
-otherwise by an actual run.
+especially applies to anything about the live supermarket sites: login
+and add-to-cart are now verified for Shufersal (see Known open issues),
+but Tiv Taam and anything not explicitly marked verified there are
+still guesses until proven otherwise by an actual run.
 
 ## Persistence
 
@@ -103,26 +103,59 @@ Don't re-derive these from scratch — they're already known:
    Whichever lands, point Playwright's `proxy` option at the local SOCKS
    port — don't reroute the whole server, two other projects' bots run
    here.
-1. **Headless username/password login probably *does* work** — the
-   opposite of what this file said until 2026-08-29. `eshaham/shufersal-automation`
-   (same author as israeli-bank-scrapers) is a maintained TypeScript
-   library doing exactly that: `createSession(username, password)`, plus
-   cart, orders and delivery slots, with no interactive OTP step. Before
-   investing more in our own Playwright adapter, evaluate whether to
-   drive that library instead. The noVNC remote-desktop flow
-   (`scripts/setup_remote_desktop.sh`, verified working on this box) may
-   turn out to be unnecessary.
-2. **Selectors were corrected against the live site on 2026-08-29.**
-   Verified working: `li.miglog-prod` tiles, with identity read from
+1. **SOLVED 2026-08-29 — headless username/password login works, no OTP.**
+   Confirmed with the user's real account through the Tailscale proxy:
+   `scripts/headless_login.py` fills `#j_username`/`#j_password` on
+   `#loginForm` (posts to `/online/he/j_spring_security_check`) and lands
+   logged in — the homepage header shows "היי ישי" and real nav links
+   (`ההזמנות שלי`, `התנתקות`). No OTP/captcha step appeared. This
+   confirms the theory raised about `eshaham/shufersal-automation`
+   (below) without adopting that library: same insight, no second
+   runtime. `scripts/login_helper.py` (manual noVNC) stays as the
+   fallback for any account where headless login *does* hit an OTP wall
+   — `headless_login.py` detects that case explicitly (checks for an OTP
+   element after submit) and fails loudly rather than hanging or
+   guessing.
+   Kept for reference — the original open question: `eshaham/shufersal-automation`
+   (same author as israeli-bank-scrapers) is a maintained TypeScript/Puppeteer
+   library doing `createSession(username, password)` plus cart, orders
+   and delivery slots. Evaluated 2026-08-29: not adopted — it's a second
+   runtime (Node/Puppeteer) bolted onto a Python/Playwright project just
+   to borrow one technique (password-only login), and it also exposes
+   order-submission methods that would need to be avoided given the hard
+   no-auto-checkout rule. The login technique was ported directly
+   instead; see above.
+2. **SOLVED 2026-08-29 — add-to-cart verified working, with a real
+   logged-in session from `headless_login.py`.** Confirmed two
+   independent ways, not just "the click didn't throw": the header cart
+   badge (`.topCartTotalItems`) went from `0` to `1`, and the minicart
+   panel showed the real order total including delivery
+   (`הסל שלי` / `43.25 ₪ כולל דמי משלוח/שרות`). Note:
+   `data-product-purchasable` reads `false` on tiles even for a
+   logged-in session — that attribute is **not** a reliable purchasable/
+   anonymous signal as previously assumed; don't gate logic on it.
+   Selectors themselves were separately corrected against the live site
+   earlier the same day: `li.miglog-prod` tiles, identity from
    `data-product-name` / `data-product-code` / `data-product-price`
    attributes rather than scraped text, and `button.js-add-to-cart`.
-   The old `[data-testid=...]` guesses and `.miglog-prod-name` were
-   wrong and are gone. Search, tile parsing and the not-found path are
-   confirmed against real queries.
-   **Still unverified: the actual add-to-cart click**, which needs a
-   logged-in session — `data-product-purchasable` is `false` for
-   anonymous visitors, so that path has never executed successfully.
-   That is the next thing to test once a session exists.
+   Search, tile parsing and the not-found path were confirmed against
+   real queries before the login work.
+   **Still open:** removing/clearing a cart item programmatically was
+   *not* solved — the real cart page is `/online/he/cart/cartsummary`
+   (not a guess-worthy URL), and its "ניקוי הסל" clear-cart control
+   (`a[data-miglog-role="cart-remove-overlay-opener"]`) rendered but
+   stayed non-visible/non-clickable through several attempts (likely a
+   responsive-layout duplicate-element issue — there are two copies in
+   the DOM gated by viewport-width CSS classes). Deliberately not
+   pursued further since that page is one step from the real checkout
+   flow and the user asked not to be poked around there. A stray test
+   item (milk, ₪7.35) was left in the real cart as a result — harmless
+   (no charge happens without the user completing checkout themselves),
+   but worth knowing about.
+   Also confirmed real account data is reachable read-only: name (ישי
+   דומב), member number, and four saved lists under `/online/he/wish-lists/main`
+   — notably "המוצרים שאני בדרך כלל קונה" (usually-buy, 27 items), a
+   good candidate source for the bot's base/recurring list.
 2b. **The price/promotion feed is NOT blocked and is already working.**
    `prices.shufersal.co.il` (the price-transparency feed mandated by
    Israeli law) is ordinary IIS, not CloudFront, and serves fine from
