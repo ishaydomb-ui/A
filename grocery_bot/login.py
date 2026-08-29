@@ -48,8 +48,15 @@ def login_and_save_session(
     output_path: str,
     proxy: str,
     headless: bool = True,
+    browser=None,
 ) -> None:
     """Log in and write a Playwright storage_state file to `output_path`.
+
+    Pass `browser` to reuse a caller's existing Playwright browser. The
+    adapter must: starting a second `sync_playwright()` while one is
+    already running raises "Sync API inside the asyncio loop", so a
+    self-renewing adapter that launched its own browser could never log
+    in again — the renewal would fail every single time.
 
     Raises LoginFailed (or OtpRequired) rather than writing a session
     file that isn't actually logged in — a half-valid session file is
@@ -68,41 +75,57 @@ def login_and_save_session(
             "would look like wrong credentials rather than a blocked request."
         )
 
+    if browser is not None:
+        _perform_login(browser, username, password, output_path)
+        return
+
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless, proxy={"server": proxy})
+        own_browser = p.chromium.launch(headless=headless, proxy={"server": proxy})
         try:
-            context = browser.new_context()
-            page = context.new_page()
-            page.goto(LOGIN_URL, wait_until="domcontentloaded")
-            page.locator(USERNAME_SELECTOR).fill(username)
-            page.locator(PASSWORD_SELECTOR).fill(password)
-            page.locator(SUBMIT_SELECTOR).first.click()
-
-            try:
-                page.wait_for_load_state("networkidle", timeout=20_000)
-            except Exception:
-                pass  # the state checks below decide, not this wait
-
-            if page.locator(OTP_SELECTOR).count() > 0:
-                raise OtpRequired(
-                    "Shufersal asked for a one-time code. Use "
-                    "scripts/login_helper.py over noVNC to log in by hand."
-                )
-
-            if "error=true" in page.url.lower():
-                raise LoginFailed("Shufersal rejected the credentials.")
-
-            # Confirm against the account page rather than trusting the
-            # post-submit URL: some failures redirect to a generic page
-            # instead of surfacing an explicit error.
-            page.goto(ACCOUNT_URL, wait_until="domcontentloaded")
-            if "login" in page.url.lower():
-                raise LoginFailed(
-                    f"Did not reach the account page after login (landed on {page.url})."
-                )
-
-            context.storage_state(path=output_path)
+            _perform_login(own_browser, username, password, output_path)
         finally:
-            browser.close()
+            own_browser.close()
+
+
+def _perform_login(browser, username: str, password: str, output_path: str) -> None:
+    """Drive the login form in a throwaway context on `browser`.
+
+    Uses its own context so it never disturbs the caller's cookies — the
+    adapter may be mid-cycle with a cart open when a renewal is needed.
+    """
+    context = browser.new_context()
+    try:
+        page = context.new_page()
+        page.goto(LOGIN_URL, wait_until="domcontentloaded")
+        page.locator(USERNAME_SELECTOR).fill(username)
+        page.locator(PASSWORD_SELECTOR).fill(password)
+        page.locator(SUBMIT_SELECTOR).first.click()
+
+        try:
+            page.wait_for_load_state("networkidle", timeout=20_000)
+        except Exception:
+            pass  # the state checks below decide, not this wait
+
+        if page.locator(OTP_SELECTOR).count() > 0:
+            raise OtpRequired(
+                "Shufersal asked for a one-time code. Use "
+                "scripts/login_helper.py over noVNC to log in by hand."
+            )
+
+        if "error=true" in page.url.lower():
+            raise LoginFailed("Shufersal rejected the credentials.")
+
+        # Confirm against the account page rather than trusting the
+        # post-submit URL: some failures redirect to a generic page
+        # instead of surfacing an explicit error.
+        page.goto(ACCOUNT_URL, wait_until="domcontentloaded")
+        if "login" in page.url.lower():
+            raise LoginFailed(
+                f"Did not reach the account page after login (landed on {page.url})."
+            )
+
+        context.storage_state(path=output_path)
+    finally:
+        context.close()

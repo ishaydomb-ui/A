@@ -114,8 +114,13 @@ class ShufersalAdapter(StoreAdapter):
         self._context = self._browser.new_context(storage_state=str(state_path))
         self._page = self._context.new_page()
 
-    def _login(self) -> None:
-        """Create a fresh session file from stored credentials."""
+    def _login(self, browser=None) -> None:
+        """Create a fresh session file from stored credentials.
+
+        `browser` is passed once this adapter has one of its own: a second
+        `sync_playwright()` inside a running one raises "Sync API inside
+        the asyncio loop", so renewal has to reuse the live browser.
+        """
         from ..login import login_and_save_session
 
         if not self._username or not self._password:
@@ -133,6 +138,7 @@ class ShufersalAdapter(StoreAdapter):
             output_path=self._storage_state_path,
             proxy=self._proxy,
             headless=self._headless,
+            browser=browser,
         )
 
     def ensure_session(self) -> bool:
@@ -149,7 +155,7 @@ class ShufersalAdapter(StoreAdapter):
             logger.warning("Shufersal session expired and no credentials to renew it")
             return False
         try:
-            self._login()
+            self._login(browser=self._browser)
         except Exception:
             logger.exception("Shufersal: re-login failed")
             return False
