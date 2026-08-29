@@ -124,6 +124,12 @@ _ADDED_COLUMNS = {
         "unit": "TEXT NOT NULL DEFAULT ''",
         "brand": "TEXT NOT NULL DEFAULT ''",
     },
+    # Full candidate detail (price/size/brand) behind each choice. The
+    # older `candidates` column holds names only, which are duplicated
+    # across brands and so cannot be told apart in a chooser.
+    "pending_ambiguities": {
+        "candidate_cards": "TEXT NOT NULL DEFAULT '[]'",
+    },
 }
 
 
@@ -369,17 +375,20 @@ class Storage:
     # -- pending ambiguity decisions --------------------------------------
 
     def save_pending_ambiguity(
-        self, store: str, original_term: str, quantity: int, candidates: list[str]
+        self, store: str, original_term: str, quantity: int, candidates: list[str],
+        candidate_cards: list[dict] | None = None
     ) -> int:
         with closing(self._connect()) as conn:
             cur = conn.execute(
-                "INSERT INTO pending_ambiguities (store, original_term, quantity, candidates, created_at) "
-                "VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO pending_ambiguities "
+                "(store, original_term, quantity, candidates, candidate_cards, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
                 (
                     store,
                     original_term,
                     quantity,
                     json.dumps(candidates, ensure_ascii=False),
+                    json.dumps(candidate_cards or [], ensure_ascii=False),
                     datetime.now(timezone.utc).isoformat(),
                 ),
             )
@@ -389,7 +398,8 @@ class Storage:
     def list_pending_ambiguities(self) -> list[dict]:
         with closing(self._connect()) as conn:
             rows = conn.execute(
-                "SELECT id, store, original_term, candidates FROM pending_ambiguities WHERE resolved = 0"
+                "SELECT id, store, original_term, candidates, candidate_cards "
+                "FROM pending_ambiguities WHERE resolved = 0"
             ).fetchall()
         return [
             {
@@ -397,6 +407,7 @@ class Storage:
                 "store": row["store"],
                 "original_term": row["original_term"],
                 "candidates": json.loads(row["candidates"]),
+                "candidate_cards": json.loads(row["candidate_cards"] or "[]"),
             }
             for row in rows
         ]
@@ -415,6 +426,9 @@ class Storage:
             "original_term": row["original_term"],
             "quantity": row["quantity"],
             "candidates": json.loads(row["candidates"]),
+            "candidate_cards": json.loads(
+                (row["candidate_cards"] if "candidate_cards" in row.keys() else "") or "[]"
+            ),
         }
 
     def mark_ambiguity_resolved(self, ambiguity_id: int) -> None:

@@ -186,11 +186,15 @@ class ShufersalAdapter(StoreAdapter):
         if count == 0:
             return CartAddResult(item_name=term, store=self.name, status="not_found", quantity=quantity)
         if count > 1:
+            shortlist = cards[:MAX_CANDIDATES]
             return CartAddResult(
                 item_name=term,
                 store=self.name,
                 status="ambiguous",
-                candidates=[c["name"] for c in cards[:MAX_CANDIDATES]],
+                candidates=[c["name"] for c in shortlist],
+                # Names alone repeat across brands; the full cards let the
+                # caller both auto-resolve and show a distinguishable choice.
+                candidate_cards=shortlist,
                 quantity=quantity,
             )
         return self._add(cards[0], term, quantity)
@@ -294,13 +298,24 @@ class ShufersalAdapter(StoreAdapter):
             return []
         return self._page.eval_on_selector_all(
             PRODUCT_CARD_SELECTOR,
-            """els => els.map((e, i) => ({
-                index: i,
-                name: e.getAttribute('data-product-name') || '',
-                code: e.getAttribute('data-product-code') || '',
-                price: e.getAttribute('data-product-price') || '',
-                purchasable: e.getAttribute('data-product-purchasable') === 'true',
-            }))""",
+            # `.smallText` holds "250 גרם | תנובה" — size and manufacturer.
+            # Without it, a search for קוטג' returns three tiles all named
+            # "קוטג' 5% שומן" (Tnuva, Strauss, Tara), and a chooser showing
+            # only names offers three identical buttons.
+            """els => els.map((e, i) => {
+                const small = e.querySelector('.smallText');
+                const detail = small ? small.innerText.replace(/\\s+/g, ' ').trim() : '';
+                const parts = detail.split('|').map(s => s.trim());
+                return {
+                    index: i,
+                    name: e.getAttribute('data-product-name') || '',
+                    code: e.getAttribute('data-product-code') || '',
+                    price: e.getAttribute('data-product-price') || '',
+                    size: parts[0] || '',
+                    brand: parts.length > 1 ? parts[parts.length - 1] : '',
+                    purchasable: e.getAttribute('data-product-purchasable') === 'true',
+                };
+            })""",
         )
 
     def _add(self, card: dict, term: str, quantity: int) -> CartAddResult:

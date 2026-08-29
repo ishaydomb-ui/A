@@ -84,6 +84,14 @@ class CartAddResult:
     # remembered choice can be keyed on the code rather than the display
     # name, which is neither unique nor stable.
     product_code: str = ""
+    # Full detail for each candidate (name/code/price/size/brand), so a
+    # chooser can show what actually distinguishes them. `candidates`
+    # keeps only names, which are routinely duplicated across brands.
+    candidate_cards: list[dict] = field(default_factory=list)
+    # Set when the cycle picked a product without asking, and why
+    # ("history" | "exact_name"); shown so an automatic choice is never
+    # silent.
+    auto_resolved: str = ""
 
 
 @dataclass

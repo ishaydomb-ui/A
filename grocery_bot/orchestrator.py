@@ -7,11 +7,15 @@ that one item — never as a blanket "confirm this whole cart" step.
 """
 from __future__ import annotations
 
+import logging
 from typing import Callable
 
 from .adapters.base import StoreAdapter
+from .disambiguate import resolve
 from .models import CartAddResult, OrderCycleReport
 from .storage import Storage
+
+logger = logging.getLogger(__name__)
 
 AdapterFactory = Callable[[], StoreAdapter]
 
@@ -91,20 +95,64 @@ def _add_one(storage: Storage, adapter: StoreAdapter, store: str, term: str, qua
             search_term=term,
         )
         # A remembered product can be delisted or renamed; fall back to a
-        # fresh search rather than reporting a spurious failure.
+        # fresh search rather than reporting a spurious failure. The
+        # memory is deliberately *kept*: one failed lookup usually means
+        # the store's search didn't surface it this time, not that the
+        # household changed its mind, and deleting on the first miss
+        # silently threw away choices that took a real conversation to
+        # establish.
         if result.status != "not_found":
             return result
-        storage.forget_choice(store, term)
+        logger.info(
+            "Shufersal: remembered product for %r not found this run; keeping the memory", term
+        )
 
     result = adapter.search_and_add(term, quantity)
-    if result.status == "ambiguous":
-        storage.save_pending_ambiguity(
-            store=store,
-            original_term=term,
-            quantity=result.quantity,
-            candidates=result.candidates,
-        )
+    if result.status != "ambiguous":
+        return result
+
+    # Before asking, check whether the answer is already known. Most
+    # "ambiguity" is a search returning twenty tiles, of which exactly one
+    # is a product this household has bought for years.
+    cards = getattr(result, "candidate_cards", None)
+    if cards:
+        known = _known_products(storage, store)
+        decision = resolve(term, cards, known["names"], known["codes"])
+        if decision.resolved:
+            chosen = decision.card
+            picked = adapter.add_specific_product(
+                chosen.get("name", term),
+                quantity,
+                product_code=chosen.get("code", ""),
+                search_term=term,
+            )
+            if picked.status == "added":
+                storage.remember_choice(
+                    store=store,
+                    term=term,
+                    product_code=chosen.get("code", ""),
+                    product_name=chosen.get("name", term),
+                )
+                picked.auto_resolved = decision.reason
+                return picked
+
+    storage.save_pending_ambiguity(
+        store=store,
+        original_term=term,
+        quantity=result.quantity,
+        candidates=result.candidates,
+        candidate_cards=cards or [],
+    )
     return result
+
+
+def _known_products(storage: Storage, store: str) -> dict:
+    """Every product this household has actually bought, by name and code."""
+    preferences = storage.list_preferences(store)
+    return {
+        "names": {p["product_name"] for p in preferences if p.get("product_name")},
+        "codes": {p["product_code"] for p in preferences if p.get("product_code")},
+    }
 
 
 def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
@@ -114,6 +162,15 @@ def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
         lines.append(f"*{store}*")
         if report.added:
             lines.append(f"✅ נוספו ({len(report.added)}): " + ", ".join(r.item_name for r in report.added))
+            # An automatic pick must be visible: it replaced a question the
+            # user would otherwise have answered, so they need to be able to
+            # spot a wrong one.
+            auto = [r for r in report.added if getattr(r, "auto_resolved", "")]
+            if auto:
+                lines.append(
+                    f"   _נבחרו לפי הרגלי הקנייה שלכם ({len(auto)}): _"
+                    + ", ".join(r.item_name for r in auto)
+                )
         if report.ambiguous:
             lines.append(
                 f"❓ דורש בחירה ({len(report.ambiguous)}): " + ", ".join(r.item_name for r in report.ambiguous)

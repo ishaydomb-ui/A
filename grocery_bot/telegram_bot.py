@@ -30,6 +30,7 @@ from .catalog import (
     refresh_catalog,
 )
 from .config import Config
+from .disambiguate import describe_card
 from .connectivity import check_israeli_exit
 from .nlu import ParsedItem, build_meal_plan, expand_recipe, parse_message
 from .orchestrator import format_report_summary, run_order_cycle
@@ -384,16 +385,16 @@ class GroceryBot:
             await context.bot.send_message(chat_id=chat_id, text=message, parse_mode="Markdown")
 
     async def _send_pending_ambiguities(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        await self._ask_ambiguities(update.effective_chat.id, context)
+
+    async def _ask_ambiguities(self, chat_id: int, context: ContextTypes.DEFAULT_TYPE) -> None:
         for pending in self.storage.list_pending_ambiguities():
-            buttons = [
-                [InlineKeyboardButton(label, callback_data=f"resolve:{pending['id']}:{i}")]
-                for i, label in enumerate(pending["candidates"])
-            ]
-            buttons.append([InlineKeyboardButton("דלג", callback_data=f"skip:{pending['id']}:0")])
+            text, buttons = _format_choice(pending)
             await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=f"[{pending['store']}] '{pending['original_term']}' — כמה תוצאות מתאימות, איזו?",
+                chat_id=chat_id,
+                text=text,
                 reply_markup=InlineKeyboardMarkup(buttons),
+                parse_mode="Markdown",
             )
 
     async def resolve_ambiguity(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -413,7 +414,14 @@ class GroceryBot:
             return
 
         choice_index = int(choice_str)
-        chosen_label = pending["candidates"][choice_index]
+        cards = pending.get("candidate_cards") or []
+        chosen_card = cards[choice_index] if choice_index < len(cards) else {}
+        # Identify by code, never by name: a search for קוטג' returns three
+        # different products all named "קוטג' 5% שומן" (Tnuva, Strauss,
+        # Tara), so adding by name would silently add whichever matched
+        # first -- quite possibly not the one just chosen.
+        chosen_code = chosen_card.get("code", "")
+        chosen_label = chosen_card.get("name") or pending["candidates"][choice_index]
         factories = _build_adapter_factories(self.config)
         make_adapter = factories.get(pending["store"])
         if make_adapter is None:
@@ -423,7 +431,10 @@ class GroceryBot:
         def _add():
             with make_adapter() as adapter:
                 return adapter.add_specific_product(
-                    chosen_label, pending["quantity"], search_term=pending["original_term"]
+                    chosen_label,
+                    pending["quantity"],
+                    product_code=chosen_code,
+                    search_term=pending["original_term"],
                 )
 
         result = await asyncio.to_thread(_add)
@@ -434,7 +445,7 @@ class GroceryBot:
             self.storage.remember_choice(
                 store=pending["store"],
                 term=pending["original_term"],
-                product_code=getattr(result, "product_code", "") or "",
+                product_code=chosen_code or getattr(result, "product_code", "") or "",
                 product_name=chosen_label,
             )
             await query.edit_message_text(
@@ -503,6 +514,55 @@ class GroceryBot:
                 text=f"[{item['store']}] '{item['original_term']}' — כמה תוצאות מתאימות, איזו?",
                 reply_markup=InlineKeyboardMarkup(buttons),
             )
+
+
+# Telegram truncates a long inline-button label (the client showed roughly
+# 24 Hebrew characters), so putting "name · brand size · price" on the
+# button hides exactly the part that distinguishes the options. The detail
+# goes in the message text instead, and the buttons stay short numbers.
+_NUMBER_EMOJI = ("1\ufe0f\u20e3", "2\ufe0f\u20e3", "3\ufe0f\u20e3", "4\ufe0f\u20e3", "5\ufe0f\u20e3")
+
+
+def _format_choice(pending: dict) -> tuple[str, list[list[InlineKeyboardButton]]]:
+    """Render one ambiguity as a numbered list plus a compact button row."""
+    cards = pending.get("candidate_cards") or []
+    names = pending.get("candidates") or []
+    lines = [f"*{pending['original_term']}* — איזה מהם?"]
+
+    if cards:
+        cheapest = _cheapest_index(cards)
+        for i, card in enumerate(cards[: len(_NUMBER_EMOJI)]):
+            marker = " 💰" if i == cheapest else ""
+            lines.append(f"{_NUMBER_EMOJI[i]} {describe_card(card)}{marker}")
+    else:
+        # Older rows saved before candidate detail was stored.
+        for i, name in enumerate(names[: len(_NUMBER_EMOJI)]):
+            lines.append(f"{_NUMBER_EMOJI[i]} {name}")
+
+    count = min(len(cards or names), len(_NUMBER_EMOJI))
+    row = [
+        InlineKeyboardButton(_NUMBER_EMOJI[i], callback_data=f"resolve:{pending['id']}:{i}")
+        for i in range(count)
+    ]
+    buttons = [row, [InlineKeyboardButton("דלג", callback_data=f"skip:{pending['id']}:0")]]
+    return "\n".join(lines), buttons
+
+
+def _cheapest_index(cards: list[dict]) -> int | None:
+    """Index of the cheapest candidate, for a 💰 hint.
+
+    Only a hint: the cheapest is often a smaller pack rather than a better
+    buy, so it is never auto-selected (see disambiguate.py).
+    """
+    best, best_price = None, None
+    for i, card in enumerate(cards):
+        try:
+            price = float(card.get("price", ""))
+        except (TypeError, ValueError):
+            continue
+        if best_price is None or price < best_price:
+            best, best_price = i, price
+    return best
 
 
 async def _register_bot_metadata(application: Application) -> None:

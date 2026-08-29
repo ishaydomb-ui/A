@@ -125,13 +125,30 @@ class RememberedChoiceTests(unittest.TestCase):
         self.assertEqual(len(report.added), 1)
         self.assertEqual(adapter.specific_calls[0][1], "P_111", "should match on code, not name")
 
-    def test_a_delisted_remembered_product_falls_back_to_searching(self):
+    def test_a_missing_remembered_product_falls_back_to_searching(self):
         self.storage.remember_choice("shufersal", "חלב 3%", "P_GONE", "מוצר שהוסר")
         report = self._cycle(_MissingSpecificAdapter())["shufersal"]
         self.assertEqual(len(report.ambiguous), 1, "should re-ask rather than fail")
-        self.assertIsNone(
-            self.storage.preferred_for("shufersal", "חלב 3%"),
-            "a dead choice must be forgotten so it isn't retried forever",
+
+    def test_a_missing_remembered_product_is_not_forgotten(self):
+        """A single miss is usually the store's search, not a decision.
+
+        Deleting on the first failure threw away choices that took a real
+        conversation to establish, and it happened routinely: searching a
+        long exact product name often fails to surface that very product.
+        The cost of keeping it is one wasted lookup on a genuinely
+        delisted item; the memory self-heals because answering the
+        follow-up question overwrites it.
+        """
+        self.storage.remember_choice("shufersal", "חלב 3%", "P_GONE", "מוצר שהוסר")
+        self._cycle(_MissingSpecificAdapter())
+        self.assertIsNotNone(self.storage.preferred_for("shufersal", "חלב 3%"))
+
+    def test_answering_the_question_replaces_a_stale_choice(self):
+        self.storage.remember_choice("shufersal", "חלב 3%", "P_GONE", "מוצר שהוסר")
+        self.storage.remember_choice("shufersal", "חלב 3%", "P_NEW", "חלב אחר")
+        self.assertEqual(
+            self.storage.preferred_for("shufersal", "חלב 3%")["product_code"], "P_NEW"
         )
 
     def test_adhoc_survives_a_transient_error(self):
