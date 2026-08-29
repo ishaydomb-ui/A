@@ -63,7 +63,26 @@ regardless of how the request is framed.
 
 Don't re-derive these from scratch — they're already known:
 
-0. **THE blocker: Shufersal and Tiv Taam geo-block this server.**
+0. **SOLVED 2026-08-29 — the geo-block is beaten.** A Tailscale exit
+   node on the user's Xiaomi Android TV box at home in Israel now gives
+   this server an Israeli residential exit (Hot-Net, Petah Tikva).
+   Tailscale runs here in **userspace mode** as
+   `tailscaled-userspace.service`, offering SOCKS5 on `localhost:1055` —
+   it is deliberately *not* the system default route, because the
+   family-budget and Family OS bots share this box. Point Playwright at
+   `PLAYWRIGHT_PROXY` (already set) and nothing else changes. Verified
+   through the proxy: Shufersal login page returns a real 230KB page,
+   `/online/he/<nonsense>` correctly 404s, and Tiv Taam went 403 → 200.
+   The price feed deliberately does **not** use the proxy — it works
+   direct and would otherwise consume the user's home bandwidth.
+   If the exit node is ever down, the symptom is subtle: pages return
+   HTTP 200 with a geo-block placeholder, which reads like broken
+   selectors. `ShufersalAdapter` refuses to start without a proxy for
+   exactly this reason. Check with:
+   `curl --socks5-hostname localhost:1055 https://ipinfo.io/json`
+   (must report country IL).
+   Kept for reference — the original diagnosis:
+   **Shufersal and Tiv Taam geo-block this server.**
    Verified on the VPS itself, not inferred. Every path on
    `www.shufersal.co.il` returns a 444-byte CloudFront placeholder
    whose image reads "הגישה לאתר פתוחה ממדינות נבחרות בלבד";
@@ -93,12 +112,17 @@ Don't re-derive these from scratch — they're already known:
    drive that library instead. The noVNC remote-desktop flow
    (`scripts/setup_remote_desktop.sh`, verified working on this box) may
    turn out to be unnecessary.
-2. **Selectors are unverified guesses.** The CSS selectors and URLs in
-   `grocery_bot/adapters/shufersal.py` were written without access to
-   the real site. Treat them as *wrong until proven otherwise* by a live
-   run with `PLAYWRIGHT_HEADLESS=false`, not as "probably fine." They
-   could not be fixed yet because of issue 0 — the site is unreachable
-   from here, so there was nothing real to tune them against.
+2. **Selectors were corrected against the live site on 2026-08-29.**
+   Verified working: `li.miglog-prod` tiles, with identity read from
+   `data-product-name` / `data-product-code` / `data-product-price`
+   attributes rather than scraped text, and `button.js-add-to-cart`.
+   The old `[data-testid=...]` guesses and `.miglog-prod-name` were
+   wrong and are gone. Search, tile parsing and the not-found path are
+   confirmed against real queries.
+   **Still unverified: the actual add-to-cart click**, which needs a
+   logged-in session — `data-product-purchasable` is `false` for
+   anonymous visitors, so that path has never executed successfully.
+   That is the next thing to test once a session exists.
 2b. **The price/promotion feed is NOT blocked and is already working.**
    `prices.shufersal.co.il` (the price-transparency feed mandated by
    Israeli law) is ordinary IIS, not CloudFront, and serves fine from

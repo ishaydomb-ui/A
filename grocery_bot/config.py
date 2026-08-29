@@ -22,6 +22,12 @@ class Config:
     tivtaam_storage_state_path: str
     enabled_stores: list[str]
     headless: bool = True
+    # Both chains block non-Israeli IPs, and this server is in France, so
+    # store traffic has to leave through an Israeli exit. This is a local
+    # SOCKS5 port (Tailscale in userspace mode, exiting via a device at
+    # home) rather than a system-wide route on purpose: other projects'
+    # bots share this machine and must keep the normal connection.
+    playwright_proxy: str = ""
     # Which branch the public price/promotion feed is read for. Prices and
     # promotions are per-branch, so this has to name a real store id from
     # the dropdown at prices.shufersal.co.il.
@@ -50,4 +56,5 @@ class Config:
             enabled_stores=_split_csv(os.environ.get("ENABLED_STORES", "shufersal")),
             headless=os.environ.get("PLAYWRIGHT_HEADLESS", "true").lower() != "false",
             shufersal_price_store_id=os.environ.get("SHUFERSAL_PRICE_STORE_ID", "9"),
+            playwright_proxy=os.environ.get("PLAYWRIGHT_PROXY", ""),
         )
