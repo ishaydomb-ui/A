@@ -17,9 +17,33 @@ logger = logging.getLogger(__name__)
 
 
 def refresh_catalog(storage: Storage, store_id: str) -> dict[str, str]:
-    """Pull the current snapshot for a branch and replace the stored catalog."""
+    """Pull the current snapshot for a branch and replace the stored catalog.
+
+    Keeps the previous promotions when a refresh comes back with none.
+    The feed listing is scraped page by page and a page that fails is
+    only warned about, so a transient error makes the PromoFull file
+    invisible for that run — which used to wipe every promotion while
+    still reporting success, leaving /deals quietly answering "no
+    promotions" instead of admitting it had no data. Observed in
+    practice: 18,456 rows at 06:19, zero at 12:17, both "successful".
+
+    Stale promotions are the lesser evil: they carry their own validity
+    dates, so an expired one is filtered at query time anyway.
+    """
     products, promotions, source_info = fetch_branch_snapshot(store_id)
     source_info["branch"] = store_id
+
+    if not promotions:
+        existing = storage.catalog_meta().get("promo_file", "")
+        if existing:
+            logger.warning(
+                "Price feed: no promotions in this snapshot; keeping the previous set "
+                "from %s rather than wiping them.",
+                existing,
+            )
+            storage.replace_products_only(products, source_info)
+            return storage.catalog_meta()
+
     storage.replace_catalog(products, promotions, source_info)
     logger.info(
         "Catalog refreshed for branch %s: %d products, %d promotion rows",
@@ -126,4 +150,82 @@ def format_deals_report(
             f"   {_money(product.price)} ⟵ {_money(deal.discounted_price)} (-{saving:.0f}%)"
             f" — {deal.description}"
         )
+    return "\n".join(lines)
+
+
+def _is_comparable(usual: PricedProduct, candidate: PricedProduct) -> bool:
+    """Is `candidate` the same *kind* of thing as `usual`?
+
+    Name search alone happily offers banana-flavoured snack rings as a
+    substitute for a kilo of fresh bananas — they share a word, so they
+    rank together. Selling shape is what actually separates them: fresh
+    produce is weighed and priced per kilo, a packaged snack is neither.
+    Comparing those two is worse than staying quiet, because a suggestion
+    that misses this obviously erodes trust in the ones that don't.
+    """
+    return (
+        usual.is_weighted == candidate.is_weighted
+        and usual.unit_of_measure == candidate.unit_of_measure
+    )
+
+
+def find_cycle_alternatives(
+    storage: Storage, item_names: list[str], per_item: int = 8, min_saving: float = 0.05
+) -> list[tuple[str, PricedProduct, PricedProduct, PromotionItem]]:
+    """Cheaper promoted alternatives to what a cycle just added.
+
+    This is the brand-fixation pain point (goals, #2) made concrete: the
+    household reliably buys the same variant, so a promotion on a
+    neighbouring brand is invisible. Remembered product choices make that
+    *worse*, not better, because the bot now goes straight to the usual
+    pick without ever looking sideways — so the memory has to be paired
+    with an explicit look at the alternatives.
+
+    Returns (term, what-you-buy, alternative, its-promotion) per item
+    where a genuinely cheaper promoted alternative exists.
+
+    Product codes cannot be used to join the two sides: the web store's
+    ids (``P_522319``) and the price feed's item codes are different
+    namespaces entirely, so matching goes through the name search that
+    already backs /price. `min_saving` keeps out noise — a few agorot
+    difference is not worth a message.
+    """
+    suggestions = []
+    for term in item_names:
+        results = storage.search_with_deals(term, limit=per_item)
+        if not results:
+            continue
+        # The first hit is the closest name match, i.e. the usual pick.
+        usual_product, usual_deal = results[0]
+        usual_price = usual_deal.discounted_price if usual_deal else usual_product.price
+
+        best: tuple[PricedProduct, PromotionItem] | None = None
+        for product, deal in results[1:]:
+            if deal is None:
+                continue
+            if not _is_comparable(usual_product, product):
+                continue
+            if deal.discounted_price >= usual_price * (1 - min_saving):
+                continue
+            if best is None or deal.discounted_price < best[1].discounted_price:
+                best = (product, deal)
+        if best is not None:
+            suggestions.append((term, usual_product, best[0], best[1]))
+    return suggestions
+
+
+def format_cycle_alternatives(
+    suggestions: list[tuple[str, PricedProduct, PricedProduct, PromotionItem]]
+) -> str:
+    if not suggestions:
+        return ""
+    lines = ["*חלופות זולות יותר במבצע*"]
+    for term, usual, alt, deal in suggestions:
+        saving = usual.price - deal.discounted_price
+        lines.append(
+            f"• במקום {usual.name} ({_money(usual.price)})\n"
+            f"   {alt.name} — {_money(deal.discounted_price)} "
+            f"(חיסכון {_money(saving)}) — {deal.description}"
+        )
+    lines.append("\n_זו הצעה בלבד — לא שיניתי כלום בסל._")
     return "\n".join(lines)

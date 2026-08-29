@@ -482,6 +482,51 @@ class Storage:
 
     # -- price catalog ----------------------------------------------------
 
+    def replace_products_only(
+        self, products: list[PricedProduct], meta: dict[str, str] | None = None
+    ) -> None:
+        """Refresh prices while leaving the stored promotions alone.
+
+        For the case where a snapshot comes back with no promotions at
+        all: that is far more likely to be a transient hole in the feed
+        listing than a branch genuinely running zero promotions, and
+        wiping them makes /deals answer "nothing on offer" with no way
+        to tell that apart from having no data.
+        """
+        preserved_promo_file = self.catalog_meta().get("promo_file", "")
+        merged = dict(meta or {})
+        merged["promo_file"] = preserved_promo_file
+        with closing(self._connect()) as conn:
+            with conn:
+                conn.execute("DELETE FROM catalog_products")
+                conn.executemany(
+                    "INSERT OR REPLACE INTO catalog_products "
+                    "(item_code, name, manufacturer, price, unit_of_measure_price, "
+                    " unit_of_measure, quantity, is_weighted) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    [
+                        (
+                            p.item_code,
+                            p.name,
+                            p.manufacturer,
+                            p.price,
+                            p.unit_of_measure_price,
+                            p.unit_of_measure,
+                            p.quantity,
+                            int(p.is_weighted),
+                        )
+                        for p in products
+                    ],
+                )
+                for key, value in merged.items():
+                    conn.execute(
+                        "INSERT OR REPLACE INTO catalog_meta (key, value) VALUES (?, ?)",
+                        (key, value),
+                    )
+                conn.execute(
+                    "INSERT OR REPLACE INTO catalog_meta (key, value) VALUES ('refreshed_at', ?)",
+                    (datetime.now(timezone.utc).isoformat(),),
+                )
+
     def replace_catalog(
         self,
         products: list[PricedProduct],

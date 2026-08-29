@@ -21,7 +21,9 @@ from telegram.ext import (
 from .adapters.base import StoreAdapter
 from .adapters.shufersal import ShufersalAdapter
 from .catalog import (
+    find_cycle_alternatives,
     find_deals_for_base_list,
+    format_cycle_alternatives,
     format_deals_report,
     format_full_list,
     format_search_answer,
@@ -351,7 +353,23 @@ class GroceryBot:
 
         summary = format_report_summary(reports)
         await update.message.reply_text(summary or "לא היה מה להוסיף.", parse_mode="Markdown")
+        await self._send_alternatives(update.effective_chat.id, context, reports)
         await self._send_pending_ambiguities(update, context)
+
+    async def _send_alternatives(self, chat_id: int, context, reports) -> None:
+        """Point out cheaper promoted substitutes for what was just added.
+
+        Sent after the cart is already filled, on purpose: the project
+        rules out an approval gate, so this is information to act on if
+        you want it, not a question blocking the order.
+        """
+        added = [result.item_name for report in reports.values() for result in report.added]
+        if not added:
+            return
+        suggestions = await asyncio.to_thread(find_cycle_alternatives, self.storage, added)
+        message = format_cycle_alternatives(suggestions)
+        if message:
+            await context.bot.send_message(chat_id=chat_id, text=message, parse_mode="Markdown")
 
     async def _send_pending_ambiguities(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         for pending in self.storage.list_pending_ambiguities():
@@ -461,6 +479,7 @@ class GroceryBot:
             text=summary or "לא היה מה להוסיף.",
             parse_mode="Markdown",
         )
+        await self._send_alternatives(chat_id, context, reports)
         for item in self.storage.list_pending_ambiguities():
             buttons = [
                 [InlineKeyboardButton(label, callback_data=f"resolve:{item['id']}:{i}")]
