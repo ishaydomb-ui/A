@@ -6,6 +6,8 @@ Run with: python -m grocery_bot.cli <command>
     price <query>         look up an item (same answer the bot gives)
     deals                 promotions on the standing list
     import-base-list <f>  load a YAML base list into the database
+    import-history        build the base list from real past orders
+                          [--year N] [--min-share F] [--memory-only] [--dry-run]
 
 `refresh-prices` is the one meant for a scheduler — the feed publishes a
 new full snapshot a few times a day, and a stale catalog quietly gives
@@ -68,7 +70,81 @@ def main(argv: list[str] | None = None) -> int:
         print(f"imported {count} items from {rest[0]}")
         return 0
 
+    if command == "import-history":
+        return _import_history(config, storage, rest)
+
     return _usage()
+
+
+def _import_history(config: Config, storage: Storage, args: list[str]) -> int:
+    """Rebuild the base list and product memory from real past orders.
+
+    Needs a logged-in session and the Israeli exit, so it borrows the
+    Shufersal adapter rather than opening its own browser.
+    """
+    from .adapters.shufersal import ShufersalAdapter
+    from .history import fetch_order_history, import_base_list, seed_product_memory, summarise
+
+    year = _int_flag(args, "--year")
+    min_share = _float_flag(args, "--min-share") or 0.5
+    dry_run = "--dry-run" in args
+    memory_only = "--memory-only" in args
+
+    adapter = ShufersalAdapter(
+        config.shufersal_storage_state_path,
+        headless=config.headless,
+        proxy=config.playwright_proxy,
+        username=config.shufersal_username,
+        password=config.shufersal_password,
+    )
+    try:
+        if not adapter.ensure_session():
+            print("Could not get a valid Shufersal session.")
+            return 1
+        orders = fetch_order_history(adapter._page, year=year)
+        history = summarise(orders)
+    finally:
+        adapter.close()
+
+    print(f"analysed {history.orders_analysed} orders, {len(history.products)} distinct products")
+    if history.orders_analysed == 0:
+        print("No orders matched — nothing to import.")
+        return 1
+
+    selected = history.frequent(min_share)
+    for item in selected:
+        amount, unit = item.amount_and_unit
+        extra = f"{amount} {unit}" if amount else ""
+        print(f"  {item.share * 100:3.0f}%  {item.name}  x{item.default_quantity} {extra}")
+
+    if dry_run:
+        print(f"\n--dry-run: would import {len(selected)} base items; nothing written.")
+        return 0
+
+    seeded = seed_product_memory(storage, history)
+    print(f"\nremembered {seeded} product choices")
+    if not memory_only:
+        count = import_base_list(storage, history, min_share=min_share)
+        print(f"imported {count} base-list items (bought in {min_share * 100:.0f}%+ of orders)")
+    return 0
+
+
+def _int_flag(args: list[str], name: str) -> int | None:
+    value = _flag(args, name)
+    return int(value) if value is not None else None
+
+
+def _float_flag(args: list[str], name: str) -> float | None:
+    value = _flag(args, name)
+    return float(value) if value is not None else None
+
+
+def _flag(args: list[str], name: str) -> str | None:
+    if name in args:
+        index = args.index(name)
+        if index + 1 < len(args):
+            return args[index + 1]
+    return None
 
 
 if __name__ == "__main__":

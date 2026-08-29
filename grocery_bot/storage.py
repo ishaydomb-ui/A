@@ -202,6 +202,19 @@ class Storage:
             conn.commit()
             return row["name"]
 
+    def deactivate_all_base_items(self) -> int:
+        """Retire the whole standing list, keeping the rows for history.
+
+        Used when re-deriving the list from order history: without it a
+        re-run appends a second copy of every item instead of replacing.
+        Deactivating rather than deleting keeps any remembered choice
+        that points at an old row meaningful.
+        """
+        with closing(self._connect()) as conn:
+            cursor = conn.execute("UPDATE base_list_items SET active = 0 WHERE active = 1")
+            conn.commit()
+            return cursor.rowcount
+
     def list_active_base_items(self) -> list[BaseListItem]:
         with closing(self._connect()) as conn:
             rows = conn.execute(

@@ -1,0 +1,110 @@
+[
+  {
+    "name": "קישואים מובחר",
+    "product_code": "P_53",
+    "orders_with_item": 18,
+    "of_orders": 19,
+    "share_pct": 95,
+    "median_quantity": 499.0,
+    "last_bought": "2026-08-24"
+  },
+  {
+    "name": "פלפל אדום",
+    "product_code": "P_91",
+    "orders_with_item": 18,
+    "of_orders": 19,
+    "share_pct": 95,
+    "median_quantity": 499.5,
+    "last_bought": "2026-08-24"
+  },
+  {
+    "name": "פלפל צהוב",
+    "product_code": "P_855",
+    "orders_with_item": 17,
+    "of_orders": 19,
+    "share_pct": 89,
+    "median_quantity": 499,
+    "last_bought": "2026-08-24"
+  },
+  {
+    "name": "קוטג' 5% שומן",
+    "product_code": "P_4127329",
+    "orders_with_item": 17,
+    "of_orders": 19,
+    "share_pct": 89,
+    "median_quantity": 2,
+    "last_bought": "2026-08-24"
+  },
+  {
+    "name": "בצל יבש",
+    "product_code": "P_480",
+    "orders_with_item": 15,
+    "of_orders": 19,
+    "share_pct": 79,
+    "median_quantity": 800,
+    "last_bought": "2026-01-25"
+  },
+  {
+    "name": "חסה לאליק הידרופונית",
+    "product_code": "P_7296073495758",
+    "orders_with_item": 15,
+    "of_orders": 19,
+    "share_pct": 79,
+    "median_quantity": 1,
+    "last_bought": "2026-01-25"
+  },
+  {
+    "name": "דנונה דל לקטוז",
+    "product_code": "P_7290110561352",
+    "orders_with_item": 14,
+    "of_orders": 19,
+    "share_pct": 74,
+    "median_quantity": 4.0,
+    "last_bought": "2026-08-24"
+  },
+  {
+    "name": "בננה",
+    "product_code": "P_967684",
+    "orders_with_item": 14,
+    "of_orders": 19,
+    "share_pct": 74,
+    "median_quantity": 500.0,
+    "last_bought": "2026-01-25"
+  },
+  {
+    "name": "עגבניות שרי יובל ליקופן",
+    "product_code": "P_7290015055000",
+    "orders_with_item": 12,
+    "of_orders": 19,
+    "share_pct": 63,
+    "median_quantity": 1.0,
+    "last_bought": "2026-01-25"
+  },
+  {
+    "name": "מלפפון",
+    "product_code": "P_46",
+    "orders_with_item": 12,
+    "of_orders": 19,
+    "share_pct": 63,
+    "median_quantity": 499.0,
+    "last_bought": "2026-08-24"
+  },
+  {
+    "name": "אבוקדו",
+    "product_code": "P_964980",
+    "orders_with_item": 10,
+    "of_orders": 19,
+    "share_pct": 53,
+    "median_quantity": 550.0,
+    "last_bought": "2026-08-24"
+  },
+  {
+    "name": "חלב בקרטון 3% שומן",
+    "product_code": "P_4131074",
+    "orders_with_item": 10,
+    "of_orders": 19,
+    "share_pct": 53,
+    "median_quantity": 1.5,
+    "last_bought": "2026-08-24"
+  }
+]
