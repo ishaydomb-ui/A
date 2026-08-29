@@ -133,28 +133,33 @@ _ADDED_COLUMNS = {
 }
 
 
-# Promotions that are not open to an ordinary shopper. The feed mixes
-# these in with real price cuts, and they dominate it: of 18,456 rows for
-# one branch, ~83% are meal-voucher gimmicks ("ע. סיבוס קופון"), Shufersal
-# club perks ("תו זהב"), manufacturer coupons, or credit-card offers. The
-# household has no Shufersal club card, so surfacing them is not just
-# noise -- it is advice they cannot act on.
-_CLUB_ONLY_MARKERS = (
+# Promotions this household cannot actually use. Confirmed with them
+# rather than guessed, because the categories look alike in the feed and
+# the split is not obvious:
+#
+#   - Shufersal's own club ("תו זהב") and store credit card: they hold
+#     neither, so these prices are unreachable.
+#   - Sodexo/Cibus meal vouchers: employer-issued cards they do not have.
+#     By far the largest category in the feed (61% of rows).
+#
+# Manufacturer coupons ARE kept: those are handed out by the brand, not
+# gated behind a Shufersal membership, and the household does use them.
+# So are ordinary quantity and price promotions.
+_UNUSABLE_MARKERS = (
     "תו זהב",
     "מועדון",
-    "קופון",
-    "סיבוס",
-    "סודקסו",
+    "אשראי שופרסל",
     "כ.אשראי",
     "כרטיס אשראי",
-    "אשראי שופרסל",
+    "סיבוס",
+    "סודקסו",
 )
 
 
 def is_public_promotion(description: str) -> bool:
-    """True when a promotion applies without club membership or a coupon."""
+    """True when this household could actually claim the promotion."""
     text = description or ""
-    return not any(marker in text for marker in _CLUB_ONLY_MARKERS)
+    return not any(marker in text for marker in _UNUSABLE_MARKERS)
 
 
 class Storage:
