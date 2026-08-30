@@ -35,7 +35,9 @@ from .cartview import MIN_EDIT_INTERVAL_SECONDS, render_final, render_progress
 from .checklist import render_department, render_panel, render_summary
 from .config import Config
 from .disambiguate import describe_card
-from .connectivity import check_israeli_exit  # noqa: F401  (kept for tests/back-compat)
+from .listbuilder import as_paste_text, available_lists, build as build_list, summarise
+from .connectivity import check_israeli_exit
+from .listbuilder import as_paste_text, available_lists, build as build_list, summarise  # noqa: F401  (kept for tests/back-compat)
 from .exitnode import ensure_israeli_exit
 from .nlu import ParsedItem, build_meal_plan, expand_recipe, parse_message
 from .orchestrator import add_terms_to_cart, format_report_summary, run_order_cycle
@@ -284,6 +286,57 @@ class GroceryBot:
         await self.start_order(update, context)
 
     # -- proposal checklists ------------------------------------------------
+
+    async def make_list(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/list_full [core|full|fresh|pantry] — a paste-ready shopping list.
+
+        Deliberately does not touch the cart. Shufersal's own "הזמנה
+        מהירה" box takes a newline-separated list and matches it against
+        the household's purchase history, so handing over text is both
+        instant and leaves every decision with the user — where filling a
+        cart item by item costs 10-40s each.
+        """
+        if not _authorized(self.config, update):
+            return
+        store = (self.config.enabled_stores or ["shufersal"])[0]
+        rows = self.storage.list_stock_items(store)
+        if not rows:
+            await update.message.reply_text(
+                "אין עדיין היסטוריה. הריצו `python -m grocery_bot.cli build-stock`.",
+                parse_mode="Markdown",
+            )
+            return
+
+        wanted = (context.args[0].lower() if context.args else "full")
+        specs = {spec.key: spec for spec in available_lists()}
+        if wanted not in specs:
+            await update.message.reply_text(
+                "איזו רשימה?\n"
+                "• `/list_full core` — ליבה 35%+\n"
+                "• `/list_full full` — מלאה 15%+\n"
+                "• `/list_full fresh` — טרי בלבד\n"
+                "• `/list_full pantry` — מזווה ובית",
+                parse_mode="Markdown",
+            )
+            return
+
+        spec = build_list(specs[wanted], rows)
+        adhoc = [item.text for item in self.storage.list_pending_adhoc()]
+
+        await update.message.reply_text(summarise(spec), parse_mode="Markdown")
+        body = as_paste_text(spec)
+        if adhoc:
+            body += "\n" + "\n".join(adhoc)
+        # Sent as its own bare message so it can be copied in one gesture;
+        # anything else in it would be pasted into the box as a product.
+        await update.message.reply_text(body)
+        note = (
+            f"☝️ להעתיק ולהדביק ב*הזמנה מהירה* באפליקציה"
+            f"{f' (כולל {len(adhoc)} בקשות מהשבוע)' if adhoc else ''}.\n"
+            "שופרסל תתאים מוצרים לפי ההיסטוריה שלכם, ואתם מסננים שם."
+        )
+        await update.message.reply_text(note, parse_mode="Markdown")
+
 
     async def cheaper(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/cheaper <product> — better value for the same kind of thing."""
@@ -1080,6 +1133,7 @@ async def _register_bot_metadata(application: Application) -> None:
             BotCommand("propose", "הצעת קנייה לפי מחלקות — מסמנים מה צריך"),
             BotCommand("stockup", "שווה לאגור — מבצעים חריגים לקנייה מראש"),
             BotCommand("cheaper", "השוואת ₪ לק\"ג — יש חלופה זולה יותר?"),
+            BotCommand("list_full", "רשימה להדבקה בהזמנה מהירה"),
             BotCommand("start_order", "מילוי מהיר של כל הרשימה"),
         ]
     )
@@ -1129,6 +1183,7 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("propose", bot.propose_cycle))
     application.add_handler(CommandHandler("stockup", bot.stockup))
     application.add_handler(CommandHandler("cheaper", bot.cheaper))
+    application.add_handler(CommandHandler("list_full", bot.make_list))
     application.add_handler(CallbackQueryHandler(bot.resolve_ambiguity, pattern=r"^(resolve|skip):"))
     application.add_handler(
         CallbackQueryHandler(bot.on_proposal_button, pattern=r"^(ptoggle|pall|pnone|pconfirm):")
