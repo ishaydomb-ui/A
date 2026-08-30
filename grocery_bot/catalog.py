@@ -124,10 +124,15 @@ def format_full_list(
     if adhoc_items:
         if lines:
             lines.append("")
-        lines.append(f"*נוסף לפעם הבאה* ({len(adhoc_items)})")
+        # Who asked is the point of this section, not a footnote. Both
+        # partners add here (the other one through the household's shared
+        # assistant), and the useful distinction at a glance is "someone
+        # specifically wants this" versus "this came off the standing list
+        # or a promotion".
+        lines.append(f"*בקשות אישיות לפעם הבאה* ({len(adhoc_items)})")
         lines += [
             f"• {item.describe()}"
-            + (f"  _{item.requested_by}_" if item.requested_by else "")
+            + (f" — 🙋 {item.requested_by}" if item.requested_by else "")
             for item in adhoc_items
         ]
     return "\n".join(lines)

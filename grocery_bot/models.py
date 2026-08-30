@@ -97,6 +97,12 @@ class CartAddResult:
     # meaningless for loose produce; half a kilo versus two kilos is not.
     amount: float | None = None
     unit: str = ""
+    # Who specifically asked for this, when it came from a personal
+    # request rather than the standing list or a promotion. Both partners
+    # add items (the other through the household's shared assistant), and
+    # "someone wants this" reads very differently from "this is on the
+    # usual list".
+    requested_by: str = ""
     # Set when the cycle picked a product without asking, and why
     # ("history" | "exact_name"); shown so an automatic choice is never
     # silent.

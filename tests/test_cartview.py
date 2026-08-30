@@ -118,3 +118,23 @@ class PriceParsingTests(unittest.TestCase):
         from grocery_bot.adapters.shufersal import _price_after
 
         self.assertIsNone(_price_after("0.00 משהו אחר", "לתשלום"))
+
+
+class AttributionTests(unittest.TestCase):
+    """Who asked distinguishes a personal request from the standing list."""
+
+    def test_a_personal_request_is_marked(self) -> None:
+        result = CartAddResult(
+            item_name="מלפפונים חמוצים", store="s", status="added",
+            price=12.9, requested_by="לירן",
+        )
+        self.assertIn("🙋לירן", render_final([result], None, WHEN))
+
+    def test_a_standing_list_item_is_not_marked(self) -> None:
+        self.assertNotIn("🙋", render_final([_added("פלפל", 9.9)], None, WHEN))
+
+    def test_attribution_shows_during_the_run_too(self) -> None:
+        result = CartAddResult(
+            item_name="לימון", store="s", status="added", price=5.0, requested_by="ישי"
+        )
+        self.assertIn("🙋ישי", render_progress([result], 1, 3, WHEN))

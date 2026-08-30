@@ -321,18 +321,32 @@ class GroceryBot:
             return
 
         spec = build_list(specs[wanted], rows)
-        adhoc = [item.text for item in self.storage.list_pending_adhoc()]
+        requests = self.storage.list_pending_adhoc()
 
-        await update.message.reply_text(summarise(spec), parse_mode="Markdown")
+        summary = summarise(spec)
+        if requests:
+            # Named separately from the standing list: these are things a
+            # person specifically asked for this week, and knowing which
+            # of the two asked is exactly what distinguishes them from an
+            # item that arrived off the frequency list or a promotion.
+            summary += "\n\n*בקשות אישיות שנוספו:*\n" + "\n".join(
+                f"• {item.text}" + (f" — 🙋 {item.requested_by}" if item.requested_by else "")
+                for item in requests
+            )
+        await update.message.reply_text(summary, parse_mode="Markdown")
+
         body = as_paste_text(spec)
-        if adhoc:
-            body += "\n" + "\n".join(adhoc)
+        if requests:
+            # The paste block stays bare names only — the quick-buy box
+            # matches whatever it is given, so a "🙋 לירן" would be looked
+            # up as part of a product.
+            body += "\n" + "\n".join(item.text for item in requests)
         # Sent as its own bare message so it can be copied in one gesture;
         # anything else in it would be pasted into the box as a product.
         await update.message.reply_text(body)
         note = (
             f"☝️ להעתיק ולהדביק ב*הזמנה מהירה* באפליקציה"
-            f"{f' (כולל {len(adhoc)} בקשות מהשבוע)' if adhoc else ''}.\n"
+            f"{f' (כולל {len(requests)} בקשות אישיות)' if requests else ''}.\n"
             "שופרסל תתאים מוצרים לפי ההיסטוריה שלכם, ואתם מסננים שם."
         )
         await update.message.reply_text(note, parse_mode="Markdown")

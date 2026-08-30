@@ -93,6 +93,7 @@ def run_order_cycle(
 
             for adhoc in adhoc_items:
                 result = _add_one(storage, adapter, store, adhoc.text, adhoc.quantity)
+                result.requested_by = adhoc.requested_by
                 report.record(result)
                 if result.status in ("added", "ambiguous", "not_found"):
                     resolved_adhoc.add(adhoc.id)

@@ -64,6 +64,11 @@ def _row(result) -> str:
             line += f" ×{quantity}"
         if price is not None:
             line += f" — {_money(price * quantity)}"
+        # Mark a personal request so it is distinguishable from a standing
+        # -list item at a glance.
+        asked_by = getattr(result, "requested_by", "")
+        if asked_by:
+            line += f" 🙋{asked_by}"
         return line
     if result.status == "ambiguous":
         return f"{icon} {name} — צריך בחירה"
