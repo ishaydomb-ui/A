@@ -435,26 +435,75 @@ class ShufersalAdapter(StoreAdapter):
             logger.debug("Overlay dismissal failed; continuing", exc_info=True)
 
     def _add(self, card: dict, term: str, quantity: int) -> CartAddResult:
+        """Put one product in the cart, by product code rather than position.
+
+        Two things go wrong with the obvious approach, both seen in real
+        runs:
+
+        - **Positional lookup drifts.** Tiles lazy-load and re-render, so
+          the nth tile at click time is not necessarily the nth tile the
+          search parsed. Re-finding by `data-product-code` is exact.
+        - **A tile that is already in the cart hides its add button** and
+          shows a quantity stepper instead. Playwright then waits out the
+          full timeout on an element that exists but will never be
+          visible, and the item is reported as an error even though it is
+          sitting in the cart. That produced a wall of red on items the
+          user had simply asked for more than once.
+
+        So: set the quantity directly when the stepper is showing, click
+        "add" when it is not, and confirm against the tile's own state
+        rather than trusting the click to mean anything.
+        """
         name = card.get("name") or term
+        code = card.get("code", "")
         try:
             self._dismiss_overlays()
-            tile = self._page.locator(PRODUCT_CARD_SELECTOR).nth(card["index"])
+            tile = (
+                self._page.locator(f'{PRODUCT_CARD_SELECTOR}[data-product-code="{code}"]').first
+                if code
+                else self._page.locator(PRODUCT_CARD_SELECTOR).nth(card["index"])
+            )
+            if not tile.count():
+                tile = self._page.locator(PRODUCT_CARD_SELECTOR).nth(card["index"])
+            try:
+                tile.scroll_into_view_if_needed(timeout=5_000)
+            except Exception:
+                pass
+
+            already_in_cart = self._tile_in_cart(tile)
+            if already_in_cart:
+                # Already there: adjust the amount instead of pressing a
+                # button that is no longer on screen.
+                if quantity > 1:
+                    self._set_quantity(tile, quantity)
+                return CartAddResult(
+                    item_name=name, store=self.name, status="added", quantity=quantity,
+                    product_code=code, price=_as_float(card.get("price")),
+                )
+
             if quantity > 1:
                 self._set_quantity(tile, quantity)
+            button = tile.locator(ADD_TO_CART_SELECTOR).first
             try:
-                tile.locator(ADD_TO_CART_SELECTOR).first.click(timeout=15_000)
+                button.click(timeout=10_000)
             except Exception:
-                # One retry after clearing overlays: the popup may have
-                # appeared between the check above and the click itself.
                 self._dismiss_overlays()
-                tile.locator(ADD_TO_CART_SELECTOR).first.click(timeout=10_000)
+                # The tile may have flipped to its in-cart form while we
+                # waited, which is a success, not a failure.
+                if self._tile_in_cart(tile):
+                    return CartAddResult(
+                        item_name=name, store=self.name, status="added", quantity=quantity,
+                        product_code=code, price=_as_float(card.get("price")),
+                    )
+                button.click(timeout=8_000, force=True)
+
             self._page.wait_for_timeout(1_000)  # let the cart request settle
             return CartAddResult(
                 item_name=name,
                 store=self.name,
                 status="added",
                 quantity=quantity,
-                product_code=card.get("code", ""),
+                product_code=code,
                 price=_as_float(card.get("price")),
             )
         except Exception as exc:  # noqa: BLE001
@@ -462,6 +511,25 @@ class ShufersalAdapter(StoreAdapter):
             return CartAddResult(
                 item_name=name, store=self.name, status="error", detail=str(exc), quantity=quantity
             )
+
+    @staticmethod
+    def _tile_in_cart(tile) -> bool:
+        """Is this product already in the cart, per the tile's own state?"""
+        try:
+            return bool(
+                tile.evaluate(
+                    """e => {
+                        if (e.className.includes('miglog-incart')) return true;
+                        const add = e.querySelector('button.js-add-to-cart');
+                        const qty = e.querySelector('input.js-qty-selector-input');
+                        const addHidden = !add || !(add.offsetWidth || add.offsetHeight);
+                        const qtyShown = !!qty && !!(qty.offsetWidth || qty.offsetHeight);
+                        return addHidden && qtyShown;
+                    }"""
+                )
+            )
+        except Exception:
+            return False
 
     @staticmethod
     def _set_quantity(tile, quantity: int) -> None:
