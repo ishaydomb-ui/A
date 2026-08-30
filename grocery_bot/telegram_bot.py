@@ -883,7 +883,14 @@ class GroceryBot:
             for row in self.storage.list_stock_items(store)
             if row["tier"] in ("A", "B", "C")
         ]
-        plan = await asyncio.to_thread(build_meal_plan, parsed.query or "", staples)
+        # Standing household context (who the food is for) rides along on
+        # every plan, so "תפריט שבועי" alone already knows about the kids
+        # instead of needing the ages restated each time.
+        household = self.storage.get_state("household_context")
+        request = (parsed.query or "").strip()
+        if household:
+            request = f"{request}. הרכב המשפחה: {household}" if request else f"הרכב המשפחה: {household}"
+        plan = await asyncio.to_thread(build_meal_plan, request, staples)
         if plan is None:
             await update.message.reply_text("לא הצלחתי לבנות תפריט הפעם. נסו שוב עוד רגע.")
             return
