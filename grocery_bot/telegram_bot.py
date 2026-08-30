@@ -34,11 +34,13 @@ from .catalog import (
 from .cartview import MIN_EDIT_INTERVAL_SECONDS, render_final, render_progress
 from .checklist import render_department, render_panel, render_summary
 from .config import Config
+from .digest import compose as compose_digest
 from .disambiguate import describe_card
 from .listbuilder import as_paste_text, available_lists, build as build_list, summarise
 from .connectivity import check_israeli_exit
 from .listbuilder import as_paste_text, available_lists, build as build_list, summarise  # noqa: F401  (kept for tests/back-compat)
 from .exitnode import ensure_israeli_exit
+from .learn import digest_due, sync_from_orders
 from .nlu import ParsedItem, build_meal_plan, expand_recipe, parse_message
 from .orchestrator import add_terms_to_cart, format_report_summary, run_order_cycle
 from .radar import find_stockup_deals, format_stockup_deals
@@ -256,6 +258,9 @@ class GroceryBot:
         if not text:
             return
 
+        # Remember where the household talks to us, so proactive messages
+        # (cadence digest, alerts) have somewhere to go.
+        self.storage.set_state("digest_chat_id", str(update.effective_chat.id))
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
         parsed = await asyncio.to_thread(parse_message, text)
         requested_by = update.effective_user.first_name if update.effective_user else "unknown"
@@ -286,6 +291,71 @@ class GroceryBot:
         await self.start_order(update, context)
 
     # -- proposal checklists ------------------------------------------------
+
+    async def digest(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/digest — the whole shop in one message, on demand."""
+        if not _authorized(self.config, update):
+            return
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+        await self._send_digest(update.effective_chat.id, context)
+
+    async def _send_digest(self, chat_id: int, context) -> None:
+        import datetime as _dt
+
+        message, paste = await asyncio.to_thread(compose_digest, self.storage)
+        await context.bot.send_message(chat_id=chat_id, text=message, parse_mode="Markdown")
+        if paste:
+            await context.bot.send_message(chat_id=chat_id, text=paste)
+        self.storage.set_state("last_digest_sent", _dt.datetime.now().isoformat())
+
+    async def cadence_check(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Daily: open the conversation when the household is due to order.
+
+        This is the fix for both failure modes the user described — the
+        thrown-out food and the surprising empty fridge are timing
+        problems, so the digest arrives when their own rhythm says it is
+        time, not on an arbitrary weekday.
+        """
+        chat_id = self.storage.get_state("digest_chat_id")
+        if not chat_id:
+            return
+        due, reason = await asyncio.to_thread(digest_due, self.storage)
+        if not due:
+            logger.debug("Digest not due: %s", reason)
+            return
+        logger.info("Digest due: %s", reason)
+        await self._send_digest(int(chat_id), context)
+
+    async def nightly_learn(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Nightly: learn from the store's own order history.
+
+        Every order counts, including ones placed entirely by hand in the
+        app — so the model stays current with zero effort from the
+        household. Quietly skipped when the exit node is asleep; the next
+        night catches up, and being a day behind costs nothing.
+        """
+        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy)
+        if not status.available:
+            logger.info("Nightly learn skipped: exit node down")
+            return
+        factories = _build_adapter_factories(self.config)
+        make_adapter = factories.get("shufersal")
+        if make_adapter is None:
+            return
+
+        def _sync():
+            with make_adapter() as adapter:
+                if not adapter.ensure_session():
+                    return None
+                return sync_from_orders(self.storage, adapter)
+
+        try:
+            report = await asyncio.to_thread(_sync)
+            if report:
+                logger.info("Nightly learn done: %s", report)
+        except Exception:
+            logger.exception("Nightly learn failed; will retry tomorrow")
+
 
     async def make_list(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/list_full [core|full|fresh|pantry] — a paste-ready shopping list.
@@ -1148,6 +1218,7 @@ async def _register_bot_metadata(application: Application) -> None:
             BotCommand("stockup", "שווה לאגור — מבצעים חריגים לקנייה מראש"),
             BotCommand("cheaper", "השוואת ₪ לק\"ג — יש חלופה זולה יותר?"),
             BotCommand("list_full", "רשימה להדבקה בהזמנה מהירה"),
+            BotCommand("digest", "כל הקנייה בהודעה אחת — רשימה, מבצעים, חלופות"),
             BotCommand("start_order", "מילוי מהיר של כל הרשימה"),
         ]
     )
@@ -1198,6 +1269,7 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("stockup", bot.stockup))
     application.add_handler(CommandHandler("cheaper", bot.cheaper))
     application.add_handler(CommandHandler("list_full", bot.make_list))
+    application.add_handler(CommandHandler("digest", bot.digest))
     application.add_handler(CallbackQueryHandler(bot.resolve_ambiguity, pattern=r"^(resolve|skip):"))
     application.add_handler(
         CallbackQueryHandler(bot.on_proposal_button, pattern=r"^(ptoggle|pall|pnone|pconfirm):")
@@ -1209,6 +1281,20 @@ def build_application(config: Config, storage: Storage) -> Application:
             interval=EXIT_POLL_SECONDS,
             first=EXIT_POLL_SECONDS,
             name="drain_deferred_cycle",
+        )
+        import datetime as _dt
+        import zoneinfo as _zi
+
+        israel = _zi.ZoneInfo("Asia/Jerusalem")
+        # Early evening: late enough that the day's plans are known, early
+        # enough to order before the delivery slots fill.
+        application.job_queue.run_daily(
+            bot.cadence_check, time=_dt.time(18, 40, tzinfo=israel), name="cadence_check"
+        )
+        # Long after midnight: the store's order history has settled and
+        # nobody is shopping. Failure just waits for tomorrow.
+        application.job_queue.run_daily(
+            bot.nightly_learn, time=_dt.time(3, 40, tzinfo=israel), name="nightly_learn"
         )
     else:  # pragma: no cover - depends on optional PTB extra
         logger.warning(

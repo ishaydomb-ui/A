@@ -157,6 +157,36 @@ CREATE TABLE IF NOT EXISTS proposal_items (
     selected INTEGER NOT NULL DEFAULT 1,
     PRIMARY KEY (proposal_id, store, product_code)
 );
+
+-- One row per product per day: the closing price and best usable promo.
+-- The feed only ever shows "now", so without this there is no way to say
+-- whether 10₪ for an item is genuinely rare or its regular fortnightly
+-- "sale" — which is exactly the difference between worth stockpiling and
+-- never-pay-full-price. Pruned on a rolling window; see prune_price_history.
+CREATE TABLE IF NOT EXISTS price_history (
+    item_code TEXT NOT NULL,
+    day TEXT NOT NULL,             -- YYYY-MM-DD
+    price REAL NOT NULL,
+    promo_price REAL,              -- best usable promo that day, if any
+    PRIMARY KEY (item_code, day)
+);
+
+-- When orders were actually placed, to learn the household's cadence.
+-- Fed by the nightly sync from the store's own order history, so manual
+-- orders count too.
+CREATE TABLE IF NOT EXISTS order_log (
+    order_code TEXT PRIMARY KEY,
+    store TEXT NOT NULL,
+    placed_at TEXT NOT NULL,
+    total REAL,
+    item_count INTEGER
+);
+
+-- Small key/value state (last digest sent, last chat seen, sync marks).
+CREATE TABLE IF NOT EXISTS app_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 
@@ -616,6 +646,101 @@ class Storage:
     def close_proposal(self, proposal_id: int, status: str = "confirmed") -> None:
         with closing(self._connect()) as conn:
             conn.execute("UPDATE proposals SET status = ? WHERE id = ?", (status, proposal_id))
+            conn.commit()
+
+    # -- price history and cadence state -----------------------------------
+
+    def record_price_snapshot(self) -> int:
+        """Fold today's catalog into the price history, one row per item.
+
+        Called from the catalog refresh, so history accumulates as a side
+        effect of a job that already runs — no separate scheduler. Re-runs
+        on the same day overwrite (the feed updates during the day), so a
+        day holds one closing state, not three near-duplicates.
+        """
+        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        with closing(self._connect()) as conn:
+            cursor = conn.execute(
+                """
+                INSERT OR REPLACE INTO price_history (item_code, day, price, promo_price)
+                SELECT p.item_code, ?, p.price,
+                       (SELECT MIN(pr.discounted_price) FROM catalog_promotions pr
+                        WHERE pr.item_code = p.item_code
+                          AND pr.discounted_price > 0
+                          AND pr.discounted_price < p.price)
+                FROM catalog_products p
+                """,
+                (day,),
+            )
+            conn.commit()
+            return cursor.rowcount
+
+    def prune_price_history(self, keep_days: int = 400) -> int:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=keep_days)).strftime("%Y-%m-%d")
+        with closing(self._connect()) as conn:
+            cursor = conn.execute("DELETE FROM price_history WHERE day < ?", (cutoff,))
+            conn.commit()
+            return cursor.rowcount
+
+    def price_stats(self, item_code: str) -> dict | None:
+        """How today's price compares with this item's own recorded past."""
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                """
+                SELECT COUNT(*) AS days,
+                       MIN(COALESCE(promo_price, price)) AS best,
+                       AVG(COALESCE(promo_price, price)) AS avg,
+                       SUM(CASE WHEN promo_price IS NOT NULL THEN 1 ELSE 0 END) AS promo_days
+                FROM price_history WHERE item_code = ?
+                """,
+                (item_code,),
+            ).fetchone()
+        if row is None or not row["days"]:
+            return None
+        return {
+            "days": row["days"],
+            "best": row["best"],
+            "avg": row["avg"],
+            "promo_share": row["promo_days"] / row["days"],
+        }
+
+    def log_orders(self, orders: list[dict], store: str = "shufersal") -> int:
+        """Record placed orders (idempotent) so cadence can be learned."""
+        added = 0
+        with closing(self._connect()) as conn:
+            for order in orders:
+                cursor = conn.execute(
+                    "INSERT OR IGNORE INTO order_log (order_code, store, placed_at, total, item_count) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (
+                        order.get("code"),
+                        store,
+                        order.get("placed_at", ""),
+                        order.get("total"),
+                        order.get("item_count"),
+                    ),
+                )
+                added += cursor.rowcount
+            conn.commit()
+        return added
+
+    def order_dates(self, store: str = "shufersal") -> list[str]:
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT placed_at FROM order_log WHERE store = ? ORDER BY placed_at", (store,)
+            ).fetchall()
+        return [row["placed_at"] for row in rows]
+
+    def get_state(self, key: str, default: str = "") -> str:
+        with closing(self._connect()) as conn:
+            row = conn.execute("SELECT value FROM app_state WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else default
+
+    def set_state(self, key: str, value: str) -> None:
+        with closing(self._connect()) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO app_state (key, value) VALUES (?, ?)", (key, value)
+            )
             conn.commit()
 
     # -- pending ambiguity decisions --------------------------------------

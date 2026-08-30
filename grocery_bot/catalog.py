@@ -43,9 +43,16 @@ def refresh_catalog(storage: Storage, store_id: str) -> dict[str, str]:
                 existing,
             )
             storage.replace_products_only(products, source_info)
+            storage.record_price_snapshot()
             return storage.catalog_meta()
 
     storage.replace_catalog(products, promotions, source_info)
+    # History rides on the refresh that already runs 3x a day: one row per
+    # item per day (same-day re-runs overwrite), pruned on a rolling
+    # window. This is what later distinguishes a genuinely rare price
+    # from an item's routine fortnightly "sale".
+    storage.record_price_snapshot()
+    storage.prune_price_history()
     logger.info(
         "Catalog refreshed for branch %s: %d products, %d promotion rows",
         store_id,
