@@ -394,8 +394,15 @@ class ShufersalAdapter(StoreAdapter):
                 const small = e.querySelector('.smallText');
                 const detail = small ? small.innerText.replace(/\\s+/g, ' ').trim() : '';
                 const parts = detail.split('|').map(s => s.trim());
+                // The tile also prints "2.44 ש"ח ל- 100 גרם"; that ratio is
+                // what makes two pack sizes comparable, so read it rather
+                // than trying to re-derive it from name text.
+                const flat = e.innerText.replace(/\\s+/g, ' ');
+                const ratio = flat.match(/([\\d.]+)\\s*ש"?ח\\s*ל-?\\s*([\\d]*\\s*[^\\s,|]+)/);
                 return {
                     index: i,
+                    unitPrice: ratio ? parseFloat(ratio[1]) : null,
+                    unitLabel: ratio ? ratio[2].trim() : '',
                     name: e.getAttribute('data-product-name') || '',
                     code: e.getAttribute('data-product-code') || '',
                     price: e.getAttribute('data-product-price') || '',

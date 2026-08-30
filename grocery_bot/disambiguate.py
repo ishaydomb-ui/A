@@ -115,4 +115,12 @@ def describe_card(card: dict) -> str:
             bits.append(f"₪{float(price):.2f}")
         except (TypeError, ValueError):
             pass
+    # The per-unit ratio settles "which is actually cheaper" between two
+    # pack sizes — the arithmetic the user was doing in their head.
+    ratio, label = card.get("unitPrice"), (card.get("unitLabel") or "").strip()
+    if ratio and label:
+        try:
+            bits.append(f"{float(ratio):.2f}₪/{label}")
+        except (TypeError, ValueError):
+            pass
     return " · ".join(bits)

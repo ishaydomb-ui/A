@@ -21,7 +21,9 @@ from telegram.ext import (
 from .adapters.base import StoreAdapter
 from .adapters.shufersal import ShufersalAdapter
 from .catalog import (
+    find_cheaper_equivalents,
     find_cycle_alternatives,
+    format_cheaper_equivalents,
     find_deals_for_base_list,
     format_cycle_alternatives,
     format_deals_report,
@@ -167,7 +169,8 @@ class GroceryBot:
             "• *צריך טונה סטארקיסט 4 יחידות* — שומר גם את היצרן\n"
             "• *תוריד את הטונה* — מוריד מהרשימה\n"
             "• *מה יש ברשימה* — הרשימה המלאה והמעודכנת\n"
-            "• *כמה עולה קוטג* — מחיר נוכחי בסניף + מבצע אם יש\n"
+            "• *כמה עולה קוטג* — מחיר נוכחי בסניף + מבצע אם יש (כולל ₪ לק\"ג)\n"
+            "• */cheaper שניצלונים* — יש חלופה זולה יותר ליחידת מידה?\n"
             "• *מה יש במבצע* — מבצעים אמיתיים על מה שאתם קונים\n"
             "• *מתכון לפאי תפוחים* — מפרק למצרכים ומוסיף לרשימה\n"
             "• *תכנן לי תפריט שבועי* — 5 ארוחות + רשימת קניות מאוחדת\n\n"
@@ -281,6 +284,34 @@ class GroceryBot:
         await self.start_order(update, context)
 
     # -- proposal checklists ------------------------------------------------
+
+    async def cheaper(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/cheaper <product> — better value for the same kind of thing."""
+        if not _authorized(self.config, update):
+            return
+        query = " ".join(context.args).strip()
+        if not query:
+            await update.message.reply_text(
+                "איזה מוצר להשוות? למשל: /cheaper שניצלונים"
+            )
+            return
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+        # Compare against the product actually bought for this term, when
+        # one is remembered — "cheaper than my usual" beats "cheaper than
+        # whatever the search ranked first".
+        store = (self.config.enabled_stores or ["shufersal"])[0]
+        remembered = self.storage.preferred_for(store, query)
+        reference, cheaper = await asyncio.to_thread(
+            find_cheaper_equivalents,
+            self.storage,
+            query,
+            12,
+            remembered["product_name"] if remembered else "",
+        )
+        await update.message.reply_text(
+            format_cheaper_equivalents(reference, cheaper, query), parse_mode="Markdown"
+        )
+
 
     async def stockup(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Exceptional deals worth buying ahead, even if not needed now."""
@@ -1048,6 +1079,7 @@ async def _register_bot_metadata(application: Application) -> None:
             BotCommand("list", "הרשימה המלאה והמעודכנת"),
             BotCommand("propose", "הצעת קנייה לפי מחלקות — מסמנים מה צריך"),
             BotCommand("stockup", "שווה לאגור — מבצעים חריגים לקנייה מראש"),
+            BotCommand("cheaper", "השוואת ₪ לק\"ג — יש חלופה זולה יותר?"),
             BotCommand("start_order", "מילוי מהיר של כל הרשימה"),
         ]
     )
@@ -1096,6 +1128,7 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("refresh_prices", bot.refresh_prices))
     application.add_handler(CommandHandler("propose", bot.propose_cycle))
     application.add_handler(CommandHandler("stockup", bot.stockup))
+    application.add_handler(CommandHandler("cheaper", bot.cheaper))
     application.add_handler(CallbackQueryHandler(bot.resolve_ambiguity, pattern=r"^(resolve|skip):"))
     application.add_handler(
         CallbackQueryHandler(bot.on_proposal_button, pattern=r"^(ptoggle|pall|pnone|pconfirm):")

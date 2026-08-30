@@ -12,6 +12,7 @@ import logging
 from .models import AdHocRequest, BaseListItem
 from .prices import PricedProduct, PromotionItem, fetch_branch_snapshot
 from .storage import Storage
+from .unitprice import best_value, describe, for_product
 
 logger = logging.getLogger(__name__)
 
@@ -58,10 +59,22 @@ def _money(value: float) -> str:
     return f"{value:,.2f}₪".replace(".00₪", "₪")
 
 
-def format_product_line(product: PricedProduct, deal: PromotionItem | None) -> str:
+def format_product_line(
+    product: PricedProduct, deal: PromotionItem | None, best_value_mark: bool = False
+) -> str:
+    """One product line, with the per-kilo/litre price spelled out.
+
+    The household was doing this ratio in their head at the shelf, which
+    is exactly where it is easiest to get wrong: a small tub of cottage
+    cheese looks cheaper at 3.30₪ than 6.40₪, while costing 33₪/kg
+    against 25.60₪/kg.
+    """
     line = f"• {product.name} — {_money(product.price)}"
-    if product.is_weighted and product.unit_of_measure_price:
-        line += f" ({_money(product.unit_of_measure_price)}/{product.unit_of_measure})"
+    unit = for_product(product, deal)
+    if unit is not None:
+        line += f" · {unit.format()}"
+    if best_value_mark:
+        line += " 🏆"
     if deal is not None:
         saving = (1 - deal.discounted_price / product.price) * 100 if product.price else 0
         line += f"\n   🏷️ {_money(deal.discounted_price)} (-{saving:.0f}%)"
@@ -80,7 +93,14 @@ def format_search_answer(
             "אפשר לנסות ניסוח אחר (למשל 'קוטג' במקום 'קוטג׳ תנובה')."
         )
     lines = [f"*{query}*"]
-    lines += [format_product_line(product, deal) for product, deal in results]
+    # 🏆 marks the best price per kilo/litre, not the lowest sticker price.
+    best = best_value(results)
+    lines += [
+        format_product_line(product, deal, best_value_mark=(index == best))
+        for index, (product, deal) in enumerate(results)
+    ]
+    if best is not None:
+        lines.append("\n_🏆 = המשתלם ביותר ליחידת מידה._")
     return "\n".join(lines)
 
 
@@ -245,4 +265,105 @@ def format_cycle_alternatives(
             f"(חיסכון {_money(saving)}) — {deal.description}"
         )
     lines.append("\n_זו הצעה בלבד — לא שיניתי כלום בסל._")
+    return "\n".join(lines)
+
+
+# A cheaper equivalent is only worth raising when the gap is real. Below
+# this the difference is pack-size rounding and shelf noise, not a
+# decision worth making.
+MIN_UNIT_SAVING = 0.15
+
+
+def find_cheaper_equivalents(
+    storage: Storage, product_name: str, per_item: int = 12, reference_name: str = ""
+) -> tuple[PricedProduct | None, list[tuple[PricedProduct, PromotionItem | None, float]]]:
+    """Comparable products with a materially better price per kilo/litre.
+
+    The question this answers is the one the user was doing by hand: a
+    branded frozen schnitzel at 71₪/kg sits on the same shelf as a
+    comparable one at 28₪/kg, and sticker prices hide that completely
+    because the packs are different sizes.
+
+    Comparisons stay inside one selling shape (`_is_comparable`) so a
+    per-kilo product is never held up against a per-unit one, and the
+    reference is the closest name match — the thing the user meant.
+
+    Returns (reference, [(product, deal, saving_fraction), ...]).
+    """
+    results = storage.search_with_deals(product_name, limit=per_item)
+    if not results:
+        return None, []
+
+    # The comparison is only useful against what the household actually
+    # buys. Search ranking is a poor stand-in for that: asking about
+    # "שמן זית" ranks the shortest name first, which may already be the
+    # cheapest item on the shelf and makes the answer trivially "nothing
+    # is cheaper". `reference_name` lets the caller pass the remembered
+    # product instead, so the question becomes "is there better value
+    # than my usual", which is the one being asked.
+    reference, reference_deal = results[0]
+    if reference_name:
+        for product, deal in results:
+            if product.name.strip() == reference_name.strip():
+                reference, reference_deal = product, deal
+                break
+    reference_unit = for_product(reference, reference_deal)
+    if reference_unit is None:
+        return reference, []
+
+    cheaper = []
+    for product, deal in results:
+        # Skip the reference itself rather than a fixed position: once the
+        # reference can be the remembered product, it is not necessarily
+        # the first result any more.
+        if product.item_code == reference.item_code:
+            continue
+        # Deliberately looser than `_is_comparable` here. That guard
+        # compares raw unit strings, which is right for the deals report
+        # (it keeps banana crisps away from bananas) but wrong for this:
+        # it also rejects a 750ml bottle against a 3L one, since the feed
+        # prices them per 100ml and per litre respectively. Comparing by
+        # *dimension* is what makes different pack sizes comparable at
+        # all, which is the entire point of the question.
+        if product.is_weighted != reference.is_weighted:
+            continue
+        unit = for_product(product, deal)
+        if unit is None or unit.dimension != reference_unit.dimension:
+            continue
+        saving = 1 - unit.value / reference_unit.value if reference_unit.value else 0
+        if saving >= MIN_UNIT_SAVING:
+            cheaper.append((product, deal, saving))
+    cheaper.sort(key=lambda row: -row[2])
+    return reference, cheaper
+
+
+def format_cheaper_equivalents(
+    reference: PricedProduct | None,
+    cheaper: list[tuple[PricedProduct, PromotionItem | None, float]],
+    query: str,
+) -> str:
+    if reference is None:
+        return f"לא מצאתי '{query}' בקטלוג הסניף."
+    reference_unit = for_product(reference)
+    reference_line = (
+        f"*{reference.name}* — {_money(reference.price)}"
+        + (f" · {reference_unit.format()}" if reference_unit else "")
+    )
+    if not cheaper:
+        return (
+            f"{reference_line}\n\n"
+            "לא מצאתי חלופה דומה שזולה משמעותית ליחידת מידה. "
+            "כלומר מה שאתם קונים הוא כבר בחירה טובה."
+        )
+    lines = [reference_line, "", "*חלופות זולות יותר ליחידת מידה:*"]
+    for product, deal, saving in cheaper[:5]:
+        unit = for_product(product, deal)
+        price = deal.discounted_price if deal else product.price
+        maker = f" ({product.manufacturer})" if product.manufacturer.strip("- ") else ""
+        lines.append(
+            f"• {product.name}{maker} — {_money(price)}"
+            + (f" · {unit.format()}" if unit else "")
+            + f"  ↓{saving * 100:.0f}%"
+        )
+    lines += ["", "_ההשוואה לפי ₪ לק\"ג/ליטר, לא לפי מחיר המדבקה. לא שיניתי כלום בסל._"]
     return "\n".join(lines)
