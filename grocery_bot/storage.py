@@ -354,13 +354,26 @@ class Storage:
         unit: str = "",
         brand: str = "",
     ) -> int:
+        """Queue one ad-hoc item, folding exact repeats onto the open one.
+
+        Repeats are the norm, not an edge case: when the bot looks broken
+        (as it did while the NLU was dead) people resend the same message,
+        and each copy used to become its own queue entry — the same
+        question was then asked three times in one cycle. Same text while
+        the first is still pending means "I want this", not "I want three".
+        """
         with closing(self._connect()) as conn:
+            existing = conn.execute(
+                "SELECT id FROM adhoc_requests WHERE consumed = 0 AND text = ?",
+                (text.strip(),),
+            ).fetchone()
+            if existing is not None:
+                return int(existing["id"])
             cur = conn.execute(
-                "INSERT INTO adhoc_requests "
-                "(text, requested_by, quantity, created_at, amount, unit, brand) "
+                "INSERT INTO adhoc_requests (text, requested_by, quantity, created_at, amount, unit, brand) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
-                    text,
+                    text.strip(),
                     requested_by,
                     quantity,
                     datetime.now(timezone.utc).isoformat(),

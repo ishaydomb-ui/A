@@ -406,13 +406,48 @@ class ShufersalAdapter(StoreAdapter):
             })""",
         )
 
+    def _dismiss_overlays(self) -> None:
+        """Close any modal the site has floated over the page.
+
+        Shufersal pops dialogs mid-session — product recommendations after
+        a few adds, coupon nags — and while one is open every click under
+        it times out. That took down most of a real cycle: the add button
+        resolved fine but was never clickable, so item after item came
+        back "error" while the only true problem was one popup.
+        """
+        try:
+            for selector in (
+                ".modal.fade.in button.close",
+                ".modal.show button.close",
+                "#closeButton",
+                ".btnClose:visible",
+                ".popup-close:visible",
+            ):
+                node = self._page.locator(selector).first
+                if node.count() and node.is_visible():
+                    node.click(timeout=2_000)
+                    self._page.wait_for_timeout(300)
+            # Escape closes most Bootstrap modals even without a close button.
+            if self._page.locator(".modal.fade.in, .modal.show").count():
+                self._page.keyboard.press("Escape")
+                self._page.wait_for_timeout(300)
+        except Exception:
+            logger.debug("Overlay dismissal failed; continuing", exc_info=True)
+
     def _add(self, card: dict, term: str, quantity: int) -> CartAddResult:
         name = card.get("name") or term
         try:
+            self._dismiss_overlays()
             tile = self._page.locator(PRODUCT_CARD_SELECTOR).nth(card["index"])
             if quantity > 1:
                 self._set_quantity(tile, quantity)
-            tile.locator(ADD_TO_CART_SELECTOR).first.click(timeout=15_000)
+            try:
+                tile.locator(ADD_TO_CART_SELECTOR).first.click(timeout=15_000)
+            except Exception:
+                # One retry after clearing overlays: the popup may have
+                # appeared between the check above and the click itself.
+                self._dismiss_overlays()
+                tile.locator(ADD_TO_CART_SELECTOR).first.click(timeout=10_000)
             self._page.wait_for_timeout(1_000)  # let the cart request settle
             return CartAddResult(
                 item_name=name,

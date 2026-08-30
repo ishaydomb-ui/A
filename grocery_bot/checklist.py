@@ -53,3 +53,34 @@ def render_summary(departments: list[tuple[str, list[dict]]]) -> str:
     lines.append("")
     lines.append("_אפשר עדיין לשנות בכל מחלקה. 'אישור ומילוי' ימלא את הסל._")
     return "\n".join(lines)
+
+
+def render_panel(
+    departments: list[tuple[str, list[dict]]], open_index: int
+) -> str:
+    """The whole proposal as ONE message with one department expanded.
+
+    A real run scattered six department messages plus questions plus a
+    summary, and the user reported exactly what that does: scrolling
+    around to find where the process even is. Telegram cannot collapse
+    messages, but it can edit one in place — so this renders an
+    accordion: every department as a header line, the open one expanded,
+    and tapping a header re-renders the same message.
+    """
+    total_selected = sum(1 for _, items in departments for i in items if i.get("selected"))
+    total = sum(len(items) for _, items in departments)
+    lines = [f"🛒 *הצעת קנייה* — {total_selected}/{total} מסומנים", ""]
+    for index, (name, items) in enumerate(departments):
+        chosen = sum(1 for i in items if i.get("selected"))
+        if index == open_index:
+            lines.append(f"▾ *{name}* ({chosen}/{len(items)})")
+            for position, item in enumerate(items, start=1):
+                mark = TICK if item.get("selected") else UNTICK
+                quantity = _quantity_label(item)
+                suffix = f" · {quantity}" if quantity else ""
+                lines.append(f"   {mark} {position}. {item['product_name']}{suffix}")
+        else:
+            lines.append(f"▸ {name} ({chosen}/{len(items)})")
+    lines.append("")
+    lines.append("_הקישו על מחלקה לפתוח, על מספר לסמן/להסיר._")
+    return "\n".join(lines)

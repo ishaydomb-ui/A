@@ -30,13 +30,14 @@ from .catalog import (
     refresh_catalog,
 )
 from .cartview import MIN_EDIT_INTERVAL_SECONDS, render_final, render_progress
-from .checklist import render_department, render_summary
+from .checklist import render_department, render_panel, render_summary
 from .config import Config
 from .disambiguate import describe_card
 from .connectivity import check_israeli_exit  # noqa: F401  (kept for tests/back-compat)
 from .exitnode import ensure_israeli_exit
 from .nlu import ParsedItem, build_meal_plan, expand_recipe, parse_message
 from .orchestrator import add_terms_to_cart, format_report_summary, run_order_cycle
+from .radar import find_stockup_deals, format_stockup_deals
 from .storage import Storage
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,16 @@ def _build_adapter_factories(config: Config):
     return factories
 
 
+def _added_marks(message_text: str) -> set[str]:
+    """Which variant lines are already ticked in the rendered question."""
+    added = set()
+    for line in (message_text or "").splitlines():
+        line = line.strip()
+        if line.startswith("✅"):
+            added.add(line.lstrip("✅ ").split(" · ")[0].strip())
+    return added
+
+
 def _preticked(row: dict) -> bool:
     """Pre-ticked unless the user has repeatedly removed it.
 
@@ -105,19 +116,22 @@ def _preticked(row: dict) -> bool:
     return not (skipped >= DEMOTE_AFTER_SKIPS and skipped > picked)
 
 
-def _department_buttons(proposal_id: int, department: str, rows: list[dict]):
+def _department_buttons(proposal_id: int, dept_index: int, rows: list[dict]):
     """Number buttons per item, then bulk actions.
 
-    Numbers rather than names because Telegram truncates long labels at
-    roughly 24 Hebrew characters, which would hide what distinguishes one
-    product from another.
+    Numbers rather than names on the buttons because Telegram truncates a
+    long label at roughly 24 Hebrew characters. The department travels as
+    an INDEX rather than its Hebrew name for a harder reason: callback
+    data is capped at 64 *bytes*, and "ptoggle:12:טיפוח, תינוקות
+    וניקיון:P_..." is 68 — Telegram rejects the button outright, which is
+    exactly the "buttons do nothing" a real run produced.
     """
     buttons, row = [], []
     for position, item in enumerate(rows, start=1):
         row.append(
             InlineKeyboardButton(
                 f"{'✅' if item['selected'] else '⬜'}{position}",
-                callback_data=f"ptoggle:{proposal_id}:{department}:{item['product_code']}",
+                callback_data=f"ptoggle:{proposal_id}:{dept_index}:{item['product_code']}",
             )
         )
         if len(row) == 5:
@@ -127,8 +141,8 @@ def _department_buttons(proposal_id: int, department: str, rows: list[dict]):
         buttons.append(row)
     buttons.append(
         [
-            InlineKeyboardButton("סמן הכל", callback_data=f"pall:{proposal_id}:{department}"),
-            InlineKeyboardButton("נקה הכל", callback_data=f"pnone:{proposal_id}:{department}"),
+            InlineKeyboardButton("סמן הכל", callback_data=f"pall:{proposal_id}:{dept_index}"),
+            InlineKeyboardButton("נקה הכל", callback_data=f"pnone:{proposal_id}:{dept_index}"),
         ]
     )
     return buttons
@@ -268,6 +282,15 @@ class GroceryBot:
 
     # -- proposal checklists ------------------------------------------------
 
+    async def stockup(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Exceptional deals worth buying ahead, even if not needed now."""
+        if not _authorized(self.config, update):
+            return
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+        deals = await asyncio.to_thread(find_stockup_deals, self.storage)
+        await update.message.reply_text(format_stockup_deals(deals), parse_mode="Markdown")
+
+
     async def propose_cycle(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Offer what to buy as per-department checklists, pre-ticked."""
         if not _authorized(self.config, update):
@@ -304,58 +327,85 @@ class GroceryBot:
         await self._send_departments(update.effective_chat.id, context, proposal_id)
 
     async def _send_departments(self, chat_id: int, context, proposal_id: int) -> None:
+        """One accordion panel instead of a message per department."""
+        text, markup = self._panel(proposal_id, open_index=0)
+        message = await context.bot.send_message(
+            chat_id=chat_id, text=text, parse_mode="Markdown", reply_markup=markup
+        )
+        # Pin the panel so "where is the process" is always one tap away.
+        try:
+            await context.bot.pin_chat_message(
+                chat_id=chat_id, message_id=message.message_id, disable_notification=True
+            )
+        except Exception:
+            logger.info("Could not pin the proposal panel; continuing")
+
+    def _panel(self, proposal_id: int, open_index: int):
         items = self.storage.proposal_items(proposal_id)
         names = list(dict.fromkeys(item["department"] for item in items))
-        for index, department in enumerate(names, start=1):
-            rows = [item for item in items if item["department"] == department]
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=render_department(department, rows, index, len(names)),
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(_department_buttons(proposal_id, department, rows)),
+        open_index = max(0, min(open_index, len(names) - 1))
+        grouped = [(n, [i for i in items if i["department"] == n]) for n in names]
+        text = render_panel(grouped, open_index)
+
+        buttons = []
+        # Department headers, two per row. Index in the callback, never the
+        # Hebrew name: callback data is capped at 64 bytes and a long
+        # department name blows straight past it (the "dead buttons" bug).
+        row = []
+        for index, name in enumerate(names):
+            label = ("▾ " if index == open_index else "▸ ") + name[:14]
+            row.append(
+                InlineKeyboardButton(label, callback_data=f"pdept:{proposal_id}:{index}")
             )
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=render_summary([(n, [i for i in items if i["department"] == n]) for n in names]),
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("🛒 אישור ומילוי הסל", callback_data=f"pconfirm:{proposal_id}")]]
-            ),
+            if len(row) == 2:
+                buttons.append(row)
+                row = []
+        if row:
+            buttons.append(row)
+        buttons += _department_buttons(proposal_id, open_index, grouped[open_index][1])
+        buttons.append(
+            [InlineKeyboardButton("🛒 אישור ומילוי הסל", callback_data=f"pconfirm:{proposal_id}")]
         )
+        return text, InlineKeyboardMarkup(buttons)
 
     async def on_proposal_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
-        await query.answer()
         parts = query.data.split(":")
         action, proposal_id = parts[0], int(parts[1])
 
         if action == "pconfirm":
+            await query.answer()
             await self._confirm_proposal(query, context, proposal_id)
             return
 
-        department = parts[2] if len(parts) > 2 else ""
-        if action == "ptoggle":
-            self.storage.toggle_proposal_item(proposal_id, parts[3])
+        open_index = int(parts[2]) if len(parts) > 2 else 0
+        items = self.storage.proposal_items(proposal_id)
+        names = list(dict.fromkeys(item["department"] for item in items))
+        department = names[open_index] if open_index < len(names) else ""
+
+        # Every tap gets a toast, so a press is never silent — the earlier
+        # run left the user tapping buttons with no sign anything happened.
+        if action == "pdept":
+            await query.answer(department)
+        elif action == "ptoggle":
+            now_selected = self.storage.toggle_proposal_item(proposal_id, parts[3])
+            await query.answer("סומן ✓" if now_selected else "הוסר ✗")
         elif action == "pall":
             self.storage.set_department_selection(proposal_id, department, True)
+            await query.answer("סומן הכל ✓")
         elif action == "pnone":
             self.storage.set_department_selection(proposal_id, department, False)
+            await query.answer("נוקה ✗")
+        else:
+            await query.answer()
 
-        rows = self.storage.proposal_items(proposal_id, department=department)
-        all_items = self.storage.proposal_items(proposal_id)
-        names = list(dict.fromkeys(item["department"] for item in all_items))
+        text, markup = self._panel(proposal_id, open_index)
         try:
-            await query.edit_message_text(
-                text=render_department(
-                    department, rows, names.index(department) + 1, len(names)
-                ),
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(
-                    _department_buttons(proposal_id, department, rows)
-                ),
-            )
+            await query.edit_message_text(text=text, parse_mode="Markdown", reply_markup=markup)
         except Exception:
-            logger.debug("Checklist edit failed", exc_info=True)
+            # "Message is not modified" when a tap changed nothing visible —
+            # harmless, the toast above already acknowledged it.
+            logger.debug("Panel edit skipped", exc_info=True)
 
     async def _confirm_proposal(self, query, context, proposal_id: int) -> None:
         items = self.storage.proposal_items(proposal_id)
@@ -757,19 +807,32 @@ class GroceryBot:
             )
 
     async def resolve_ambiguity(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Variant chooser — multi-select by design.
+
+        A tap adds that variant to the cart immediately and the question
+        STAYS OPEN, because a household genuinely buys both the 5% and the
+        3% cottage cheese in one shop. "סיום" closes it. Immediate add
+        (rather than tick-then-confirm) keeps a tap meaningful on its own
+        and gives instant feedback -- the earlier flow left the user
+        pressing buttons with nothing visibly happening.
+        """
         query = update.callback_query
-        await query.answer()
         action, ambiguity_id_str, choice_str = query.data.split(":")
         ambiguity_id = int(ambiguity_id_str)
 
         pending = self.storage.get_pending_ambiguity(ambiguity_id)
         if pending is None:
-            await query.edit_message_text("הבקשה הזו כבר טופלה או פגה.")
+            await query.answer("כבר טופל")
+            try:
+                await query.edit_message_reply_markup(reply_markup=None)
+            except Exception:
+                pass
             return
 
         if action == "skip":
+            await query.answer("סגור ✓")
             self.storage.mark_ambiguity_resolved(ambiguity_id)
-            await query.edit_message_text(f"דילגתי על '{pending['original_term']}'.")
+            await query.edit_message_text(f"'{pending['original_term']}' — טופל.")
             return
 
         choice_index = int(choice_str)
@@ -784,8 +847,11 @@ class GroceryBot:
         factories = _build_adapter_factories(self.config)
         make_adapter = factories.get(pending["store"])
         if make_adapter is None:
+            await query.answer()
             await query.edit_message_text("הרשת הזו לא מוגדרת יותר, לא ניתן להשלים.")
             return
+
+        await query.answer(f"מוסיף: {chosen_label[:40]}…")
 
         def _add():
             with make_adapter() as adapter:
@@ -797,24 +863,46 @@ class GroceryBot:
                 )
 
         result = await asyncio.to_thread(_add)
-        self.storage.mark_ambiguity_resolved(ambiguity_id)
-        if result.status == "added":
-            # Remember it, so this question is asked once per product and
-            # not on every single cycle.
+        if result.status != "added":
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=f"לא הצלחתי להוסיף את '{chosen_label}' (status: {result.status}).",
+            )
+            return
+
+        # The first pick becomes the remembered default for this term; a
+        # second pick in the same question is an addition, not a
+        # correction, so it must not overwrite the default.
+        if self.storage.preferred_for(pending["store"], pending["original_term"]) is None:
             self.storage.remember_choice(
                 store=pending["store"],
                 term=pending["original_term"],
                 product_code=chosen_code or getattr(result, "product_code", "") or "",
                 product_name=chosen_label,
             )
-            await query.edit_message_text(
-                f"נוסף: {chosen_label}\nאזכור את הבחירה הזו ל'{pending['original_term']}' בפעם הבאה."
-            )
-        else:
-            await query.edit_message_text(
-                f"לא הצלחתי להוסיף את '{chosen_label}' (status: {result.status})."
-            )
 
+        added = _added_marks(query.message.text or "") | {chosen_label}
+        header = f"*{pending['original_term']}* — איזה מהם?"
+        lines = [header, ""]
+        from .disambiguate import describe_card
+        for card in cards[:5]:
+            mark = "✅ " if card.get("name") in added else ""
+            lines.append(f"{mark}{describe_card(card)}")
+        lines += ["", "_אפשר לבחור עוד, או 'סיום'._"]
+        buttons = [
+            [
+                InlineKeyboardButton(str(position + 1), callback_data=f"resolve:{ambiguity_id}:{position}")
+                for position in range(min(len(cards), 5))
+            ],
+            [InlineKeyboardButton("סיום ✓", callback_data=f"skip:{ambiguity_id}:0")],
+        ]
+        try:
+            await query.edit_message_text(
+                "\n".join(lines), parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(buttons),
+            )
+        except Exception:
+            logger.debug("Choice edit skipped", exc_info=True)
 
     async def drain_deferred_cycle(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Run a queued cycle once the Israeli exit is reachable again.
@@ -936,6 +1024,7 @@ async def _register_bot_metadata(application: Application) -> None:
             BotCommand("start", "מה אפשר לבקש ממני"),
             BotCommand("list", "הרשימה המלאה והמעודכנת"),
             BotCommand("propose", "הצעת קנייה לפי מחלקות — מסמנים מה צריך"),
+            BotCommand("stockup", "שווה לאגור — מבצעים חריגים לקנייה מראש"),
             BotCommand("start_order", "מילוי מהיר של כל הרשימה"),
         ]
     )
@@ -955,6 +1044,7 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("deals", bot.deals))
     application.add_handler(CommandHandler("refresh_prices", bot.refresh_prices))
     application.add_handler(CommandHandler("propose", bot.propose_cycle))
+    application.add_handler(CommandHandler("stockup", bot.stockup))
     application.add_handler(CallbackQueryHandler(bot.resolve_ambiguity, pattern=r"^(resolve|skip):"))
     application.add_handler(
         CallbackQueryHandler(bot.on_proposal_button, pattern=r"^(ptoggle|pall|pnone|pconfirm):")
