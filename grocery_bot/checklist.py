@@ -14,6 +14,8 @@ gets one toggle button showing its state, and a department carries
 """
 from __future__ import annotations
 
+from .mdtext import escape as md
+
 TICK = "✅"
 UNTICK = "⬜"
 
@@ -34,7 +36,7 @@ def render_department(department: str, items: list[dict], index: int, total: int
         mark = TICK if item.get("selected") else UNTICK
         quantity = _quantity_label(item)
         suffix = f" · {quantity}" if quantity else ""
-        lines.append(f"{mark} {position}. {item['product_name']}{suffix}")
+        lines.append(f"{mark} {position}. {md(item['product_name'])}{suffix}")
     lines.append("")
     lines.append("_הקישו על מספר כדי להוסיף או להסיר._")
     return "\n".join(lines)
@@ -78,7 +80,7 @@ def render_panel(
                 mark = TICK if item.get("selected") else UNTICK
                 quantity = _quantity_label(item)
                 suffix = f" · {quantity}" if quantity else ""
-                lines.append(f"   {mark} {position}. {item['product_name']}{suffix}")
+                lines.append(f"   {mark} {position}. {md(item['product_name'])}{suffix}")
         else:
             lines.append(f"▸ {name} ({chosen}/{len(items)})")
     lines.append("")

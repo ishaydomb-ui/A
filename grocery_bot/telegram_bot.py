@@ -296,14 +296,29 @@ class GroceryBot:
         """/digest — the whole shop in one message, on demand."""
         if not _authorized(self.config, update):
             return
-        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-        await self._send_digest(update.effective_chat.id, context)
+        # Acknowledge before the slow part. Composing scans the catalog for
+        # deals and cheaper equivalents and takes a few seconds; without a
+        # word the user sees a command vanish into nothing and assumes it
+        # broke — which is exactly what happened.
+        notice = await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="🧮 מכין את הדייג'סט — בודק מבצעים, חלופות ומחירים. כמה שניות…",
+        )
+        try:
+            await self._send_digest(update.effective_chat.id, context)
+        finally:
+            try:
+                await context.bot.delete_message(
+                    chat_id=update.effective_chat.id, message_id=notice.message_id
+                )
+            except Exception:
+                pass  # leaving the notice is harmless
 
     async def _send_digest(self, chat_id: int, context) -> None:
         import datetime as _dt
 
         message, paste = await asyncio.to_thread(compose_digest, self.storage)
-        await context.bot.send_message(chat_id=chat_id, text=message, parse_mode="Markdown")
+        await _send_markdown(context, chat_id, message)
         if paste:
             await context.bot.send_message(chat_id=chat_id, text=paste)
         self.storage.set_state("last_digest_sent", _dt.datetime.now().isoformat())
@@ -1226,6 +1241,26 @@ async def _register_bot_metadata(application: Application) -> None:
         "בוט קניות משפחתי — מדברים איתו רגיל בעברית. מוסיף לרשימה, בודק "
         "מחירים ומבצעים אמיתיים בסניף, מפרק מתכונים למצרכים ובונה תפריט שבועי."
     )
+
+
+async def _send_markdown(context, chat_id: int, text: str, **kwargs):
+    """Send Markdown, falling back to plain text if Telegram rejects it.
+
+    A single stray character in a product name — Israeli multipacks are
+    written "6*330 מ\"ל", and 349 of this branch's products contain one —
+    makes Telegram reject the WHOLE message with "can't find end of the
+    entity". The user then sees nothing at all, with no clue why. Escaping
+    is handled at composition (see mdtext), but this is the backstop: a
+    formatting problem should cost formatting, never the content.
+    """
+    try:
+        return await context.bot.send_message(
+            chat_id=chat_id, text=text, parse_mode="Markdown", **kwargs
+        )
+    except Exception:
+        logger.warning("Markdown rejected; resending as plain text", exc_info=True)
+        plain = text.replace("*", "").replace("_", "").replace("`", "")
+        return await context.bot.send_message(chat_id=chat_id, text=plain, **kwargs)
 
 
 async def _on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:

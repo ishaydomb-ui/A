@@ -27,6 +27,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from .mdtext import escape as md
+
 # Telegram rejects rapid edits to the same message (and eventually rate
 # limits the bot), so progress is redrawn at most this often. Two seconds
 # is comfortably under the limit and still reads as live.
@@ -49,7 +51,7 @@ def _money(value: float | None) -> str:
 
 def _row(result) -> str:
     icon = _STATUS_ICON.get(result.status, "•")
-    name = (result.item_name or "").strip()
+    name = md((result.item_name or "").strip())
     if result.status == "added":
         price = getattr(result, "price", None)
         quantity = getattr(result, "quantity", 1) or 1
@@ -68,7 +70,7 @@ def _row(result) -> str:
         # -list item at a glance.
         asked_by = getattr(result, "requested_by", "")
         if asked_by:
-            line += f" 🙋{asked_by}"
+            line += f" 🙋{md(asked_by)}"
         return line
     if result.status == "ambiguous":
         return f"{icon} {name} — צריך בחירה"

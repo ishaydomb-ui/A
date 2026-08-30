@@ -34,6 +34,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .mdtext import escape as md
+
 # Departments that turn over weekly, versus those bought every few shops.
 FRESH_DEPARTMENTS = {"פירות וירקות", "מוצרי חלב וקירור"}
 
@@ -117,5 +119,5 @@ def summarise(spec: ListSpec) -> str:
 
     lines = [f"*{spec.title}* — {len(spec.items)} מוצרים", f"_{spec.description}_", ""]
     for department, rows in sorted(by_department.items(), key=lambda pair: -len(pair[1])):
-        lines.append(f"▸ {department} ({len(rows)})")
+        lines.append(f"▸ {md(department)} ({len(rows)})")
     return "\n".join(lines)

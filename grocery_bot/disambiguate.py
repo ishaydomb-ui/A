@@ -31,6 +31,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .mdtext import escape as md
+
 
 @dataclass
 class Resolution:
@@ -105,10 +107,10 @@ def describe_card(card: dict) -> str:
 
     Name alone is not enough — it is routinely duplicated across brands.
     """
-    bits = [card.get("name", "").strip()]
+    bits = [md(card.get("name", "").strip())]
     detail = " ".join(part for part in (card.get("size", ""), card.get("brand", "")) if part)
     if detail:
-        bits.append(detail)
+        bits.append(md(detail))
     price = card.get("price", "")
     if price:
         try:

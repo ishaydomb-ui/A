@@ -23,6 +23,7 @@ import datetime
 import logging
 
 from .catalog import find_cheaper_equivalents
+from .mdtext import escape as md
 from .learn import days_since_last_order, typical_gap_days
 from .listbuilder import available_lists, build as build_list
 from .radar import find_stockup_deals
@@ -58,15 +59,15 @@ def compose(storage, store: str = "shufersal") -> tuple[str, str]:
     by_department: dict[str, int] = {}
     for row in spec.items:
         by_department[row["department"]] = by_department.get(row["department"], 0) + 1
-    departments = " · ".join(f"{name} {count}" for name, count in sorted(by_department.items(), key=lambda p: -p[1]))
+    departments = " · ".join(f"{md(name)} {count}" for name, count in sorted(by_department.items(), key=lambda p: -p[1]))
     lines.append(f"*הרשימה:* {len(spec.items)} מוצרים ({departments})")
 
     if requests:
         lines.append("")
         lines.append("*בקשות אישיות:*")
         for item in requests:
-            who = f" — 🙋 {item.requested_by}" if item.requested_by else ""
-            lines.append(f"• {item.text}{who}")
+            who = f" — 🙋 {md(item.requested_by)}" if item.requested_by else ""
+            lines.append(f"• {md(item.text)}{who}")
 
     # --- worth grabbing ---------------------------------------------------
     deals = find_stockup_deals(storage, store)[:MAX_DEALS]
@@ -77,7 +78,7 @@ def compose(storage, store: str = "shufersal") -> tuple[str, str]:
             mark = "🧺 " if deal.pantryable else ""
             rarity = _rarity_note(storage, deal)
             lines.append(
-                f"• {mark}{deal.catalog_name} — *{deal.deal_price:.2f}₪* "
+                f"• {mark}{md(deal.catalog_name)} — *{deal.deal_price:.2f}₪* "
                 f"(במקום {deal.shelf_price:.2f}) −{deal.discount * 100:.0f}%{rarity}"
             )
 
@@ -141,6 +142,6 @@ def _swap_suggestions(storage, stock_rows, store: str) -> list[str]:
         unit = for_product(product, deal)
         unit_text = f" · {unit.format()}" if unit else ""
         suggestions.append(
-            f"• במקום {row['product_name']}: {product.name}{unit_text}  ↓{saving * 100:.0f}%"
+            f"• במקום {md(row['product_name'])}: {md(product.name)}{unit_text}  ↓{saving * 100:.0f}%"
         )
     return suggestions

@@ -11,6 +11,7 @@ import logging
 
 from .models import AdHocRequest, BaseListItem
 from .prices import PricedProduct, PromotionItem, fetch_branch_snapshot
+from .mdtext import escape as md
 from .storage import Storage
 from .unitprice import best_value, describe, for_product
 
@@ -76,7 +77,7 @@ def format_product_line(
     cheese looks cheaper at 3.30₪ than 6.40₪, while costing 33₪/kg
     against 25.60₪/kg.
     """
-    line = f"• {product.name} — {_money(product.price)}"
+    line = f"• {md(product.name)} — {_money(product.price)}"
     unit = for_product(product, deal)
     if unit is not None:
         line += f" · {unit.format()}"
@@ -87,7 +88,7 @@ def format_product_line(
         line += f"\n   🏷️ {_money(deal.discounted_price)} (-{saving:.0f}%)"
         if deal.min_qty > 1:
             line += f" בקניית {deal.min_qty:.0f}"
-        line += f" — {deal.description}"
+        line += f" — {md(deal.description)}"
     return line
 
 
@@ -127,7 +128,7 @@ def format_full_list(
     lines: list[str] = []
     if base_items:
         lines.append(f"*רשימת הבסיס* ({len(base_items)})")
-        lines += [f"• {item.describe()}" for item in base_items]
+        lines += [f"• {md(item.describe())}" for item in base_items]
     if adhoc_items:
         if lines:
             lines.append("")
@@ -138,8 +139,8 @@ def format_full_list(
         # or a promotion".
         lines.append(f"*בקשות אישיות לפעם הבאה* ({len(adhoc_items)})")
         lines += [
-            f"• {item.describe()}"
-            + (f" — 🙋 {item.requested_by}" if item.requested_by else "")
+            f"• {md(item.describe())}"
+            + (f" — 🙋 {md(item.requested_by)}" if item.requested_by else "")
             for item in adhoc_items
         ]
     return "\n".join(lines)
@@ -211,9 +212,9 @@ def format_deals_report(
     for item, product, deal in deals:
         saving = (1 - deal.discounted_price / product.price) * 100 if product.price else 0
         lines.append(
-            f"• {item.name} → {product.name}\n"
+            f"• {md(item.name)} → {md(product.name)}\n"
             f"   {_money(product.price)} ⟵ {_money(deal.discounted_price)} (-{saving:.0f}%)"
-            f" — {deal.description}"
+            f" — {md(deal.description)}"
         )
     return "\n".join(lines)
 
@@ -272,9 +273,9 @@ def format_cycle_alternatives(
     for term, usual, alt, deal in suggestions:
         saving = usual.price - deal.discounted_price
         lines.append(
-            f"• במקום {usual.name} ({_money(usual.price)})\n"
-            f"   {alt.name} — {_money(deal.discounted_price)} "
-            f"(חיסכון {_money(saving)}) — {deal.description}"
+            f"• במקום {md(usual.name)} ({_money(usual.price)})\n"
+            f"   {md(alt.name)} — {_money(deal.discounted_price)} "
+            f"(חיסכון {_money(saving)}) — {md(deal.description)}"
         )
     lines.append("\n_זו הצעה בלבד — לא שיניתי כלום בסל._")
     return "\n".join(lines)
@@ -358,7 +359,7 @@ def format_cheaper_equivalents(
         return f"לא מצאתי '{query}' בקטלוג הסניף."
     reference_unit = for_product(reference)
     reference_line = (
-        f"*{reference.name}* — {_money(reference.price)}"
+        f"*{md(reference.name)}* — {_money(reference.price)}"
         + (f" · {reference_unit.format()}" if reference_unit else "")
     )
     if not cheaper:
@@ -373,7 +374,7 @@ def format_cheaper_equivalents(
         price = deal.discounted_price if deal else product.price
         maker = f" ({product.manufacturer})" if product.manufacturer.strip("- ") else ""
         lines.append(
-            f"• {product.name}{maker} — {_money(price)}"
+            f"• {md(product.name)}{maker} — {_money(price)}"
             + (f" · {unit.format()}" if unit else "")
             + f"  ↓{saving * 100:.0f}%"
         )
