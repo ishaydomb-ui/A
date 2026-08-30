@@ -43,6 +43,7 @@ from .exitnode import ensure_israeli_exit
 from .learn import digest_due, sync_from_orders
 from .nlu import ParsedItem, build_meal_plan, expand_recipe, parse_message
 from .orchestrator import add_terms_to_cart, format_report_summary, run_order_cycle
+from .pantry import split_ingredients
 from .radar import find_stockup_deals, format_stockup_deals
 from .storage import Storage
 
@@ -760,41 +761,147 @@ class GroceryBot:
         if recipe is None:
             await update.message.reply_text(f"לא הצלחתי לבנות מצרכים ל'{dish}'. נסו לנסח אחרת.")
             return
-        for ingredient in recipe.ingredients:
+        await self._preview_ingredients(
+            update.effective_chat.id, context, recipe.dish, recipe.ingredients,
+            requested_by, note=recipe.note,
+        )
+
+    async def _preview_ingredients(
+        self, chat_id, context, dish, ingredients, requested_by, note=""
+    ) -> None:
+        """Show what a recipe needs and let the user decide — nothing is
+        added yet.
+
+        Two pieces of judgment the flat version lacked, both requested
+        after real use: the user asked for an approval step ("לאישורי ואז
+        תוסיף") — a recipe is speculative in a way the standing list is
+        not — and a breakdown that blindly adds flour and sugar to a
+        household that obviously owns flour and sugar creates the exact
+        delete-by-hand chore this project exists to remove. So the
+        preview marks what they probably have, and the default action
+        adds only what is probably missing.
+        """
+        import json as _json
+        import uuid as _uuid
+
+        missing, have = await asyncio.to_thread(split_ingredients, self.storage, ingredients)
+
+        token = _uuid.uuid4().hex[:8]
+        self.storage.set_state(
+            f"recipe_{token}",
+            _json.dumps(
+                {
+                    "dish": dish,
+                    "by": requested_by,
+                    "missing": [
+                        {"name": i.name, "amount": i.amount, "unit": i.unit} for i in missing
+                    ],
+                    "have": [
+                        {"name": i.name, "amount": i.amount, "unit": i.unit} for i in have
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+        )
+
+        from .mdtext import escape as _md
+
+        lines = [f"*{_md(dish)}* — {len(ingredients)} מצרכים:", ""]
+        if missing:
+            lines.append("*כנראה צריך לקנות:*")
+            lines += [f"🛒 {_md(_describe_parsed(i))}" for i in missing]
+        if have:
+            lines.append("")
+            lines.append("*כנראה יש לכם (לפי הרגלי הקנייה):*")
+            lines += [f"✔️ {_md(_describe_parsed(i))}" for i in have]
+        if note:
+            lines.append(f"\n_{_md(note)}_")
+        lines.append("\n_כלום עוד לא נוסף — בחרו:_")
+
+        buttons = [[InlineKeyboardButton(f"🛒 הוסף רק מה שחסר ({len(missing)})",
+                                         callback_data=f"rcpmiss:{token}")]]
+        buttons.append([
+            InlineKeyboardButton("הוסף הכל", callback_data=f"rcpall:{token}"),
+            InlineKeyboardButton("ביטול", callback_data=f"rcpno:{token}"),
+        ])
+        await context.bot.send_message(
+            chat_id=chat_id, text="\n".join(lines), parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(buttons),
+        )
+
+    async def on_recipe_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        import json as _json
+
+        query = update.callback_query
+        action, token = query.data.split(":")
+        raw = self.storage.get_state(f"recipe_{token}")
+        if not raw:
+            await query.answer("פג תוקף — בקשו את המתכון שוב")
+            try:
+                await query.edit_message_reply_markup(reply_markup=None)
+            except Exception:
+                pass
+            return
+        payload = _json.loads(raw)
+
+        if action == "rcpno":
+            await query.answer("בוטל")
+            self.storage.set_state(f"recipe_{token}", "")
+            await query.edit_message_text(f"'{payload['dish']}' — בוטל, כלום לא נוסף.")
+            return
+
+        chosen = payload["missing"] + (payload["have"] if action == "rcpall" else [])
+        await query.answer(f"מוסיף {len(chosen)} מצרכים…")
+        for item in chosen:
             self.storage.add_adhoc_request(
-                text=ingredient.name,
-                requested_by=f"{requested_by} (מתכון: {recipe.dish})",
-                amount=ingredient.amount,
-                unit=ingredient.unit,
+                text=item["name"],
+                requested_by=f"{payload['by']} (מתכון: {payload['dish']})",
+                amount=item.get("amount"),
+                unit=item.get("unit") or "",
             )
-        lines = [f"*{recipe.dish}* — הוספתי {len(recipe.ingredients)} מצרכים לרשימה:"]
-        lines += [f"• {_describe_parsed(i)}" for i in recipe.ingredients]
-        if recipe.note:
-            lines.append(f"\n_{recipe.note}_")
-        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+        self.storage.set_state(f"recipe_{token}", "")
+
+        from .mdtext import escape as _md
+
+        names = ", ".join(_md(item["name"]) for item in chosen)
+        skipped = len(payload["missing"]) + len(payload["have"]) - len(chosen)
+        suffix = f"\n_({skipped} דילגנו — כנראה יש לכם)_" if skipped else ""
+        try:
+            await query.edit_message_text(
+                f"*{_md(payload['dish'])}* — נוספו {len(chosen)} לרשימה:\n{names}{suffix}",
+                parse_mode="Markdown",
+            )
+        except Exception:
+            logger.debug("recipe edit failed", exc_info=True)
 
     async def _do_meal_plan(self, update, context, parsed, requested_by: str) -> None:
         await update.message.reply_text("בונה תפריט שבועי ורשימת קניות, זה ייקח כמה שניות...")
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-        plan = await asyncio.to_thread(build_meal_plan, parsed.query)
+        store = (self.config.enabled_stores or ["shufersal"])[0]
+        staples = [
+            row["product_name"]
+            for row in self.storage.list_stock_items(store)
+            if row["tier"] in ("A", "B", "C")
+        ]
+        plan = await asyncio.to_thread(build_meal_plan, parsed.query or "", staples)
         if plan is None:
-            await update.message.reply_text("לא הצלחתי לבנות תפריט כרגע, נסו שוב.")
+            await update.message.reply_text("לא הצלחתי לבנות תפריט הפעם. נסו שוב עוד רגע.")
             return
-        for ingredient in plan.ingredients:
-            self.storage.add_adhoc_request(
-                text=ingredient.name,
-                requested_by=f"{requested_by} (תפריט שבועי)",
-                amount=ingredient.amount,
-                unit=ingredient.unit,
-            )
-        lines = ["*תפריט השבוע*"]
-        lines += [f"• {day}: {dish}" if day else f"• {dish}" for day, dish in plan.meals]
-        lines.append(f"\n*הוספתי {len(plan.ingredients)} מצרכים לרשימה:*")
-        lines += [f"• {_describe_parsed(i)}" for i in plan.ingredients]
-        if plan.note:
-            lines.append(f"\n_{plan.note}_")
-        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
+        from .mdtext import escape as _md
+
+        lines = ["*תפריט שבועי:*"]
+        lines += [
+            f"• {_md(day)}: {_md(dish)}" if day else f"• {_md(dish)}"
+            for day, dish in plan.meals
+        ]
+        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+        # Ingredients go through the same look-what-you-need preview as a
+        # single recipe: same approval, same probably-have marking.
+        await self._preview_ingredients(
+            update.effective_chat.id, context,
+            "תפריט שבועי", plan.ingredients, requested_by, note=plan.note,
+        )
     async def start_order(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not _authorized(self.config, update):
             return
@@ -1308,6 +1415,9 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CallbackQueryHandler(bot.resolve_ambiguity, pattern=r"^(resolve|skip):"))
     application.add_handler(
         CallbackQueryHandler(bot.on_proposal_button, pattern=r"^(ptoggle|pall|pnone|pconfirm):")
+    )
+    application.add_handler(
+        CallbackQueryHandler(bot.on_recipe_button, pattern=r"^(rcpall|rcpmiss|rcpno):")
     )
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bot.handle_message))
     if application.job_queue is not None:

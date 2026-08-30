@@ -271,7 +271,7 @@ def expand_recipe(dish: str) -> Recipe | None:
     """Turn a dish name into a buyable ingredient list, or None if unavailable."""
     try:
         result = subprocess.run(
-            ["claude", "-p", f'{_RECIPE_PROMPT}\n\nהמנה: "{dish}"'],
+            [_claude_cli(), "-p", f'{_RECIPE_PROMPT}\n\nהמנה: "{dish}"'],
             capture_output=True,
             text=True,
             timeout=CLAUDE_TIMEOUT_SECONDS,
@@ -320,20 +320,32 @@ class MealPlan:
     note: str = ""
 
 
-def build_meal_plan(request: str = "") -> MealPlan | None:
+def build_meal_plan(request: str = "", staples: list[str] | None = None) -> MealPlan | None:
     """Plan a week of dinners and return one consolidated shopping list.
 
     Consolidation happens inside the single model call on purpose: asking
     per-dish and merging afterwards would need ingredient-name matching
     ("בצל" vs "בצל יבש") that is exactly the kind of fuzzy judgement the
     model is already making here.
+
+    `staples` grounds the plan in what this household actually eats. A
+    generic "healthy weekly menu" is a lifestyle-magazine answer; a menu
+    built around their own recurring products (schnitzel, cottage,
+    pasta, the vegetables they always buy) produces dinners the children
+    will actually eat and ingredients that mostly exist already.
     """
     prompt = _MEAL_PLAN_PROMPT
+    if staples:
+        prompt += (
+            "\n\nמוצרים שהמשפחה קונה באופן קבוע (לבסס עליהם את התפריט ככל האפשר, "
+            "כדי שהארוחות יהיו מוכרות לילדים ורוב המצרכים כבר בבית): "
+            + ", ".join(staples[:40])
+        )
     if request.strip():
         prompt += f"\n\nבקשה מיוחדת מהמשתמש: {request.strip()}"
     try:
         result = subprocess.run(
-            ["claude", "-p", prompt],
+            [_claude_cli(), "-p", prompt],
             capture_output=True,
             text=True,
             timeout=CLAUDE_TIMEOUT_SECONDS,
