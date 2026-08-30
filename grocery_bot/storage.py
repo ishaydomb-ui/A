@@ -230,8 +230,16 @@ class Storage:
                     conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path)
+        conn = sqlite3.connect(self._db_path, timeout=10.0)
         conn.row_factory = sqlite3.Row
+        # WAL lets a second process (the household's other bot, which adds
+        # to this list on behalf of the other partner) write without
+        # colliding with the grocery bot mid-cycle. In the default
+        # rollback-journal mode a concurrent writer gets "database is
+        # locked" instead, and a long cart cycle holds the file for
+        # minutes at a time.
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=10000")
         return conn
 
     # -- base list -----------------------------------------------------

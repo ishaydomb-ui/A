@@ -9,6 +9,9 @@ Run with: python -m grocery_bot.cli <command>
     import-history        build the base list from real past orders
                           [--year N] [--min-share F] [--memory-only] [--dry-run]
     build-stock           derive proposable products, tiers and departments
+    add-item <text>       add to the shopping list [--by NAME] [--qty N]
+                          (the integration point for the household's other bot)
+    list-items            print the pending shopping list, one per line
 
 `refresh-prices` is the one meant for a scheduler — the feed publishes a
 new full snapshot a few times a day, and a stale catalog quietly gives
@@ -76,6 +79,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if command == "build-stock":
         return _build_stock(config, storage, rest)
+
+    if command == "add-item":
+        return _add_item(storage, rest)
+
+    if command == "list-items":
+        for request in storage.list_pending_adhoc():
+            print(request.describe() if hasattr(request, "describe") else request.text)
+        return 0
 
     return _usage()
 
@@ -162,6 +173,50 @@ def _build_stock(config: Config, storage: Storage, args: list[str]) -> int:
     print(f"{len(orders)} orders -> {len(items)} products, {proposed} worth proposing")
     for department in departments:
         print(f"  {department.name}: {len(department.items)}")
+    return 0
+
+
+def _add_item(storage: Storage, args: list[str]) -> int:
+    """Add one item to the shopping list.
+
+    This is the seam for the household's *other* Telegram bot (Family OS,
+    which the two partners already share): it lets the second person add
+    groceries from the assistant they are already talking to, without
+    that project needing to know this schema, this venv, or the dedupe
+    rules. Keep the contract stable -- text in, one line out, exit 0.
+
+    Deliberately a CLI rather than an importable module: each project has
+    its own virtualenv, so a shared process boundary would couple their
+    dependency trees. A subprocess call has neither problem.
+    """
+    # Skip flag values as well as the flags: "--by לירן" must not leave
+    # "לירן" in the product name.
+    words, skip = [], False
+    for argument in args:
+        if skip:
+            skip = False
+            continue
+        if argument.startswith("--"):
+            skip = "=" not in argument
+            continue
+        words.append(argument)
+    if not words:
+        print("usage: add-item <text> [--by NAME] [--qty N]")
+        return 2
+    text = " ".join(words).strip()
+    requested_by = _flag(args, "--by") or "unknown"
+    quantity = _int_flag(args, "--qty") or 1
+
+    before = {r.id for r in storage.list_pending_adhoc()}
+    request_id = storage.add_adhoc_request(
+        text=text, requested_by=requested_by, quantity=quantity
+    )
+    # add_adhoc_request folds an exact repeat onto the pending one, so say
+    # which happened rather than implying a second copy was created.
+    if request_id in before:
+        print(f"already on the list: {text}")
+    else:
+        print(f"added: {text}")
     return 0
 
 
