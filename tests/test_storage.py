@@ -57,3 +57,46 @@ class StorageTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AmbiguityHygieneTests(unittest.TestCase):
+    """Questions must not pile up across runs."""
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.storage = Storage(str(Path(self._tmpdir.name) / "t.sqlite3"))
+
+    def tearDown(self) -> None:
+        self._tmpdir.cleanup()
+
+    def test_the_same_term_does_not_stack_up(self) -> None:
+        first = self.storage.save_pending_ambiguity("s", "גבינה צהובה", 1, ["a", "b"])
+        second = self.storage.save_pending_ambiguity("s", "גבינה צהובה", 1, ["a", "c"])
+        self.assertEqual(first, second)
+        self.assertEqual(len(self.storage.list_pending_ambiguities()), 1)
+
+    def test_reasking_refreshes_the_options(self) -> None:
+        self.storage.save_pending_ambiguity("s", "גבינה", 1, ["ישן"])
+        self.storage.save_pending_ambiguity("s", "גבינה", 1, ["חדש"])
+        self.assertEqual(self.storage.list_pending_ambiguities()[0]["candidates"], ["חדש"])
+
+    def test_different_terms_are_separate_questions(self) -> None:
+        self.storage.save_pending_ambiguity("s", "גבינה", 1, ["a"])
+        self.storage.save_pending_ambiguity("s", "קוטג", 1, ["a"])
+        self.assertEqual(len(self.storage.list_pending_ambiguities()), 2)
+
+    def test_stale_questions_are_expired(self) -> None:
+        import sqlite3
+
+        self.storage.save_pending_ambiguity("s", "ישן", 1, ["a"])
+        conn = sqlite3.connect(self.storage._db_path)
+        conn.execute("UPDATE pending_ambiguities SET created_at = '2020-01-01T00:00:00+00:00'")
+        conn.commit()
+        conn.close()
+        self.assertEqual(self.storage.expire_stale_ambiguities(6), 1)
+        self.assertEqual(self.storage.list_pending_ambiguities(), [])
+
+    def test_fresh_questions_survive_expiry(self) -> None:
+        self.storage.save_pending_ambiguity("s", "חדש", 1, ["a"])
+        self.storage.expire_stale_ambiguities(6)
+        self.assertEqual(len(self.storage.list_pending_ambiguities()), 1)

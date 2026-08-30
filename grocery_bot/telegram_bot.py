@@ -374,7 +374,7 @@ class GroceryBot:
         action, proposal_id = parts[0], int(parts[1])
 
         if action == "pconfirm":
-            await query.answer()
+            await query.answer("ממלא את הסל…")
             await self._confirm_proposal(query, context, proposal_id)
             return
 
@@ -820,9 +820,16 @@ class GroceryBot:
         action, ambiguity_id_str, choice_str = query.data.split(":")
         ambiguity_id = int(ambiguity_id_str)
 
+        # Acknowledge before touching storage or the network: a callback
+        # query expires ~15s after the tap, and anything slower than that
+        # leaves the button looking dead.
+        try:
+            await query.answer("רגע…")
+        except Exception:
+            logger.debug("Callback already expired", exc_info=True)
+
         pending = self.storage.get_pending_ambiguity(ambiguity_id)
         if pending is None:
-            await query.answer("כבר טופל")
             try:
                 await query.edit_message_reply_markup(reply_markup=None)
             except Exception:
@@ -830,7 +837,6 @@ class GroceryBot:
             return
 
         if action == "skip":
-            await query.answer("סגור ✓")
             self.storage.mark_ambiguity_resolved(ambiguity_id)
             await query.edit_message_text(f"'{pending['original_term']}' — טופל.")
             return
@@ -850,8 +856,6 @@ class GroceryBot:
             await query.answer()
             await query.edit_message_text("הרשת הזו לא מוגדרת יותר, לא ניתן להשלים.")
             return
-
-        await query.answer(f"מוסיף: {chosen_label[:40]}…")
 
         def _add():
             with make_adapter() as adapter:
@@ -885,21 +889,40 @@ class GroceryBot:
         header = f"*{pending['original_term']}* — איזה מהם?"
         lines = [header, ""]
         from .disambiguate import describe_card
-        for card in cards[:5]:
-            mark = "✅ " if card.get("name") in added else ""
-            lines.append(f"{mark}{describe_card(card)}")
-        lines += ["", "_אפשר לבחור עוד, או 'סיום'._"]
-        buttons = [
-            [
-                InlineKeyboardButton(str(position + 1), callback_data=f"resolve:{ambiguity_id}:{position}")
-                for position in range(min(len(cards), 5))
-            ],
-            [InlineKeyboardButton("סיום ✓", callback_data=f"skip:{ambiguity_id}:0")],
-        ]
+
+        remaining = []
+        for position, card in enumerate(cards[:5]):
+            if card.get("name") in added:
+                # A chosen option turns into a confirmation line and loses
+                # its button: the user asked for a press to visibly do
+                # something, and a button that stays put looks ignored.
+                lines.append(f"✅ *{describe_card(card)}* — נוסף לסל")
+            else:
+                lines.append(f"{len(remaining) + 1}. {describe_card(card)}")
+                remaining.append((len(remaining) + 1, position))
+
+        if remaining:
+            lines += ["", "_אפשר לבחור עוד, או 'סיום'._"]
+            buttons = [
+                [
+                    InlineKeyboardButton(
+                        str(label), callback_data=f"resolve:{ambiguity_id}:{position}"
+                    )
+                    for label, position in remaining
+                ],
+                [InlineKeyboardButton("סיום ✓", callback_data=f"skip:{ambiguity_id}:0")],
+            ]
+            markup = InlineKeyboardMarkup(buttons)
+        else:
+            # Nothing left to choose: close the question rather than leave
+            # a dead keyboard behind.
+            lines += ["", "_הכול נבחר._"]
+            markup = None
+            self.storage.mark_ambiguity_resolved(ambiguity_id)
+
         try:
             await query.edit_message_text(
-                "\n".join(lines), parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(buttons),
+                "\n".join(lines), parse_mode="Markdown", reply_markup=markup
             )
         except Exception:
             logger.debug("Choice edit skipped", exc_info=True)
@@ -1034,9 +1057,37 @@ async def _register_bot_metadata(application: Application) -> None:
     )
 
 
+async def _on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Keep expected Telegram complaints out of the traceback stream."""
+    from telegram.error import BadRequest
+
+    error = context.error
+    if isinstance(error, BadRequest) and (
+        "Query is too old" in str(error) or "not modified" in str(error)
+    ):
+        # A tap that arrived after its query expired, or an edit that
+        # changed nothing. Neither is actionable.
+        logger.debug("Ignoring benign Telegram error: %s", error)
+        return
+    logger.exception("Unhandled error while processing an update", exc_info=error)
+
+
 def build_application(config: Config, storage: Storage) -> Application:
     bot = GroceryBot(config, storage)
-    application = Application.builder().token(config.telegram_bot_token).post_init(_register_bot_metadata).build()
+    # concurrent_updates matters more than it looks: python-telegram-bot
+    # processes updates one at a time by default, so while a cart add runs
+    # for 10-40s every button tap queues behind it. Telegram invalidates a
+    # callback query after ~15s, so those taps arrived expired -- no toast,
+    # no edit, nothing. That is the whole "I press buttons and nothing
+    # happens" report.
+    application = (
+        Application.builder()
+        .token(config.telegram_bot_token)
+        .post_init(_register_bot_metadata)
+        .concurrent_updates(True)
+        .build()
+    )
+    application.add_error_handler(_on_error)
     application.add_handler(CommandHandler("start", bot.start))
     application.add_handler(CommandHandler("start_order", bot.start_order))
     application.add_handler(CommandHandler("list", bot.list_base_items))

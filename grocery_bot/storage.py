@@ -10,7 +10,7 @@ import json
 import re
 import sqlite3
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .models import AdHocRequest, BaseListItem
@@ -616,7 +616,35 @@ class Storage:
         self, store: str, original_term: str, quantity: int, candidates: list[str],
         candidate_cards: list[dict] | None = None
     ) -> int:
+        """Record a choice to put to the user, once per open term.
+
+        Questions used to pile up across cycles: an unanswered "גבינה
+        צהובה" from one run was still pending on the next, so the user was
+        shown the same question three times in a row alongside a fresh
+        copy. One open question per term is all that can be meaningfully
+        answered.
+        """
         with closing(self._connect()) as conn:
+            existing = conn.execute(
+                "SELECT id FROM pending_ambiguities "
+                "WHERE resolved = 0 AND store = ? AND original_term = ?",
+                (store, original_term),
+            ).fetchone()
+            if existing is not None:
+                # Refresh the options; the old ones may be stale.
+                conn.execute(
+                    "UPDATE pending_ambiguities SET candidates = ?, candidate_cards = ?, "
+                    "quantity = ?, created_at = ? WHERE id = ?",
+                    (
+                        json.dumps(candidates, ensure_ascii=False),
+                        json.dumps(candidate_cards or [], ensure_ascii=False),
+                        quantity,
+                        datetime.now(timezone.utc).isoformat(),
+                        existing["id"],
+                    ),
+                )
+                conn.commit()
+                return int(existing["id"])
             cur = conn.execute(
                 "INSERT INTO pending_ambiguities "
                 "(store, original_term, quantity, candidates, candidate_cards, created_at) "
@@ -632,6 +660,25 @@ class Storage:
             )
             conn.commit()
             return cur.lastrowid
+
+    def expire_stale_ambiguities(self, older_than_hours: int = 6) -> int:
+        """Drop questions the user never answered from an earlier run.
+
+        An unanswered question is not a to-do list: by the next cycle the
+        cart and the offers have moved on, and re-asking a half-day-old
+        question next to a fresh one is just noise.
+        """
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(hours=older_than_hours)
+        ).isoformat()
+        with closing(self._connect()) as conn:
+            cur = conn.execute(
+                "UPDATE pending_ambiguities SET resolved = 1 "
+                "WHERE resolved = 0 AND created_at < ?",
+                (cutoff,),
+            )
+            conn.commit()
+            return cur.rowcount
 
     def list_pending_ambiguities(self) -> list[dict]:
         with closing(self._connect()) as conn:
