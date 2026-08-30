@@ -76,3 +76,33 @@ class IntegrationContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RemoveItemContractTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.db = str(Path(self._tmpdir.name) / "t.sqlite3")
+
+    def tearDown(self) -> None:
+        self._tmpdir.cleanup()
+
+    def test_removes_a_pending_item_by_fuzzy_name(self) -> None:
+        _run(["add-item", "חלב 3%", "--by", "לירן"], self.db)
+        result = _run(["remove-item", "חלב"], self.db)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("removed", result.stdout)
+        self.assertNotIn("חלב", _run(["list-items"], self.db).stdout)
+
+    def test_a_missing_item_is_a_distinct_exit_code(self) -> None:
+        """Not-found must be tellable apart from a usage error."""
+        result = _run(["remove-item", "לא קיים"], self.db)
+        self.assertEqual(result.returncode, 1)
+
+    def test_missing_text_is_a_usage_error(self) -> None:
+        result = _run(["remove-item"], self.db)
+        self.assertEqual(result.returncode, 2)
+
+    def test_needs_no_telegram_token(self) -> None:
+        _run(["add-item", "חלב", "--by", "לירן"], self.db)
+        result = _run(["remove-item", "חלב"], self.db)
+        self.assertEqual(result.returncode, 0, result.stderr)

@@ -11,6 +11,7 @@ Run with: python -m grocery_bot.cli <command>
     build-stock           derive proposable products, tiers and departments
     add-item <text>       add to the shopping list [--by NAME] [--qty N]
                           (the integration point for the household's other bot)
+    remove-item <text>    remove one item by fuzzy name ("תוריד חלב מהרשימה")
     list-items            print the pending shopping list, one per line
 
 `refresh-prices` is the one meant for a scheduler — the feed publishes a
@@ -242,6 +243,27 @@ def _flag(args: list[str], name: str) -> str | None:
     return None
 
 
+def _remove_item(storage: Storage, args: list[str]) -> int:
+    """Remove one pending item by fuzzy name.
+
+    An obvious follow-up to add-item once a second bot is putting items
+    on this list on someone's behalf: "תוריד חלב מהרשימה" is exactly the
+    kind of thing either partner will say, and there was no way to answer
+    it. Reuses the same fuzzy match the Telegram bot already uses, so the
+    behaviour is one implementation, not two.
+    """
+    text = " ".join(a for a in args if not a.startswith("--")).strip()
+    if not text:
+        print("usage: remove-item <text>")
+        return 2
+    removed = storage.remove_adhoc_by_name(text)
+    if removed is None:
+        print(f"not found: {text}")
+        return 1
+    print(f"removed: {removed}")
+    return 0
+
+
 def _list_items(storage: Storage, args: list[str]) -> int:
     """Print the pending shopping list, one item per line.
 
@@ -259,6 +281,7 @@ def _list_items(storage: Storage, args: list[str]) -> int:
 # integration surface for the household's other bot.
 _DB_ONLY_COMMANDS = {
     "add-item": lambda storage, args: _add_item(storage, args),
+    "remove-item": _remove_item,
     "list-items": _list_items,
 }
 
