@@ -20,6 +20,7 @@ wrong prices rather than failing loudly.
 from __future__ import annotations
 
 import logging
+import os
 import sys
 
 from .catalog import (
@@ -44,6 +45,17 @@ def main(argv: list[str] | None = None) -> int:
         return _usage()
 
     command, rest = args[0], args[1:]
+
+    # Commands that only touch the local database are dispatched before
+    # Config.from_env(), which demands TELEGRAM_BOT_TOKEN. The household's
+    # other bot calls `add-item` to put groceries on the list, and making
+    # that require this bot's Telegram secret would force an unrelated
+    # project to hold a credential it has no use for — a boundary worth
+    # keeping clean. These need nothing but GROCERY_BOT_DB_PATH.
+    if command in _DB_ONLY_COMMANDS:
+        storage = Storage(os.environ.get("GROCERY_BOT_DB_PATH", "data/grocery_bot.sqlite3"))
+        return _DB_ONLY_COMMANDS[command](storage, rest)
+
     config = Config.from_env()
     storage = Storage(config.db_path)
 
@@ -79,14 +91,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if command == "build-stock":
         return _build_stock(config, storage, rest)
-
-    if command == "add-item":
-        return _add_item(storage, rest)
-
-    if command == "list-items":
-        for request in storage.list_pending_adhoc():
-            print(request.describe() if hasattr(request, "describe") else request.text)
-        return 0
 
     return _usage()
 
@@ -236,6 +240,27 @@ def _flag(args: list[str], name: str) -> str | None:
         if index + 1 < len(args):
             return args[index + 1]
     return None
+
+
+def _list_items(storage: Storage, args: list[str]) -> int:
+    """Print the pending shopping list, one item per line.
+
+    Includes who asked, because the household's two people both add here
+    and "someone specifically wants this" is the distinction that matters
+    when reading the list back.
+    """
+    for request in storage.list_pending_adhoc():
+        who = f"  🙋 {request.requested_by}" if request.requested_by else ""
+        print(f"{request.text}{who}")
+    return 0
+
+
+# Commands needing only the database — no Telegram token, no network. The
+# integration surface for the household's other bot.
+_DB_ONLY_COMMANDS = {
+    "add-item": lambda storage, args: _add_item(storage, args),
+    "list-items": _list_items,
+}
 
 
 if __name__ == "__main__":
