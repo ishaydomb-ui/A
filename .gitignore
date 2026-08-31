@@ -6,6 +6,8 @@ venv/
 data/*.sqlite3
 data/sessions/*.json
 !data/sessions/.gitkeep
+# Persistent browser profile holding a live store login (cookies + localStorage).
+data/sessions/*_profile/
 .remote_desktop/
 
 # Personal data: the real base list stays local; the .example file is the template.

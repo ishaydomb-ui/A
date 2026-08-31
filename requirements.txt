@@ -5,3 +5,7 @@
 python-telegram-bot[job-queue]>=21.0,<22
 playwright>=1.45,<2
 PyYAML>=6.0,<7
+# Tiv Taam talks JSON over the Israeli SOCKS exit; socksio is what
+# gives httpx socks5h:// support (DNS resolved at the exit, not here).
+httpx>=0.27,<1
+socksio>=1.0,<2
