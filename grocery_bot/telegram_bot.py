@@ -765,17 +765,29 @@ class GroceryBot:
         if not parsed.items:
             await update.message.reply_text("מה להוריד?")
             return
-        removed, missing = [], []
+        removed, suppressed, missing = [], [], []
         for item in parsed.items:
             # Ad-hoc first: a just-added request is the likelier target of
             # "תוריד את X" than a long-standing base-list entry.
             hit = self.storage.remove_adhoc_by_name(item.name)
             if hit is None:
                 hit = self.storage.deactivate_base_item_by_name(item.name)
-            (removed if hit else missing).append(hit or item.name)
+            if hit:
+                removed.append(hit)
+                continue
+            # Third drawer: a product the bot proposes on its own, learned
+            # from order history and never typed onto either list. Before
+            # this, "תוריד סימילאק" answered "not on the list" about an
+            # item plainly visible in the proposal the user was reading.
+            hit = self.storage.suppress_stock_item_by_name(item.name)
+            (suppressed if hit else missing).append(hit or item.name)
         parts = []
         if removed:
             parts.append("הורדתי: " + ", ".join(removed))
+        if suppressed:
+            # Say which list it came off, so "removed" is not mistaken for
+            # a change to the standing list the user maintains by hand.
+            parts.append("לא אציע יותר: " + ", ".join(suppressed))
         if missing:
             parts.append("לא מצאתי ברשימה: " + ", ".join(missing))
         await update.message.reply_text("\n".join(parts))

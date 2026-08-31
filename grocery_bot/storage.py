@@ -270,6 +270,11 @@ def is_public_promotion(description: str) -> bool:
     return not any(marker in text for marker in _UNUSABLE_MARKERS)
 
 
+# An explicit "stop suggesting this" outweighs any amount of past
+# buying. Large enough that history cannot out-vote the user, finite so a
+# genuine change of habit can still recover the item.
+_STOCK_SUPPRESS_WEIGHT = 50
+
 class Storage:
     def __init__(self, db_path: str):
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -583,6 +588,41 @@ class Storage:
                 "SELECT * FROM stock_items WHERE store = ? ORDER BY share DESC", (store,)
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def suppress_stock_item_by_name(self, name: str, store: str = "shufersal") -> str | None:
+        """Stop proposing a learned recurring product, by (fuzzy) name.
+
+        The third place a "תוריד X" can mean. The standing list and the
+        ad-hoc queue are things the user typed; this is a product the bot
+        *learned* from order history and proposes on its own. Asking to
+        remove one of those found nothing before this existed, because the
+        item was never on either typed list — which reads as the bot being
+        broken when it is in fact looking in the wrong drawer.
+
+        Implemented as a large skip rather than a delete: the nightly sync
+        rebuilds this table from real order history, so a deleted row would
+        quietly return. A skip count survives the rebuild and is already
+        what the proposal logic weighs.
+        """
+        needle = name.strip()
+        if not needle:
+            return None
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                "SELECT product_code, product_name FROM stock_items WHERE store = ? AND "
+                "(product_name = ? OR product_name LIKE ? OR ? LIKE '%' || product_name || '%') "
+                "ORDER BY LENGTH(product_name) LIMIT 1",
+                (store, needle, f"%{needle}%", needle),
+            ).fetchone()
+            if row is None:
+                return None
+            conn.execute(
+                "UPDATE stock_items SET skipped_count = skipped_count + ?, picked_count = 0 "
+                "WHERE store = ? AND product_code = ?",
+                (_STOCK_SUPPRESS_WEIGHT, store, row["product_code"]),
+            )
+            conn.commit()
+            return row["product_name"]
 
     def record_stock_feedback(self, store: str, picked: list[str], skipped: list[str]) -> None:
         """Remember which proposals the user kept and which they removed."""
