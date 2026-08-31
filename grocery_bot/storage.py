@@ -171,6 +171,34 @@ CREATE TABLE IF NOT EXISTS price_history (
     PRIMARY KEY (item_code, day)
 );
 
+-- Prices seen at a chain, keyed by the manufacturer's EAN barcode.
+--
+-- The barcode is what makes cross-chain comparison honest: the same
+-- carton of milk is 7290004131074 in both chains, so no Hebrew name
+-- matching is involved and there is nothing to get subtly wrong.
+--
+-- Shufersal prices are not duplicated here — they already live in
+-- catalog_products, whose item_code *is* the EAN. This table holds the
+-- chains that have no public feed, Tiv Taam today, whose prices we only
+-- learn by observing them.
+--
+-- observed_at matters and is never assumed to be today: a price taken
+-- from a July order is what the household paid in July, and comparing it
+-- against a live Shufersal price without saying so would be a lie
+-- dressed as a saving.
+CREATE TABLE IF NOT EXISTS store_prices (
+    store TEXT NOT NULL,
+    barcode TEXT NOT NULL,
+    name TEXT NOT NULL,
+    price REAL NOT NULL,
+    observed_at TEXT NOT NULL,     -- YYYY-MM-DD
+    source TEXT NOT NULL DEFAULT 'order',  -- order | search
+    PRIMARY KEY (store, barcode, observed_at)
+);
+
+CREATE INDEX IF NOT EXISTS idx_store_prices_barcode
+    ON store_prices(barcode);
+
 -- When orders were actually placed, to learn the household's cadence.
 -- Fed by the nightly sync from the store's own order history, so manual
 -- orders count too.
@@ -570,6 +598,63 @@ class Storage:
                 [(store, code) for code in skipped],
             )
             conn.commit()
+
+    # -- observed prices at chains without a public feed ---------------------
+
+    def record_store_prices(self, store: str, rows: list[dict]) -> int:
+        """Store observed prices. Rows need barcode, name, price, observed_at."""
+        with closing(self._connect()) as conn:
+            cur = conn.executemany(
+                "INSERT OR REPLACE INTO store_prices "
+                "(store, barcode, name, price, observed_at, source) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    (
+                        store,
+                        str(r["barcode"]),
+                        r.get("name", ""),
+                        float(r["price"]),
+                        r["observed_at"],
+                        r.get("source", "order"),
+                    )
+                    for r in rows
+                ],
+            )
+            conn.commit()
+            return cur.rowcount
+
+    def latest_store_price(self, store: str, barcode: str) -> dict | None:
+        """The most recently observed price for one barcode at one chain."""
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                "SELECT * FROM store_prices WHERE store = ? AND barcode = ? "
+                "ORDER BY observed_at DESC LIMIT 1",
+                (store, str(barcode)),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def latest_store_prices(self, store: str) -> dict[str, dict]:
+        """Newest price per barcode at one chain, keyed by barcode."""
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT p.* FROM store_prices p "
+                "JOIN (SELECT barcode, MAX(observed_at) AS observed_at "
+                "      FROM store_prices WHERE store = ? GROUP BY barcode) latest "
+                "  ON p.barcode = latest.barcode AND p.observed_at = latest.observed_at "
+                "WHERE p.store = ?",
+                (store, store),
+            ).fetchall()
+        return {row["barcode"]: dict(row) for row in rows}
+
+    def catalog_price(self, barcode: str) -> dict | None:
+        """Shufersal's price for a barcode — its item_code *is* the EAN."""
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                "SELECT item_code, name, price, unit_of_measure_price, unit_of_measure "
+                "FROM catalog_products WHERE item_code = ?",
+                (str(barcode),),
+            ).fetchone()
+        return dict(row) if row else None
 
     # -- proposals awaiting the user's ticks --------------------------------
 
