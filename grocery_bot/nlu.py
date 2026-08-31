@@ -377,3 +377,64 @@ def build_meal_plan(request: str = "", staples: list[str] | None = None) -> Meal
     if not meals and not ingredients:
         return None
     return MealPlan(meals=meals, ingredients=ingredients, note=str(payload.get("note") or "").strip())
+
+_RECIPE_TEXT_PROMPT = """אתה עוזר קניות. קיבלת טקסט של מתכון (ייתכן שהגיע מצילום מסך, אז ייתכנו שגיאות OCR, שורות קטועות או טקסט מיותר). החזר JSON בלבד:
+{"dish": "שם המנה", "ingredients": [{"name","amount","unit"}], "note": "הערה קצרה"}
+
+כללים:
+- לחלץ רק את רשימת המצרכים. להתעלם מהוראות הכנה, זמני בישול, טקסט פרסומי ותגובות.
+- אם שם המנה לא מופיע במפורש — להסיק אותו מהמצרכים.
+- שמות מוצרים כפי שמחפשים אותם בסופר בישראל, לא כפי שנכתבו במתכון
+  (למשל "קמח" -> "קמח לבן", "ביצה" -> "ביצים").
+- amount מספר או null, unit "גרם"/"קילו"/"יחידות"/"כפות"/"כוסות" או null.
+- עד 20 מצרכים. אם הטקסט אינו מתכון כלל — להחזיר ingredients ריק."""
+
+
+def extract_recipe_from_text(text: str) -> Recipe | None:
+    """Pull a buyable ingredient list out of raw recipe text.
+
+    Exists for the screenshot path: the household's other bot handles
+    images (that is its job — it already archives them), extracts the
+    text, and hands the text here. The split keeps image handling in one
+    place and grocery knowledge in another, and it also covers a recipe
+    simply pasted in as text.
+
+    OCR text is messy — broken lines, stray UI chrome, cooking
+    instructions mixed with quantities — so the prompt is told to expect
+    that rather than assuming clean input.
+    """
+    body = (text or "").strip()
+    if not body:
+        return None
+    try:
+        result = subprocess.run(
+            [_claude_cli(), "-p", f"{_RECIPE_TEXT_PROMPT}\n\nהטקסט:\n{body[:6000]}"],
+            capture_output=True,
+            text=True,
+            timeout=CLAUDE_TIMEOUT_SECONDS,
+            stdin=subprocess.DEVNULL,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr[:200])
+        payload = _extract_json(result.stdout)
+    except Exception:
+        logger.warning("Recipe extraction from text failed", exc_info=True)
+        return None
+
+    ingredients = [
+        ParsedItem(
+            name=str(raw.get("name") or "").strip(),
+            amount=_to_float(raw.get("amount")),
+            unit=str(raw.get("unit") or "").strip(),
+        )
+        for raw in (payload.get("ingredients") or [])
+        if isinstance(raw, dict) and str(raw.get("name") or "").strip()
+    ]
+    if not ingredients:
+        return None
+    return Recipe(
+        dish=str(payload.get("dish") or "מתכון").strip(),
+        ingredients=ingredients,
+        note=str(payload.get("note") or "").strip(),
+    )
+

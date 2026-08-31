@@ -106,3 +106,32 @@ class RemoveItemContractTests(unittest.TestCase):
         _run(["add-item", "חלב", "--by", "לירן"], self.db)
         result = _run(["remove-item", "חלב"], self.db)
         self.assertEqual(result.returncode, 0, result.stderr)
+
+
+class RecipeContractTests(unittest.TestCase):
+    """The recipe surface the household's other bot calls for Liran."""
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.db = str(Path(self._tmpdir.name) / "t.sqlite3")
+
+    def tearDown(self) -> None:
+        self._tmpdir.cleanup()
+
+    def test_recipe_without_a_dish_is_a_usage_error(self) -> None:
+        self.assertEqual(_run(["recipe"], self.db).returncode, 2)
+
+    def test_recipe_text_without_input_is_a_usage_error(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-m", "grocery_bot.cli", "recipe-text"],
+            cwd=PROJECT, input="", capture_output=True, text=True,
+            env={"GROCERY_BOT_DB_PATH": self.db, "PATH": os.environ.get("PATH", ""),
+                 "HOME": os.environ.get("HOME", "")},
+        )
+        self.assertEqual(result.returncode, 2)
+
+    def test_the_recipe_commands_need_no_telegram_token(self) -> None:
+        """Same boundary as add-item: no secret crosses to the other bot."""
+        for argv in (["recipe"], ["recipe-text"], ["meal-plan", "--preview"]):
+            result = _run(argv, self.db)
+            self.assertNotIn("TELEGRAM_BOT_TOKEN", result.stdout + result.stderr, argv)

@@ -13,6 +13,9 @@ Run with: python -m grocery_bot.cli <command>
                           (the integration point for the household's other bot)
     remove-item <text>    remove one item by fuzzy name ("תוריד חלב מהרשימה")
     list-items            print the pending shopping list, one per line
+    recipe <dish>         ingredients for a dish [--by NAME] [--all] [--preview]
+    recipe-text           same, from recipe text on stdin (OCR/screenshot/paste)
+    meal-plan [request]   weekly menu + its ingredients [--by NAME] [--all] [--preview]
 
 `refresh-prices` is the one meant for a scheduler — the feed publishes a
 new full snapshot a few times a day, and a stale catalog quietly gives
@@ -264,6 +267,128 @@ def _remove_item(storage: Storage, args: list[str]) -> int:
     return 0
 
 
+def _report_recipe(storage, recipe, args: list[str], header: str) -> int:
+    """Shared output for the recipe/meal-plan commands.
+
+    Adds only what the household probably lacks by default. Blindly
+    queueing flour and sugar for a kitchen that owns flour and sugar
+    recreates the delete-by-hand chore this project exists to remove —
+    the same reasoning as the Telegram preview, kept identical here so
+    both bots behave the same way.
+
+    --preview adds nothing, so the calling bot can show the split and
+    ask first; --all queues everything.
+    """
+    from .pantry import split_ingredients
+
+    requested_by = _flag(args, "--by") or "unknown"
+    preview = "--preview" in args
+    add_all = "--all" in args
+
+    missing, have = split_ingredients(storage, recipe.ingredients)
+    chosen = recipe.ingredients if add_all else missing
+
+    print(f"{header}: {recipe.dish}")
+    for item in chosen:
+        print(f"  + {item.name}" + (f" ({item.amount:g} {item.unit})" if item.amount and item.unit else ""))
+    for item in (have if not add_all else []):
+        print(f"  ~ {item.name} (כנראה יש)")
+    if recipe.note:
+        print(f"  note: {recipe.note}")
+
+    if preview:
+        print(f"preview only — nothing added ({len(chosen)} would be added)")
+        return 0
+
+    for item in chosen:
+        storage.add_adhoc_request(
+            text=item.name,
+            requested_by=f"{requested_by} (מתכון: {recipe.dish})",
+            amount=item.amount,
+            unit=item.unit,
+        )
+    skipped = len(recipe.ingredients) - len(chosen)
+    print(f"added {len(chosen)}" + (f", skipped {skipped} already at home" if skipped else ""))
+    return 0
+
+
+def _recipe(storage: Storage, args: list[str]) -> int:
+    from .nlu import expand_recipe
+
+    dish = " ".join(_positional(args)).strip()
+    if not dish:
+        print("usage: recipe <dish> [--by NAME] [--all] [--preview]")
+        return 2
+    recipe = expand_recipe(dish)
+    if recipe is None:
+        print(f"could not build ingredients for {dish!r}")
+        return 1
+    return _report_recipe(storage, recipe, args, "recipe")
+
+
+def _recipe_text(storage: Storage, args: list[str]) -> int:
+    """Ingredients from recipe text on stdin — the screenshot path.
+
+    Image handling stays with the bot that received the image; this end
+    takes the extracted text. That keeps OCR in one place and grocery
+    knowledge in another, and it works just as well for a pasted recipe.
+    """
+    from .nlu import extract_recipe_from_text
+
+    body = sys.stdin.read()
+    if not body.strip():
+        print("usage: recipe-text [--by NAME] [--all] [--preview]  < recipe.txt")
+        return 2
+    recipe = extract_recipe_from_text(body)
+    if recipe is None:
+        print("no ingredients found in that text")
+        return 1
+    return _report_recipe(storage, recipe, args, "recipe")
+
+
+def _meal_plan(storage: Storage, args: list[str]) -> int:
+    from .nlu import build_meal_plan
+
+    request = " ".join(_positional(args)).strip()
+    household = storage.get_state("household_context")
+    if household:
+        request = f"{request}. הרכב המשפחה: {household}" if request else f"הרכב המשפחה: {household}"
+    staples = [
+        row["product_name"]
+        for row in storage.list_stock_items("shufersal")
+        if row["tier"] in ("A", "B", "C")
+    ]
+    plan = build_meal_plan(request, staples)
+    if plan is None:
+        print("could not build a meal plan")
+        return 1
+    for day, dish in plan.meals:
+        print(f"  {day}: {dish}" if day else f"  {dish}")
+
+    from .nlu import Recipe
+
+    return _report_recipe(
+        storage,
+        Recipe(dish="תפריט שבועי", ingredients=plan.ingredients, note=plan.note),
+        args,
+        "meal plan",
+    )
+
+
+def _positional(args: list[str]) -> list[str]:
+    """Arguments that are not flags or flag values."""
+    words, skip = [], False
+    for argument in args:
+        if skip:
+            skip = False
+            continue
+        if argument.startswith("--"):
+            skip = argument in ("--by",)
+            continue
+        words.append(argument)
+    return words
+
+
 def _list_items(storage: Storage, args: list[str]) -> int:
     """Print the pending shopping list, one item per line.
 
@@ -283,6 +408,11 @@ _DB_ONLY_COMMANDS = {
     "add-item": lambda storage, args: _add_item(storage, args),
     "remove-item": _remove_item,
     "list-items": _list_items,
+    # Recipes and meal plans need the model, not the store, so they stay
+    # on the token-free path the other bot already calls.
+    "recipe": _recipe,
+    "recipe-text": _recipe_text,
+    "meal-plan": _meal_plan,
 }
 
 
