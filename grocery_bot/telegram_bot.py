@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 
 from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
@@ -59,6 +60,45 @@ EXIT_POLL_SECONDS = 120
 # view and the place the purchase is completed by hand, so the bot points
 # at it rather than trying to reproduce it.
 SHUFERSAL_CART_URL = "https://www.shufersal.co.il/online/he/cart/cartsummary"
+
+# The bot's waiting lines have a character: "גורדון" — Gordon Ramsay in the
+# kitchen, clipped and impatient (household's choice, 2026-08-31; the
+# family's other bots got their own — see the familyos project). This is
+# surface only: it governs how a "hold on" line is phrased and nothing
+# else. No parsing, no list logic, no store behaviour depends on it.
+#
+# First person throughout, deliberately: the household is two people and a
+# second-person Hebrew line would have to pick a gender and would be wrong
+# for one of them half the time.
+GORDON_THINKING = [
+    "🔪 רגע, בודק במזווה.",
+    "🍳 שנייה, אני על זה!",
+    "🥬 בודק מה חסר.",
+    "🛒 עובר על העגלה.",
+    "🔥 רגע אחד, כבר מטפל.",
+    "🧑\u200d🍳 שנייה, מארגן את התחנה.",
+    "📝 רושם את ההזמנה.",
+    "⏱️ זה ייקח שנייה. לא יותר.",
+    "🔪 עובד על זה. לא עומד בטל.",
+    "🍽️ שנייה, מסדר את השירות.",
+]
+
+# A shuffled cycle rather than random.choice: with ten lines and plain
+# random, the same one repeats back-to-back often enough to read as a bug.
+# Every line appears once before any of them comes round again.
+_thinking_bag: list[str] = []
+
+
+def gordon_thinking() -> str:
+    """A generic 'hold on' line, in Gordon's voice.
+
+    Surface only. Nothing here is ever the vehicle for a number, an item
+    name or a result — the character phrases the wait, never the answer.
+    """
+    global _thinking_bag
+    if not _thinking_bag:
+        _thinking_bag = random.sample(GORDON_THINKING, len(GORDON_THINKING))
+    return _thinking_bag.pop()
 
 
 def _describe_parsed(item: ParsedItem) -> str:
@@ -228,7 +268,7 @@ class GroceryBot:
         """/refresh_prices — re-download the branch's price + promo snapshot."""
         if not _authorized(self.config, update):
             return
-        await update.message.reply_text("מרענן מחירים ומבצעים מהפיד הציבורי, רגע...")
+        await update.message.reply_text("🔥 מושך מחירים ומבצעים מהפיד. שנייה.")
         try:
             meta = await asyncio.to_thread(
                 refresh_catalog, self.storage, self.config.shufersal_price_store_id
@@ -303,7 +343,7 @@ class GroceryBot:
         # broke — which is exactly what happened.
         notice = await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text="🧮 מכין את הדייג'סט — בודק מבצעים, חלופות ומחירים. כמה שניות…",
+            text="🔪 מכין את הדייג'סט — מבצעים, חלופות, מחירים. שנייה.",
         )
         try:
             await self._send_digest(update.effective_chat.id, context)
@@ -608,7 +648,7 @@ class GroceryBot:
             skipped=[i["product_code"] for i in items if not i["selected"]],
         )
         self.storage.close_proposal(proposal_id)
-        await query.edit_message_text(f"מתחיל למלא {len(chosen)} פריטים…")
+        await query.edit_message_text(f"📝 {len(chosen)} פריטים לסל. מתחיל.")
 
         factories = _build_adapter_factories(self.config)
         if not factories:
@@ -652,7 +692,7 @@ class GroceryBot:
 
         terms = [(item.name, int(item.amount or 1)) for item in parsed.items]
         names = ", ".join(item.name for item in parsed.items)
-        await update.message.reply_text(f"מוסיף לסל: {names}…")
+        await update.message.reply_text(f"🔥 ממלא את הסל: {names}. לא זז מפה.")
         try:
             reports = await asyncio.to_thread(
                 add_terms_to_cart, self.storage, factories, terms
@@ -755,7 +795,7 @@ class GroceryBot:
         if not dish:
             await update.message.reply_text("מתכון למה?")
             return
-        await update.message.reply_text(f"בונה רשימת מצרכים ל{dish}, רגע...")
+        await update.message.reply_text(f"🧑\u200d🍳 בונה רשימת מצרכים ל{dish}. שנייה, אני על זה.")
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
         recipe = await asyncio.to_thread(expand_recipe, dish)
         if recipe is None:
@@ -875,7 +915,7 @@ class GroceryBot:
             logger.debug("recipe edit failed", exc_info=True)
 
     async def _do_meal_plan(self, update, context, parsed, requested_by: str) -> None:
-        await update.message.reply_text("בונה תפריט שבועי ורשימת קניות, זה ייקח כמה שניות...")
+        await update.message.reply_text("🍳 בונה תפריט שבועי ורשימת קניות. כמה שניות, לא זז.")
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
         store = (self.config.enabled_stores or ["shufersal"])[0]
         staples = [
@@ -959,7 +999,7 @@ class GroceryBot:
         """
         loop = asyncio.get_running_loop()
         view = await context.bot.send_message(
-            chat_id=chat_id, text="🛒 *מתחיל למלא את העגלה…*", parse_mode="Markdown"
+            chat_id=chat_id, text="🍳 *מתחיל למלא את העגלה. עין על התחנה.*", parse_mode="Markdown"
         )
         # Pinning keeps it reachable during a long run; not every chat
         # allows it, and failing to pin must not abort the shop.
@@ -1011,7 +1051,7 @@ class GroceryBot:
         """Fill the cart with an explicit list, showing the same live view."""
         loop = asyncio.get_running_loop()
         view = await context.bot.send_message(
-            chat_id=chat_id, text="🛒 *מתחיל למלא את העגלה…*", parse_mode="Markdown"
+            chat_id=chat_id, text="🍳 *מתחיל למלא את העגלה. עין על התחנה.*", parse_mode="Markdown"
         )
         collected: list = []
         last_edit = 0.0
