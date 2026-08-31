@@ -85,6 +85,27 @@ written `6*330 מ"ל`; 349 of 5,807 products contain one, and one is
 enough for Telegram to reject an entire message. Escape store text
 before it enters Markdown (`mdtext.escape`).
 
+
+**"Forbidden" can mean "you forgot a parameter".** Self-Point's products
+endpoint refuses every plain query with `{"error":"Forbidden"}`, which
+reads like a permissions wall and sent us looking for a login that was
+never needed. It wants an Elasticsearch-shaped `filters` argument and
+rejects anything else. Given one it takes a whole *list* of barcodes and
+answers in a single unauthenticated call. Before concluding an endpoint
+is gated, get its real parameters from the site's own traffic.
+
+**The order summary omits the numbers the order detail has.** Tiv Taam's
+order list carries payment method ids with no amounts, so totalling
+benefits from it reports zero for every scheme and reads convincingly as
+"the card was never used". The amounts exist only in the order detail,
+under `secondaryPayments`.
+
+**A second chain may be the same platform as the first.** Tiv Taam and
+Victory both run on Self-Point; recognising that turned a second adapter
+into a row in a registry. Cloudflare's own block page named the origin
+(`self-point.com`) when the site itself would not load — worth reading
+the error page rather than only its status code.
+
 ## 4. Behaviour to copy, not just code
 
 - **Fail closed on access.** An empty allowlist denies everyone.
