@@ -45,7 +45,16 @@ DEFAULT_STATE_PATH = Path("data/sessions/tivtaam_storage_state.json")
 # Fields in an order payload that carry card data. Stripped before anything
 # reaches the database or a log line — the account holds real money and the
 # household's card is not ours to hold.
-_PAYMENT_SECRET_FIELDS = ("paymentToken", "cardToken", "creditCard", "sessionCD")
+_PAYMENT_SECRET_FIELDS = (
+    "paymentToken",
+    "cardToken",
+    "creditCard",
+    "creditCards",
+    "paypalAccounts",
+    "ebtCards",
+    "sessionCD",
+    "lastFourDigits",
+)
 
 
 class TivTaamAuthError(RuntimeError):
@@ -135,8 +144,12 @@ class TivTaamApi:
 
     # -- plumbing ---------------------------------------------------------
 
-    def get(self, path: str, **params) -> Any:
-        url = f"{API_BASE}/v2/retailers/{RETAILER_ID}/{path.lstrip('/')}"
+    def get(self, path: str, version: str = "v2", **params) -> Any:
+        # Self-Point never finished migrating: the account profile and the
+        # loyalty ledger are still v1 routes, and asking for them under /v2
+        # answers a bland "Bad request" rather than a 404.
+        prefix = f"/{version}" if version else ""
+        url = f"{API_BASE}{prefix}/retailers/{RETAILER_ID}/{path.lstrip('/')}"
         params = {"appId": APP_ID, "token": self.session.token, **params}
         response = self._http.get(url, params=params, timeout=self.timeout)
         # The API answers 200 with an error body as often as it uses a status
@@ -176,9 +189,31 @@ class TivTaamApi:
         )
         return strip_payment(payload)
 
+    def profile(self) -> dict:
+        """Account profile: club membership, area, contact details.
+
+        A v1 route — under /v2 it answers "Bad request", not 404. Read only;
+        nothing here is ever written back (see CLAUDE.md).
+        """
+        payload = strip_payment(self.get(f"users/{self.session.user_id}", version=""))
+        return payload[0] if isinstance(payload, list) else payload
+
     def coupons(self) -> list:
         """Coupons currently offered to this household."""
         return self.get(f"branches/{BRANCH_ID}/users/{self.session.user_id}/coupons")
+
+    def smart_list(self) -> dict:
+        """Tiv Taam's own "what this household usually buys".
+
+        Worth preferring over anything we derive: it ships
+        ``purchaseFrequencyDays`` and ``ordersNumber`` per product, computed
+        from in-store purchases too, not only the online orders we can see.
+        """
+        return self.get(f"branches/{BRANCH_ID}/users/{self.session.user_id}/smart-list")
+
+    def shop_lists(self) -> dict:
+        """The household's saved shopping lists."""
+        return self.get(f"users/{self.session.user_id}/shopLists", version="")
 
     def is_alive(self) -> bool:
         """Cheap check that the stored session is still accepted."""
