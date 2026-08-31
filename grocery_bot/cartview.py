@@ -128,6 +128,10 @@ def render_final(results: list, cart: dict | None, when: datetime | None = None)
         # estimate off as the total.
         lines.append("_לא הצלחתי לקרוא את הסל באתר, אז זו הערכה בלבד._")
 
+    # The hand-off matters as much as the list: this is the moment the
+    # user switches to the store's app, and without saying so explicitly
+    # they are left guessing whether anything else is expected of them.
     lines.append("")
+    lines.append("*מה עכשיו:* להיכנס לשופרסל, לעבור על הסל, ולשלם.")
     lines.append("⚠️ _לא בוצעה קנייה — הסל מוכן לבדיקה ותשלום שלך._")
     return "\n".join(lines)

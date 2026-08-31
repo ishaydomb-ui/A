@@ -1018,7 +1018,9 @@ class GroceryBot:
         """
         loop = asyncio.get_running_loop()
         view = await context.bot.send_message(
-            chat_id=chat_id, text="🍳 *מתחיל למלא את העגלה. עין על התחנה.*", parse_mode="Markdown"
+            chat_id=chat_id,
+            text="🍳 *מאתר את כל המוצרים ברשת — כ-40 שניות, ואז מתחיל למלא.*",
+            parse_mode="Markdown",
         )
         # Pinning keeps it reachable during a long run; not every chat
         # allows it, and failing to pin must not abort the shop.
@@ -1070,7 +1072,9 @@ class GroceryBot:
         """Fill the cart with an explicit list, showing the same live view."""
         loop = asyncio.get_running_loop()
         view = await context.bot.send_message(
-            chat_id=chat_id, text="🍳 *מתחיל למלא את העגלה. עין על התחנה.*", parse_mode="Markdown"
+            chat_id=chat_id,
+            text="🍳 *מאתר את כל המוצרים ברשת — כ-40 שניות, ואז מתחיל למלא.*",
+            parse_mode="Markdown",
         )
         collected: list = []
         last_edit = 0.0
@@ -1120,6 +1124,32 @@ class GroceryBot:
             )
         except Exception:
             logger.exception("Could not render the final cart view")
+        # Stock-up deals belong here, not buried in an earlier message:
+        # this is the moment before the user opens the store and pays,
+        # which is the only moment "worth grabbing while you are there"
+        # can still be acted on.
+        await self._send_stockup_hint(chat_id, context)
+
+    async def _send_stockup_hint(self, chat_id, context) -> None:
+        try:
+            deals = await asyncio.to_thread(find_stockup_deals, self.storage)
+        except Exception:
+            logger.debug("stock-up hint failed", exc_info=True)
+            return
+        if not deals:
+            return
+        from .mdtext import escape as _md
+
+        lines = ["📦 *לפני שמשלמים — שווה לאגור:*"]
+        for deal in deals[:3]:
+            mark = "🧺 " if deal.pantryable else ""
+            lines.append(
+                f"• {mark}{_md(deal.catalog_name)} — *{deal.deal_price:.2f}₪* "
+                f"(במקום {deal.shelf_price:.2f}) −{deal.discount * 100:.0f}%"
+            )
+        lines.append("")
+        lines.append("_לא נוסף לסל — להוסיף באפליקציה אם רלוונטי._")
+        await _send_markdown(context, chat_id, "\n".join(lines))
 
     def _read_cart(self, factories) -> dict | None:
         """Read the authoritative cart total, if the store is reachable."""
