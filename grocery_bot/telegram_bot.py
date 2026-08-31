@@ -196,8 +196,27 @@ def _department_buttons(proposal_id: int, dept_index: int, rows: list[dict]):
 
 
 def _authorized(config: Config, update: Update) -> bool:
+    """Only the household may drive this bot.
+
+    Fails CLOSED when no allowlist is configured. The previous default
+    was the opposite — an empty list meant "allow everyone", annotated
+    "fine for a private single-user bot" — and that assumption was wrong
+    in a way worth spelling out: the bot has a public @username anyone
+    can find, and it does not merely answer questions. It reads the
+    household's shopping list and routines, and /start_order fills a
+    real cart on a real Shufersal account.
+
+    An open default fails silently and invisibly; a closed one fails
+    loudly and locally, and is trivially fixed by setting
+    ALLOWED_TELEGRAM_USER_IDS. That is the correct direction for the
+    mistake to point.
+    """
     if not config.allowed_telegram_user_ids:
-        return True  # no allowlist configured -> open (fine for a private single-user bot)
+        logger.error(
+            "ALLOWED_TELEGRAM_USER_IDS is empty — refusing every request. "
+            "Set it to the household's Telegram user ids in .env."
+        )
+        return False
     user = update.effective_user
     return user is not None and user.id in config.allowed_telegram_user_ids
 
