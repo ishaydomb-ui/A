@@ -61,10 +61,11 @@ regardless of how the request is framed.
 
 ### What a logged-in store session may and may not touch
 
-Set explicitly by the user (2026-08-31) when adding a second chain, and
-applying to **every** store account this project holds — Shufersal, Tiv
-Taam, and any added later. The account belongs to a real household with
-real money in it; the automation is a guest in it.
+**One rule for every chain — Shufersal, Tiv Taam and any added later.**
+There are deliberately no per-store exceptions: a boundary that differs
+by chain is a boundary nobody can remember correctly. Set explicitly by
+the user (2026-08-31, while adding the second chain). The account holds
+a real household's money; the automation is a guest in it.
 
 **Allowed:** searching the catalogue, reading price and promotion data,
 reading the household's own order history and saved lists, adding and
@@ -88,6 +89,17 @@ discount or a club benefit.
 When something genuinely requires one of these, stop and say so. A
 blocked step reported honestly is always the right outcome; working
 around it is not.
+
+## Adding another chain
+
+Read [`docs/ADDING_A_STORE.md`](./docs/ADDING_A_STORE.md) first. It lists
+what is already store-agnostic (most of it — every table carries a
+`store` column), and every trap Shufersal cost us: geo-blocks that
+return HTTP 200, a "success" that is really the homepage, endpoints that
+recommend rather than match, quantity units that differ by selling
+method, in-cart tiles that hide their add button, and asterisks in
+product names that break Telegram messages. Each entry is a bug that
+actually happened, not a precaution.
 
 ## Known open issues (as of 2026-08-29)
 
