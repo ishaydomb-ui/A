@@ -99,6 +99,25 @@ RESULTS_TIMEOUT_MS = 30_000
 MAX_CANDIDATES = 5
 
 
+def _plausible_match(term: str, name: str) -> bool:
+    """Does a returned product actually resemble what was asked for?
+
+    Word overlap rather than fuzzy scoring: product names here are short
+    and the failure being guarded against is gross ("חלב" for a nonsense
+    phrase), not subtle. One shared meaningful word is enough — "קוטג'
+    5% שומן" against "קוטג' 5% שומן תנובה" must pass — while an unrelated
+    recommendation shares none.
+    """
+    import re
+
+    def words(text: str) -> set[str]:
+        cleaned = re.sub(r"[^\w\u0590-\u05FF ]", " ", text or "")
+        return {w for w in cleaned.split() if len(w) >= 2}
+
+    asked, got = words(term), words(name)
+    return bool(asked & got) if asked else True
+
+
 class ShufersalAdapter(StoreAdapter):
     name = "shufersal"
 
@@ -302,6 +321,99 @@ class ShufersalAdapter(StoreAdapter):
         except Exception:
             logger.exception("Shufersal: failed to remove %r from cart", product_code)
             return False
+
+    def bulk_match(self, terms: list[str]) -> dict:
+        """Resolve many product names at once via the store's own matcher.
+
+        This is the endpoint behind "הזמנה מהירה" (the paste-a-list box).
+        It answers the whole list in one request, ranked by this
+        household's purchase history, and returns stock status per hit —
+        89 real terms resolved in 42s against roughly fifteen minutes of
+        one-search-per-item, because each of those searches was a full
+        page load through a phone-tethered proxy.
+
+        Two details it took a while to get right: the call needs the
+        page's CSRF header (without it the server answers 200 with the
+        homepage rather than an error, which reads like success), and it
+        must run in the page context so the session cookies come along.
+
+        Returns {term: {"code","name","in_stock","price"}} for terms that
+        matched. Never raises — a failure here should fall back to
+        ordinary per-item search, not abort a shop.
+        """
+        if not terms:
+            return {}
+        try:
+            self._page.goto(BASE_URL + "/online/he/", wait_until="domcontentloaded", timeout=60_000)
+            self._page.wait_for_timeout(1_500)
+            raw = self._page.evaluate(
+                """async (terms) => {
+                    const hdr = document.querySelector('meta[name=_csrf_header]')?.content || 'CSRFToken';
+                    const tok = document.querySelector('meta[name=_csrf]')?.content || '';
+                    const h = {'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'};
+                    h[hdr] = tok;
+                    const r = await fetch('/online/he/search/multi/results', {
+                        method:'POST', credentials:'include', headers:h,
+                        body: JSON.stringify(terms)});
+                    if (!r.ok) return null;
+                    if (!(r.headers.get('content-type')||'').includes('json')) return null;
+                    return await r.text();
+                }""",
+                terms,
+            )
+            if not raw:
+                logger.info("Bulk match unavailable; falling back to per-item search")
+                return {}
+            import json as _json
+
+            payload = _json.loads(raw)
+        except Exception:
+            logger.exception("Bulk match failed; falling back to per-item search")
+            return {}
+
+        matched = {}
+        for term, entry in (payload or {}).items():
+            results = (entry or {}).get("results") or []
+            if not results:
+                continue
+            # Prefer an in-stock hit: the top match is sometimes a
+            # delisted product, and queueing something unbuyable wastes a
+            # slot the user only discovers at checkout.
+            best = next(
+                (
+                    r
+                    for r in results
+                    if ((r.get("stock") or {}).get("stockLevelStatus") or {}).get("code")
+                    == "inStock"
+                ),
+                results[0],
+            )
+            # The endpoint is a recommender, not an exact matcher: it
+            # always answers with *something*. Asked for a deliberately
+            # nonsense product it confidently returned milk. Unguarded
+            # that silently drops the wrong item in the cart, so a hit is
+            # only trusted when it actually resembles what was asked.
+            if not _plausible_match(term, best.get("name", "")):
+                logger.info(
+                    "Bulk match for %r returned unrelated %r; ignoring",
+                    term,
+                    best.get("name", ""),
+                )
+                continue
+            price = None
+            for key in ("price", "basePrice"):
+                value = (best.get(key) or {}).get("value") if isinstance(best.get(key), dict) else None
+                if value:
+                    price = value
+                    break
+            matched[term] = {
+                "code": best.get("code", ""),
+                "name": best.get("name", ""),
+                "in_stock": ((best.get("stock") or {}).get("stockLevelStatus") or {}).get("code")
+                == "inStock",
+                "price": price,
+            }
+        return matched
 
     def cart_summary(self) -> dict:
         """Read the real cart: line items and the price actually payable.
