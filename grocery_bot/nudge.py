@@ -39,6 +39,13 @@ DUE_AFTER_DAYS = 6
 # a reminder becomes noise.
 QUIET_PERIOD_DAYS = 3
 
+# Deliberately no reply marker. One was built for the delivering bot to
+# match replies against, then removed: that bot routes replies by intent
+# instead, so nothing consumed it and it was a visible hashtag in a
+# family group serving no purpose. Routing by intent is also better —
+# a reply works whether or not a nudge was ever sent, with no state
+# linking the two.
+
 
 @dataclass(frozen=True)
 class NudgeDecision:
