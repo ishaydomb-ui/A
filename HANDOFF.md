@@ -6,7 +6,7 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-01 11:42 (Asia/Jerusalem host time)
+**Last anchored:** 2026-09-01 14:45 (Asia/Jerusalem host time)
 **Conversation id:** `df559a44-e7ec-4e8f-9462-046d0a364d36`
 **Branch:** `claude/online-grocery-automation-b7pq4g`
 
@@ -40,6 +40,14 @@ with HTTP 200, which reads like broken selectors.
 
 Nothing is half-built. The last completed pieces, newest first:
 
+- Eight chains priced by barcode; five new ones from the transparency
+  portal. `whereto` answers "where should the whole shop go this week".
+- `nudge` — the six-day message: reminder, free-text reply, card
+  question, ten deals and a link to twenty more.
+- `threshold` — the ₪599 gift and one-short multi-buys, checked before
+  the hand-off to pay.
+- `habits` — one consumption rate per product across chains.
+- `waste`, `shelflife`, `pricecontrol`, `smartlist`, `hotdeals`.
 - Backup monitoring — heartbeat, freshness doctor, `OnFailure=` alerts,
   all-clear on recovery. Verified end to end.
 - `shelflife.py` — when cupboard staples are actually due again.
@@ -50,6 +58,11 @@ Nothing is half-built. The last completed pieces, newest first:
 
 ## 3. Blocked, and on what
 
+- **Victory storefront is Cloudflare-blocked** from this exit as of
+  2026-09-01 12:42 — `victoryonline.co.il` returns 403 while Tiv Taam and
+  `api.self-point.com` stay fine. Likely provoked by my own automated
+  loads. **Victory prices still work**, because they come from the API.
+  Credentials are stored; retry the login later or from another exit.
 - **Victory account login.** Needs the same manual noVNC flow as Tiv Taam
   (checkbox reCAPTCHA). The user could not reach
   `http://localhost:6080/vnc.html` from the phone — the stack is running
