@@ -337,6 +337,23 @@ class GroceryBot:
             hotdeals.format_extended(deals), parse_mode="Markdown"
         )
 
+    async def on_chain_deals_button(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """The button under /stockup — cross-chain deals, one tap."""
+        query = update.callback_query
+        if not _authorized(self.config, update):
+            await query.answer()
+            return
+        await query.answer()
+        relevant, exceptional = await asyncio.to_thread(hotdeals.find, self.storage)
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=hotdeals.format_deals(relevant, exceptional)
+            or "אין כרגע מבצעים חריגים ברשתות האחרות.",
+            parse_mode="Markdown",
+        )
+
     async def chain_deals(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/chaindeals — the same products, priced at every other chain.
 
@@ -603,10 +620,16 @@ class GroceryBot:
             return
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
         deals = await asyncio.to_thread(find_stockup_deals, self.storage)
+        # A callback button, not a deep link: a t.me link tapped from
+        # inside this chat sends a bare /start and looks broken.
         await update.message.reply_text(
-            format_stockup_deals(deals, self.config.bot_username),
+            format_stockup_deals(deals),
             parse_mode="Markdown",
-            disable_web_page_preview=True,
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton(
+                    "🔎 מבצעים מרשתות אחרות", callback_data="chaindeals"
+                )]]
+            ),
         )
 
 
@@ -1711,6 +1734,9 @@ def build_application(config: Config, storage: Storage) -> Application:
     )
     application.add_handler(
         CallbackQueryHandler(bot.on_recipe_button, pattern=r"^(rcpall|rcpmiss|rcpno):")
+    )
+    application.add_handler(
+        CallbackQueryHandler(bot.on_chain_deals_button, pattern=r"^chaindeals$")
     )
     application.add_handler(
         CallbackQueryHandler(bot.on_card_button, pattern=r"^cardok$")

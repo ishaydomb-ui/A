@@ -93,6 +93,7 @@ def find_stockup_deals(storage: Storage, store: str = "shufersal") -> list[Stock
 
 
 def format_stockup_deals(deals: list[StockUpDeal], bot_username: str = "") -> str:
+    """`bot_username` is accepted and unused; see the note about deep links."""
     if not deals:
         return (
             "אין כרגע מבצעים חריגים (25%+ הנחה) על מוצרים שאתם קונים. "
@@ -111,12 +112,8 @@ def format_stockup_deals(deals: list[StockUpDeal], bot_username: str = "") -> st
             f"(-{deal.discount * 100:.0f}%) — {deal.description}"
         )
     lines += ["", "_🧺 = נשמר בארון; שווה לקנות מראש. כלום לא נוסף לסל אוטומטית._"]
-    if bot_username:
-        # This list is Shufersal only, by construction — it is built from
-        # that chain's feed. The cross-chain deals are a different search
-        # with a different bar, so they get their own link rather than
-        # being merged in and diluting both.
-        lines.append(
-            f"[מבצעים מרשתות אחרות](https://t.me/{bot_username}?start=chaindeals)"
-        )
+    # No link here. A t.me deep link tapped from inside the bot's own chat
+    # sends a bare /start with the payload stripped, so it appears to do
+    # nothing — which is exactly what happened. The cross-chain list is
+    # offered as a button on the message instead; see telegram_bot.stockup.
     return "\n".join(lines)

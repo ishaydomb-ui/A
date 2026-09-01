@@ -94,15 +94,21 @@ class StockupLinksToOtherChainsTest(unittest.TestCase):
             deal_price=10.0, description="d", pantryable=True,
         )
 
-    def test_it_offers_a_link_to_the_other_chains(self):
+    def test_the_message_carries_no_deep_link(self):
+        # A t.me deep link tapped from inside the bot's own chat sends a
+        # bare /start with the payload stripped, so it looks broken and
+        # does nothing. The cross-chain list is a button on the message
+        # instead.
         text = radar.format_stockup_deals([self._deal()], "TestBot")
-        self.assertIn("מרשתות אחרות", text)
-        self.assertIn("start=chaindeals", text)
-
-    def test_no_link_when_no_bot_username_is_configured(self):
-        # A half-built link is worse than none: it looks tappable.
-        text = radar.format_stockup_deals([self._deal()], "")
         self.assertNotIn("t.me", text)
+        self.assertNotIn("start=chaindeals", text)
+
+    def test_the_button_is_attached_by_the_bot_not_the_formatter(self):
+        import pathlib as _p
+
+        source = _p.Path("grocery_bot/telegram_bot.py").read_text()
+        self.assertIn('callback_data="chaindeals"', source)
+        self.assertIn("on_chain_deals_button", source)
 
     def test_the_two_lists_stay_separate(self):
         # /stockup answers "what is unusually cheap where I shop";
