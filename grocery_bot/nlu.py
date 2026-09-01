@@ -44,6 +44,7 @@ INTENTS = {
     "meal_plan",
     "start_order",
     "add_to_cart",
+    "report_waste",
     "smalltalk",
     "unclear",
 }
@@ -51,7 +52,7 @@ INTENTS = {
 _SYSTEM_PROMPT = """אתה מנתח הודעות של בוט קניות משפחתי בעברית. החזר JSON בלבד, בלי טקסט נוסף ובלי הסברים.
 
 שדות:
-- intent: אחד מ- add_item | remove_item | price_query | deals | show_list | recipe | meal_plan | start_order | add_to_cart | smalltalk | unclear
+- intent: אחד מ- add_item | remove_item | price_query | deals | show_list | recipe | meal_plan | start_order | add_to_cart | report_waste | smalltalk | unclear
 - items: מערך של {"name","amount","unit","brand"} — רק שם המוצר עצמו, בלי פעלים כמו "תוסיף"/"תוריד"/"צריך".
   amount = מספר או null. unit = "גרם"/"קילו"/"יחידות"/"ליטר" או null. brand = שם יצרן אם צוין, אחרת null.
 - query: מחרוזת חיפוש (ל-price_query, ל-recipe שם המנה, ל-meal_plan תיאור)
@@ -62,6 +63,10 @@ _SYSTEM_PROMPT = """אתה מנתח הודעות של בוט קניות משפח
 - גם "תוסיף מה שצריך ל<מנה>" / "מה צריך בשביל <מנה>" / "תכין רשימה ל<מנה>" => intent=recipe.
   לעולם לא לפרק מנה למרכיבים בעצמך בתוך items — הפירוק קורה בשלב נפרד עם אישור המשתמש.
 - "תכנן לי שבוע" / "תפריט שבועי" => intent=meal_plan.
+- "זרקתי..." / "נזרק..." / "התקלקל..." / "נשאר ולא אכלנו..." => intent=report_waste.
+  כל פריט שנזרק הוא item. חשוב: זה דיווח על בזבוז, לא בקשה להוסיף או להסיר —
+  אסור להוסיף את הפריטים לרשימה. אם נאמרה כמות ("חצי", "הכל", "קצת") השאירו
+  אותה בטקסט של הפריט.
 - מילה בודדת חסרת הקשר או הודעה לא מובנת (למשל "מה") => intent=unclear. עדיף unclear מאשר לנחש.
 - "כמה עולה X" / "מחיר של X" / "יש מבצע על X" => price_query.
 - "מה יש במבצע" => deals. "מה יש ברשימה" / "תראה לי את הרשימה" => show_list.

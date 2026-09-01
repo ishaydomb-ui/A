@@ -204,6 +204,19 @@ CREATE TABLE IF NOT EXISTS store_prices (
 CREATE INDEX IF NOT EXISTS idx_store_prices_barcode
     ON store_prices(barcode);
 
+-- What the household reported throwing away. The only signal here that
+-- cannot be derived from any store: order history shows what was bought,
+-- never what was eaten.
+CREATE TABLE IF NOT EXISTS waste_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_name TEXT NOT NULL,
+    fraction REAL NOT NULL DEFAULT 0.5,
+    reported_on TEXT NOT NULL,     -- YYYY-MM-DD
+    reported_by TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_waste_item ON waste_reports(item_name);
+
 -- When each product was last actually bought. Separate from stock_items
 -- because that table is rebuilt wholesale on every nightly sync, and a
 -- purchase date stored there would be thrown away with it.
@@ -608,6 +621,33 @@ class Storage:
                 "SELECT * FROM stock_items WHERE store = ? ORDER BY share DESC", (store,)
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def record_waste(self, rows: list[tuple]) -> int:
+        """Store waste reports: (item_name, fraction, reported_on, by)."""
+        with closing(self._connect()) as conn:
+            cur = conn.executemany(
+                "INSERT INTO waste_reports (item_name, fraction, reported_on, "
+                "reported_by) VALUES (?, ?, ?, ?)",
+                rows,
+            )
+            conn.commit()
+            return cur.rowcount
+
+    def waste_summary(self) -> dict:
+        """item_name -> (number of reports, total fraction wasted)."""
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT item_name, COUNT(*) AS reports, SUM(fraction) AS total "
+                "FROM waste_reports GROUP BY item_name"
+            ).fetchall()
+        return {r["item_name"]: (r["reports"], float(r["total"] or 0)) for r in rows}
+
+    def recent_waste(self, limit: int = 20) -> list[dict]:
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT * FROM waste_reports ORDER BY id DESC LIMIT ?", (limit,)
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     def record_last_purchase(self, store: str, entries: list[tuple[str, str]]) -> int:
         """Remember when each product was last actually bought.

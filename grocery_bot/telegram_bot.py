@@ -19,7 +19,7 @@ from telegram.ext import (
     filters,
 )
 
-from . import ask
+from . import ask, waste
 from .adapters.base import StoreAdapter
 from .adapters.shufersal import ShufersalAdapter
 from .catalog import (
@@ -365,6 +365,7 @@ class GroceryBot:
             "meal_plan": self._do_meal_plan,
             "start_order": self._do_start_order,
             "add_to_cart": self._do_add_to_cart,
+            "report_waste": self._do_report_waste,
         }.get(parsed.intent)
 
         if handler is None:  # unclear / smalltalk
@@ -766,6 +767,27 @@ class GroceryBot:
             text=render_final(results, cart),
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(buttons),
+        )
+
+    async def _do_report_waste(self, update, context, parsed, requested_by: str) -> None:
+        """Record what was thrown away. Never comments on the waste itself.
+
+        The household agreed to report this only because it costs one line
+        of free text; a reply that moralises would end the supply of data
+        immediately.
+        """
+        raw = update.message.text or ""
+        items = [
+            (item.name, waste.fraction_for(f"{item.name} {raw}"))
+            for item in parsed.items
+            if item.name
+        ]
+        if items:
+            await asyncio.to_thread(
+                waste.record, self.storage, items, requested_by
+            )
+        await update.message.reply_text(
+            waste.acknowledge(items), parse_mode="Markdown"
         )
 
     async def _do_add(self, update, context, parsed, requested_by: str) -> None:
