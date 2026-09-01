@@ -241,3 +241,32 @@ def staleness_days(comparison: BasketComparison, today: date | None = None) -> i
     except ValueError:
         return None
     return ((today or date.today()) - observed).days
+
+# Selling methods whose quantity arrives in grams rather than as a count.
+# This is the single most expensive mistake available in this codebase:
+# reading 1000 grams of grapes as 1000 packets turned a ₪19.90 line into
+# ₪19,900 and a ₪575 basket into ₪28,187. BY_PACKAGE is the one that gets
+# forgotten — it is not BY_WEIGHT, but it is still grams.
+GRAM_SELLING_METHODS = {"BY_WEIGHT", "BY_PACKAGE"}
+
+
+def selling_method(product: dict) -> str:
+    """The selling method code, whatever shape the payload uses."""
+    method = product.get("sellingMethod")
+    if isinstance(method, dict):
+        return method.get("code", "") or ""
+    return str(method or "")
+
+
+def units_bought(entry: dict) -> float:
+    """How many priced units a line represents.
+
+    For a counted product that is the quantity. For anything sold by
+    weight or by package it is grams converted to kilograms, because the
+    price on those lines is per kilogram.
+    """
+    product = entry.get("product") or {}
+    raw = float(entry.get("quantity") or 1)
+    if selling_method(product) in GRAM_SELLING_METHODS:
+        return raw / 1000.0
+    return raw
