@@ -115,6 +115,22 @@ The user's standing decision from the same conversation: **future systems
 should reach the household through מירי rather than each gaining its own
 bot.** This CLI is the seam.
 
+**Two design rules that came out of building it, worth reusing:**
+
+*A question the household can be asked in two places needs one record,
+not two agreeing behaviours.* The ₪700 card question appears both in the
+nudge and at this bot's cart hand-off; both read and write
+`benefit_confirmations`, keyed `(kind, month)`, through `cardreminder`.
+Confirming anywhere silences everywhere by construction. Being asked
+twice about one allowance is the kind of small indignity that makes
+people stop reading a bot at all.
+
+*Buttons and intent-routing are not interchangeable; the surface
+decides.* A button cannot be wrong about what a tap meant, so it wins in
+a one-to-one flow like this bot's. In the shared family group a button
+raises a second question — whose tap counts? — so מירי routes replies by
+intent there instead. Neither is the better technique in general.
+
 ## 5. Open questions for the user
 
 - **Which Victory branch do they actually shop at?** Prices are per
