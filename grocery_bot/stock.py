@@ -77,6 +77,11 @@ class StockItem:
     unit: str = ""
     picked_count: int = 0
     skipped_count: int = 0
+    # Days between purchases when the *chain* measured it rather than us.
+    # Tiv Taam publishes this per product and counts in-store purchases we
+    # cannot see, so it beats anything derived from online orders alone.
+    # None means "nobody measured it"; shelflife falls back to 1/share.
+    interval_days: float | None = None
 
     @property
     def tier(self) -> str:

@@ -68,6 +68,44 @@ def session_token(state_path: Path) -> dict | None:
     return None
 
 
+def _prefill_credentials(page, store: str) -> None:
+    """Open the login dialog and type the stored username and password.
+
+    Never fails the run: if the markup moved, the person can still log in
+    by hand, which is the whole point of this script.
+    """
+    username = os.environ.get(f"{store.upper()}_USERNAME", "")
+    password = os.environ.get(f"{store.upper()}_PASSWORD", "")
+    if not (username and password):
+        print("no stored credentials; log in fully by hand", flush=True)
+        return
+    try:
+        for label in ("כניסה", "התחברות"):
+            try:
+                page.get_by_text(label, exact=False).first.click(timeout=5000)
+                break
+            except Exception:
+                continue
+        page.wait_for_timeout(2500)
+        filled = 0
+        for selector in ('input[type="email"]', 'input[name="username"]',
+                         'input[type="text"]'):
+            try:
+                page.locator(selector).first.fill(username, timeout=3000)
+                filled += 1
+                break
+            except Exception:
+                continue
+        try:
+            page.locator('input[type="password"]').first.fill(password, timeout=3000)
+            filled += 1
+        except Exception:
+            pass
+        print(f"pre-filled {filled}/2 fields — tick the captcha and submit", flush=True)
+    except Exception as exc:
+        print("could not pre-fill:", repr(exc), flush=True)
+
+
 def main(store: str, minutes: int = DEFAULT_MINUTES) -> int:
     if store not in SITES:
         print(f"unknown store {store!r}; expected one of {sorted(SITES)}")
@@ -110,6 +148,12 @@ def main(store: str, minutes: int = DEFAULT_MINUTES) -> int:
                 break
             except Exception:
                 continue
+
+        # Fill what can be filled. The reCAPTCHA checkbox is the only part
+        # that genuinely requires a person, so leaving the credentials for
+        # them to type as well just adds friction on a slow site viewed
+        # through a remote desktop.
+        _prefill_credentials(page, store)
 
         retailer = RETAILERS[store]
         print(f"READY — {retailer.name} is open on the desktop. Log in there.", flush=True)

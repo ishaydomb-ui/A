@@ -133,6 +133,11 @@ CREATE TABLE IF NOT EXISTS stock_items (
     -- the only signal for "we stopped needing this".
     picked_count INTEGER NOT NULL DEFAULT 0,
     skipped_count INTEGER NOT NULL DEFAULT 0,
+    -- Days between purchases as measured by the chain itself, where it
+    -- publishes that. Tiv Taam does, and counts in-store purchases that
+    -- never appear in the online history, so it is strictly better than
+    -- our own 1/share estimate. NULL means nobody measured it.
+    interval_days REAL,
     updated_at TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (store, product_code)
 );
@@ -232,6 +237,9 @@ CREATE TABLE IF NOT EXISTS app_state (
 # "ADD COLUMN IF NOT EXISTS", and the database already holds a real list,
 # so each is added only when missing rather than recreating the table.
 _ADDED_COLUMNS = {
+    # Added 2026-09-01 when Tiv Taam's smart list turned out to publish a
+    # measured purchase interval, which beats our 1/share estimate.
+    "stock_items": {"interval_days": "REAL"},
     "base_list_items": {
         "amount": "REAL",
         "unit": "TEXT NOT NULL DEFAULT ''",
@@ -569,7 +577,8 @@ class Storage:
             conn.executemany(
                 "INSERT INTO stock_items (store, product_code, product_name, department, "
                 "category, tier, share, default_quantity, amount, unit, picked_count, "
-                "skipped_count, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "skipped_count, interval_days, updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 [
                     (
                         store,
@@ -584,6 +593,7 @@ class Storage:
                         item.unit,
                         learned.get(item.product_code, (0, 0))[0],
                         learned.get(item.product_code, (0, 0))[1],
+                        getattr(item, "interval_days", None),
                         now,
                     )
                     for item in items

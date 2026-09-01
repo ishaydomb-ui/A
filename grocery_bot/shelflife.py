@@ -71,6 +71,9 @@ class ShelfItem:
     share: float
     last_purchased: date | None
     order_gap_days: float = DEFAULT_ORDER_GAP_DAYS
+    # Published by the chain, where it publishes one. None means nobody
+    # measured it and the share-based estimate is used instead.
+    measured_interval_days: float | None = None
 
     @property
     def is_pantryable(self) -> bool:
@@ -78,7 +81,16 @@ class ShelfItem:
 
     @property
     def expected_interval_days(self) -> float | None:
-        """Typical days between purchases, or None when unknowable."""
+        """Typical days between purchases, or None when unknowable.
+
+        A figure the chain measured itself always wins: Tiv Taam publishes
+        one per product and counts in-store purchases that never reach the
+        online history. Our own value is 1/share × the household's order
+        gap — a reasonable guess resting on two approximations, and only
+        used where nothing better exists.
+        """
+        if self.measured_interval_days:
+            return round(float(self.measured_interval_days), 1)
         if self.share < MIN_RELIABLE_SHARE or self.share > 1:
             return None
         return round((1 / self.share) * self.order_gap_days, 1)
@@ -122,6 +134,7 @@ def build_items(storage, store: str = "shufersal", order_gap_days: float = DEFAU
             share=float(row.get("share") or 0),
             last_purchased=last.get(row["product_code"]),
             order_gap_days=order_gap_days,
+            measured_interval_days=row.get("interval_days"),
         )
         if item.is_pantryable:
             items.append(item)
