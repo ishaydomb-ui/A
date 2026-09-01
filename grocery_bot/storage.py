@@ -138,6 +138,12 @@ CREATE TABLE IF NOT EXISTS stock_items (
     -- never appear in the online history, so it is strictly better than
     -- our own 1/share estimate. NULL means nobody measured it.
     interval_days REAL,
+    -- The manufacturer EAN, where the chain will tell us. This is what
+    -- lets the same product bought at two chains merge into one habit;
+    -- without it a Self-Point product id and a Shufersal sku look like
+    -- two unrelated products. NULL for loose produce, which no chain
+    -- barcodes.
+    barcode TEXT,
     updated_at TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (store, product_code)
 );
@@ -263,7 +269,7 @@ CREATE TABLE IF NOT EXISTS app_state (
 _ADDED_COLUMNS = {
     # Added 2026-09-01 when Tiv Taam's smart list turned out to publish a
     # measured purchase interval, which beats our 1/share estimate.
-    "stock_items": {"interval_days": "REAL"},
+    "stock_items": {"interval_days": "REAL", "barcode": "TEXT"},
     "base_list_items": {
         "amount": "REAL",
         "unit": "TEXT NOT NULL DEFAULT ''",
@@ -601,8 +607,8 @@ class Storage:
             conn.executemany(
                 "INSERT INTO stock_items (store, product_code, product_name, department, "
                 "category, tier, share, default_quantity, amount, unit, picked_count, "
-                "skipped_count, interval_days, updated_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "skipped_count, interval_days, barcode, updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 [
                     (
                         store,
@@ -618,6 +624,7 @@ class Storage:
                         learned.get(item.product_code, (0, 0))[0],
                         learned.get(item.product_code, (0, 0))[1],
                         getattr(item, "interval_days", None),
+                        getattr(item, "barcode", None),
                         now,
                     )
                     for item in items
@@ -810,6 +817,25 @@ class Storage:
                 (store, store),
             ).fetchall()
         return {row["barcode"]: dict(row) for row in rows}
+
+    def catalog_price_by_suffix(self, sku: str) -> dict | None:
+        """Find a catalogue product whose EAN ends with this store sku.
+
+        Shufersal's own product codes are the EAN with the manufacturer
+        prefix stripped — P_4131074 for 7290004131074 — so this is the
+        only join between its cart data and its price feed. Ambiguous
+        matches are rejected rather than guessed: two products sharing a
+        suffix would silently price the wrong one.
+        """
+        if not str(sku).isdigit():
+            return None
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT item_code, name, price FROM catalog_products "
+                "WHERE item_code LIKE ? LIMIT 2",
+                (f"%{sku}",),
+            ).fetchall()
+        return dict(rows[0]) if len(rows) == 1 else None
 
     def catalog_price(self, barcode: str) -> dict | None:
         """Shufersal's price for a barcode — its item_code *is* the EAN."""

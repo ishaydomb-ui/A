@@ -90,6 +90,35 @@ class SelfPointPrices:
             found.update(self._fetch_chunk(wanted[start : start + MAX_BARCODES_PER_CALL]))
         return found
 
+    def barcodes_for_ids(self, product_ids) -> dict[str, str]:
+        """Resolve Self-Point product ids to manufacturer EANs.
+
+        The smart list identifies products by internal id, so without this
+        a Tiv Taam staple and the same Shufersal staple look like two
+        unrelated products and the household's real consumption rate stays
+        split in half. Loose produce legitimately has no barcode and is
+        simply absent from the result.
+        """
+        wanted = [str(i) for i in dict.fromkeys(product_ids) if str(i).strip()]
+        found: dict[str, str] = {}
+        for start in range(0, len(wanted), MAX_BARCODES_PER_CALL):
+            chunk = wanted[start : start + MAX_BARCODES_PER_CALL]
+            params = {"appId": APP_ID, "from": 0, "size": len(chunk)}
+            for index, product_id in enumerate(chunk):
+                params[f"filters[must][term][id][{index}]"] = product_id
+            url = (
+                f"{API_BASE}/v2/retailers/{self.retailer.retailer_id}"
+                f"/branches/{self.retailer.branch_id}/products"
+            )
+            payload = self._http.get(url, params=params).json()
+            if isinstance(payload, dict) and payload.get("error"):
+                raise RuntimeError(f"{self.retailer.key} id lookup: {payload}")
+            for product in payload.get("products", []):
+                barcode = product.get("localBarcode") or product.get("barcode")
+                if barcode and product.get("id") is not None:
+                    found[str(product["id"])] = str(barcode)
+        return found
+
     def _fetch_chunk(self, barcodes: list[str]) -> dict[str, dict]:
         params = {"appId": APP_ID, "from": 0, "size": len(barcodes)}
         for index, barcode in enumerate(barcodes):

@@ -82,6 +82,9 @@ class StockItem:
     # cannot see, so it beats anything derived from online orders alone.
     # None means "nobody measured it"; shelflife falls back to 1/share.
     interval_days: float | None = None
+    # Manufacturer EAN where the chain publishes one. The join key that
+    # merges the same product across chains; None for loose produce.
+    barcode: str | None = None
 
     @property
     def tier(self) -> str:

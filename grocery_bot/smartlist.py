@@ -21,6 +21,7 @@ Tiv Taam store key and joined by id, not merged into Shufersal's rows.
 """
 from __future__ import annotations
 
+from .disambiguate import _normalise
 from .stock import DEPARTMENTS, OTHER_DEPARTMENT, StockItem
 
 # Departments are not on the smart-list payload, so they are inferred
@@ -110,10 +111,45 @@ def to_stock_items(payload: dict) -> list[StockItem]:
     return result
 
 
-def sync(api, storage) -> int:
-    """Refresh the Tiv Taam stock rows from the chain's own smart list."""
+def _attach_barcodes(storage, items, store: str) -> int:
+    """Fill in barcodes by matching names within this chain's own data.
+
+    The obvious route does not work: querying the products endpoint by
+    internal id returns a different field projection that omits
+    localBarcode entirely, and its externalId is a short internal number
+    rather than an EAN. Verified against the live API — milk comes back
+    with externalId 46411, not 7290004131074.
+
+    So the barcode comes from prices already recorded for this same chain,
+    matched on the product name. Name matching *within one chain* is safe
+    in a way that cross-chain name matching is not, because both sides are
+    the same catalogue writing the same string.
+    """
+    known = {
+        _normalise(row["name"]): barcode
+        for barcode, row in storage.latest_store_prices(store).items()
+        if row.get("name")
+    }
+    if not known:
+        return 0
+    filled = 0
+    for item in items:
+        barcode = known.get(_normalise(item.product_name))
+        if barcode:
+            item.barcode = barcode
+            filled += 1
+    return filled
+
+
+def sync(api, storage, prices=None, store: str = "tivtaam") -> int:
+    """Refresh the Tiv Taam stock rows from the chain's own smart list.
+
+    ``prices`` is accepted and unused; barcodes are resolved from data
+    this chain has already given us. See :func:`_attach_barcodes`.
+    """
     items = to_stock_items(api.smart_list())
     if not items:
         return 0
-    storage.replace_stock_items("tivtaam", items)
+    _attach_barcodes(storage, items, store)
+    storage.replace_stock_items(store, items)
     return len(items)
