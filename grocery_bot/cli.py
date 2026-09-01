@@ -14,6 +14,8 @@ Run with: python -m grocery_bot.cli <command>
     remove-item <text>    remove one item by fuzzy name ("תוריד חלב מהרשימה")
     add-to-cart <text>    put it straight into the open store cart [--qty N]
                           (falls back to the list if not found; never checks out)
+    nudge                 the overdue-shop message, or nothing if not due
+                          [--last-nudged YYYY-MM-DD] [--why]
     list-items            print the pending shopping list, one per line
     recipe <dish>         ingredients for a dish [--by NAME] [--all] [--preview]
     recipe-text           same, from recipe text on stdin (OCR/screenshot/paste)
@@ -35,6 +37,7 @@ from .catalog import (
     format_search_answer,
     refresh_catalog,
 )
+from . import nudge
 from .config import Config
 from .orchestrator import add_terms_to_cart
 from .storage import Storage
@@ -475,6 +478,36 @@ def _add_to_cart(storage: Storage, args: list[str]) -> int:
     return 0
 
 
+def _nudge(storage: Storage, args: list[str]) -> int:
+    """Print the overdue-shop message, or nothing when it is not due.
+
+    Called on a schedule by the household's other bot, which delivers it
+    to the group both partners already talk in. Delivery deliberately
+    belongs to that bot: the grocery bot is not in their group, and making
+    them answer a second assistant is the friction this removes.
+
+    Exit 0 with output means "send this". Exit 0 with no output means
+    "nothing to say", which is the common case and must stay silent.
+    Replies come back through add-item, which already exists.
+    """
+    import datetime
+
+    last_nudged = None
+    for index, argument in enumerate(args):
+        if argument == "--last-nudged" and index + 1 < len(args):
+            try:
+                last_nudged = datetime.date.fromisoformat(args[index + 1])
+            except ValueError:
+                pass
+
+    decision = nudge.decide(storage, last_nudged=last_nudged)
+    if decision.due:
+        print(decision.text)
+    elif "--why" in args:
+        print(f"not due: {decision.reason}", file=sys.stderr)
+    return 0
+
+
 _DB_ONLY_COMMANDS = {
     "add-item": lambda storage, args: _add_item(storage, args),
     "remove-item": _remove_item,
@@ -484,6 +517,9 @@ _DB_ONLY_COMMANDS = {
     "recipe": _recipe,
     "recipe-text": _recipe_text,
     "meal-plan": _meal_plan,
+    # Reads only what earlier syncs already wrote, so the other bot can
+    # call it on a timer without a token or a store session.
+    "nudge": _nudge,
 }
 
 # Needs the store session and the Israeli exit, so it cannot live on the
