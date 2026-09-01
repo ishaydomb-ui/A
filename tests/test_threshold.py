@@ -93,6 +93,33 @@ class UpsellTest(unittest.TestCase):
         self.assertEqual(check.combination_to_close(), [])
 
 
+class AlreadyTakenTest(unittest.TestCase):
+    """An offer already taken is not an offer still available."""
+
+    def _check(self, quantities):
+        return threshold.ThresholdCheck(
+            basket_total=560.79,
+            threshold=599.0,
+            offers=[_offer("שוקולד", 25.90, 40.0, 2), _offer("טונה", 28.50, 48.0, 2)],
+            quantities=quantities,
+        )
+
+    def test_a_basket_holding_two_is_not_one_short(self):
+        # Verified against the real 1 September order: four of six
+        # "missed" offers had in fact been taken, at quantity two, with
+        # the discount applied.
+        names = [o.name for o in self._check({"שוקולד": 2, "טונה": 1}).upsells]
+        self.assertEqual(names, ["טונה"])
+
+    def test_no_quantities_assumes_one_of_each(self):
+        # The safe default: over-reporting an offer is better than
+        # silently hiding one, but it is still a guess.
+        self.assertEqual(len(self._check({}).upsells), 2)
+
+    def test_a_basket_that_took_everything_has_nothing_to_suggest(self):
+        self.assertEqual(self._check({"שוקולד": 2, "טונה": 2}).upsells, [])
+
+
 class ReadFromOrderTest(unittest.TestCase):
     def test_reads_the_live_threshold_from_a_real_payload(self):
         order = {

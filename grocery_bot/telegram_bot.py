@@ -801,17 +801,24 @@ class GroceryBot:
         total = (cart or {}).get("total")
         if not total:
             return
-        codes = [
-            str(getattr(r, "product_code", "") or "").removeprefix("P_")
-            for r in results
-            if r.status == "added"
-        ]
-        codes = [c for c in codes if c]
-        if not codes:
+        quantities: dict[str, float] = {}
+        for r in results:
+            if r.status != "added":
+                continue
+            code = str(getattr(r, "product_code", "") or "").removeprefix("P_")
+            if code:
+                quantities[code] = float(getattr(r, "quantity", 1) or 1)
+        if not quantities:
             return
         try:
             result = await asyncio.to_thread(
-                threshold.check, self.storage, float(total), codes
+                threshold.check,
+                self.storage,
+                float(total),
+                list(quantities),
+                None,
+                "מתנה לבחירה",
+                quantities,
             )
             if not (result.upsells or result.worth_chasing):
                 return

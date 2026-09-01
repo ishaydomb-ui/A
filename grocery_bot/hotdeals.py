@@ -71,6 +71,11 @@ MAX_PER_FAMILY = 2
 # of the plural and a naive match silently misses every packet of wipes.
 STOCKABLE_PATTERNS = (
     "חיתול", "פמפרס", "האגיס", "טיטול",
+    # A newborn's size is written several ways and none of them is a
+    # number the size-5 patterns would catch. Added ahead of a January
+    # birth so the deep discounts are visible from late in the year,
+    # while there is still time to stock up.
+    "ניובורן", "newborn", "מידה 0", "חיתול ראשון", "שלב ראשון",
     "מגבונ", "מגבון",
     "סימילאק", "מטרנה", "תמ\"ל", "תמל",
     "נייר טואלט", "מגבת נייר", "טישו",
@@ -82,9 +87,15 @@ STOCKABLE_PATTERNS = (
 
 
 def is_stockable(name: str) -> bool:
-    """Does this keep indefinitely and cost enough to be worth stocking?"""
-    text = name or ""
-    return any(pattern in text for pattern in STOCKABLE_PATTERNS)
+    """Does this keep indefinitely and cost enough to be worth stocking?
+
+    Case-folded because some of these names are Latin: "Huggies Newborn"
+    would not match a lowercase pattern, and nappy brands write their
+    sizes in English as often as in Hebrew. Hebrew has no case, so this
+    costs nothing there.
+    """
+    text = (name or "").lower()
+    return any(pattern.lower() in text for pattern in STOCKABLE_PATTERNS)
 
 
 @dataclass(frozen=True)

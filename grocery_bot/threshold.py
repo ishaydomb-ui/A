@@ -43,6 +43,12 @@ class ThresholdCheck:
     threshold: float = DEFAULT_GIFT_THRESHOLD
     offers: list[MultiBuyOffer] = field(default_factory=list)
     reward: str = "מתנה לבחירה"
+    # How many of each product the basket already holds. Without this the
+    # check happily tells the household to buy a second chocolate when
+    # two are already in the cart and the 2-for has been applied —
+    # verified against the 1 September order, where four of six "missed"
+    # offers had in fact been taken.
+    quantities: dict = field(default_factory=dict)
 
     @property
     def shortfall(self) -> float:
@@ -58,8 +64,14 @@ class ThresholdCheck:
 
     @property
     def upsells(self) -> list[MultiBuyOffer]:
-        """Offers where one more unit is genuinely cheaper per unit."""
-        return [o for o in self.offers if o.is_upsell and o.worth_taking]
+        """Offers still one or more units short of qualifying."""
+        return [
+            offer
+            for offer in self.offers
+            if offer.is_upsell
+            and offer.worth_taking
+            and self.quantities.get(offer.item_code, 1) < offer.min_qty
+        ]
 
     @property
     def closing_offers(self) -> list[MultiBuyOffer]:
@@ -105,13 +117,19 @@ class ThresholdCheck:
 
 
 def check(storage, basket_total: float, item_codes, threshold: float | None = None,
-          reward: str = "מתנה לבחירה") -> ThresholdCheck:
-    """Look at a finished basket for what is still worth changing."""
+          reward: str = "מתנה לבחירה", quantities: dict | None = None) -> ThresholdCheck:
+    """Look at a finished basket for what is still worth changing.
+
+    ``quantities`` maps a product code to how many are already in the
+    basket. Omitting it assumes one of each, which is the safe default
+    but will over-report on a basket that already took its offers.
+    """
     return ThresholdCheck(
         basket_total=round(float(basket_total), 2),
         threshold=float(threshold or DEFAULT_GIFT_THRESHOLD),
         offers=offers_for_items(storage, item_codes),
         reward=reward,
+        quantities=dict(quantities or {}),
     )
 
 
