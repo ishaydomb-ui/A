@@ -48,6 +48,26 @@ session. A session can be interrupted at any point; uncommitted work is
 the only thing genuinely at risk of being lost. Prefer several small,
 focused commits over one large commit saved for last.
 
+**Findings count as work, and are the thing actually at risk.** Code gets
+committed by habit; a number measured once and reported only in chat does
+not. Compaction summarises a conversation — it writes nothing to disk —
+so an analysis that lives only in the transcript degrades to a sentence
+and then to nothing. On 2026-09-01 the single most actionable measurement
+of the day (a ₪599 gift threshold missed twice running, by ₪38.21 and
+₪77.81) existed nowhere but the chat until the user asked what compaction
+would preserve.
+
+So: **write it down as soon as it is measured, not at the end.** The rule
+of thumb is that anything the user would plausibly ask about again next
+week belongs in a file before the next tool call, not after the next ten.
+
+- A measurement, a price, a threshold, a rate → `GOALS.md` progress log.
+- A trap or a bug that cost real time → `docs/ADDING_A_STORE.md`.
+- A decision about how to work, or a durable fact about the household →
+  the memory directory.
+- Anything about how the code behaves → a comment or a test, where it
+  cannot drift away from the code it describes.
+
 ## Hard safety rule — non-negotiable
 
 This bot may search for products, build carts, fill forms, and prepare
