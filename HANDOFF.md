@@ -6,7 +6,7 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-01
+**Last anchored:** 2026-09-01 11:42 (Asia/Jerusalem host time)
 **Conversation id:** `df559a44-e7ec-4e8f-9462-046d0a364d36`
 **Branch:** `claude/online-grocery-automation-b7pq4g`
 
@@ -64,18 +64,21 @@ referred to a section 4 that did not exist yet, so this is a proposed
 procedure — correct it rather than work around it.
 
 1. **Anchor first.** Nothing below is worth doing on top of unsaved work.
-2. **Verify the tree is genuinely clean** — `git status`, and confirm the
+2. **No bundle mechanism exists here** (unlike familyos, which bundles to
+   Drive). GitHub is the only off-box copy, so a push landing is the
+   whole backup — verify it rather than assume it.
+3. **Verify the tree is genuinely clean** — `git status`, and confirm the
    push landed on origin rather than trusting the command's exit code.
-3. **Confirm production still runs.** `systemctl --user list-timers` and
+4. **Confirm production still runs.** `systemctl --user list-timers` and
    `systemctl --user list-units --failed`. A handover that leaves a dead
    timer behind hands over a silent failure.
-4. **Refresh §1–§3 of this file** so they describe reality now, not when
+5. **Refresh §1–§3 of this file** so they describe reality now, not when
    they were written.
-5. **State the open questions waiting on the user** (§5). These are the
+6. **State the open questions waiting on the user** (§5). These are the
    things a new session cannot derive from the code and would otherwise
    silently re-litigate.
-6. **Record the conversation id** above, so the transcript can be found.
-7. **Name what is deliberately not done**, with the reasoning — otherwise
+7. **Record the conversation id** above, so the transcript can be found.
+8. **Name what is deliberately not done**, with the reasoning — otherwise
    the next session rediscovers a decision as though it were a bug. The
    clearest current example: uncommitted work is reported, never
    auto-committed, because this repo pushes to a code host and holds
