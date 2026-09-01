@@ -6,7 +6,7 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-01 14:45 (Asia/Jerusalem host time)
+**Last anchored:** 2026-09-01 16:27 (Asia/Jerusalem host time)
 **Conversation id:** `df559a44-e7ec-4e8f-9462-046d0a364d36`
 **Branch:** `claude/online-grocery-automation-b7pq4g`
 
@@ -96,6 +96,24 @@ procedure — correct it rather than work around it.
    clearest current example: uncommitted work is reported, never
    auto-committed, because this repo pushes to a code host and holds
    store credentials.
+
+## 4a. Live and owned elsewhere
+
+`grocery-nudge.timer` runs **in the familyos project, not here** — hourly,
+sending through the מירי bot into the family group, approved by the user
+on 2026-09-01. This repo only supplies the text: `cli nudge` prints a
+message when a shop is due and prints nothing when it is not.
+
+Two rules live on that side and are deliberately not duplicated here:
+it will not send outside 09:00–21:00 Israel time, and it records the
+sent date only after a confirmed delivery so a failed send retries.
+Replies are routed by intent — free text to `add-item`, card
+confirmations to `confirm-card` — so nothing depends on knowing a nudge
+was sent.
+
+The user's standing decision from the same conversation: **future systems
+should reach the household through מירי rather than each gaining its own
+bot.** This CLI is the seam.
 
 ## 5. Open questions for the user
 
