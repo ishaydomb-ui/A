@@ -199,6 +199,16 @@ CREATE TABLE IF NOT EXISTS store_prices (
 CREATE INDEX IF NOT EXISTS idx_store_prices_barcode
     ON store_prices(barcode);
 
+-- When each product was last actually bought. Separate from stock_items
+-- because that table is rebuilt wholesale on every nightly sync, and a
+-- purchase date stored there would be thrown away with it.
+CREATE TABLE IF NOT EXISTS last_purchase (
+    store TEXT NOT NULL,
+    product_code TEXT NOT NULL,
+    purchased_on TEXT NOT NULL,   -- YYYY-MM-DD
+    PRIMARY KEY (store, product_code)
+);
+
 -- When orders were actually placed, to learn the household's cadence.
 -- Fed by the nightly sync from the store's own order history, so manual
 -- orders count too.
@@ -588,6 +598,42 @@ class Storage:
                 "SELECT * FROM stock_items WHERE store = ? ORDER BY share DESC", (store,)
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def record_last_purchase(self, store: str, entries: list[tuple[str, str]]) -> int:
+        """Remember when each product was last actually bought.
+
+        Kept apart from stock_items because that table is rebuilt wholesale
+        from order history on every sync; a purchase date living there would
+        be lost and re-derived each night for no reason.
+        """
+        with closing(self._connect()) as conn:
+            cur = conn.executemany(
+                "INSERT INTO last_purchase (store, product_code, purchased_on) "
+                "VALUES (?, ?, ?) ON CONFLICT(store, product_code) DO UPDATE SET "
+                "purchased_on = MAX(purchased_on, excluded.purchased_on)",
+                [(store, code, day) for code, day in entries],
+            )
+            conn.commit()
+            return cur.rowcount
+
+    def last_purchase_dates(self, store: str) -> dict:
+        """product_code -> date last bought."""
+        from datetime import datetime as _dt
+
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT product_code, purchased_on FROM last_purchase WHERE store = ?",
+                (store,),
+            ).fetchall()
+        out = {}
+        for row in rows:
+            try:
+                out[row["product_code"]] = _dt.strptime(
+                    row["purchased_on"][:10], "%Y-%m-%d"
+                ).date()
+            except (ValueError, TypeError):
+                continue
+        return out
 
     def suppress_stock_item_by_name(self, name: str, store: str = "shufersal") -> str | None:
         """Stop proposing a learned recurring product, by (fuzzy) name.
