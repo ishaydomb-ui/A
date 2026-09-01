@@ -92,7 +92,7 @@ def find_stockup_deals(storage: Storage, store: str = "shufersal") -> list[Stock
     return ranked[:MAX_RESULTS]
 
 
-def format_stockup_deals(deals: list[StockUpDeal]) -> str:
+def format_stockup_deals(deals: list[StockUpDeal], bot_username: str = "") -> str:
     if not deals:
         return (
             "אין כרגע מבצעים חריגים (25%+ הנחה) על מוצרים שאתם קונים. "
@@ -111,4 +111,12 @@ def format_stockup_deals(deals: list[StockUpDeal]) -> str:
             f"(-{deal.discount * 100:.0f}%) — {deal.description}"
         )
     lines += ["", "_🧺 = נשמר בארון; שווה לקנות מראש. כלום לא נוסף לסל אוטומטית._"]
+    if bot_username:
+        # This list is Shufersal only, by construction — it is built from
+        # that chain's feed. The cross-chain deals are a different search
+        # with a different bar, so they get their own link rather than
+        # being merged in and diluting both.
+        lines.append(
+            f"[מבצעים מרשתות אחרות](https://t.me/{bot_username}?start=chaindeals)"
+        )
     return "\n".join(lines)

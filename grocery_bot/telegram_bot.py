@@ -235,6 +235,9 @@ class GroceryBot:
         if context.args and context.args[0] == "alldeals":
             await self.all_deals(update, context)
             return
+        if context.args and context.args[0] == "chaindeals":
+            await self.chain_deals(update, context)
+            return
         await update.message.reply_text(
             "היי! פשוט דברו איתי רגיל, בלי פקודות. למשל:\n\n"
             "• *תוסיף 300 גרם פסטרמה* — מוסיף לרשימה עם משקל\n"
@@ -332,6 +335,23 @@ class GroceryBot:
         deals = await asyncio.to_thread(hotdeals.find_extended, self.storage)
         await update.message.reply_text(
             hotdeals.format_extended(deals), parse_mode="Markdown"
+        )
+
+    async def chain_deals(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/chaindeals — the same products, priced at every other chain.
+
+        Kept apart from /stockup rather than merged into it. /stockup is
+        built from the Shufersal feed and answers "what is unusually cheap
+        where I already shop"; this answers "who else is cheaper", which
+        is a different question with a different bar. Merging them would
+        make one list that answers neither cleanly.
+        """
+        if not _authorized(self.config, update):
+            return
+        relevant, exceptional = await asyncio.to_thread(hotdeals.find, self.storage)
+        text = hotdeals.format_deals(relevant, exceptional)
+        await update.message.reply_text(
+            text or "אין כרגע מבצעים חריגים ברשתות האחרות.", parse_mode="Markdown"
         )
 
     async def refresh_prices(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -583,7 +603,11 @@ class GroceryBot:
             return
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
         deals = await asyncio.to_thread(find_stockup_deals, self.storage)
-        await update.message.reply_text(format_stockup_deals(deals), parse_mode="Markdown")
+        await update.message.reply_text(
+            format_stockup_deals(deals, self.config.bot_username),
+            parse_mode="Markdown",
+            disable_web_page_preview=True,
+        )
 
 
     async def propose_cycle(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1674,6 +1698,7 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("price", bot.price))
     application.add_handler(CommandHandler("deals", bot.deals))
     application.add_handler(CommandHandler("alldeals", bot.all_deals))
+    application.add_handler(CommandHandler("chaindeals", bot.chain_deals))
     application.add_handler(CommandHandler("refresh_prices", bot.refresh_prices))
     application.add_handler(CommandHandler("propose", bot.propose_cycle))
     application.add_handler(CommandHandler("stockup", bot.stockup))

@@ -79,3 +79,34 @@ class CartDestinationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StockupLinksToOtherChainsTest(unittest.TestCase):
+    """/stockup is Shufersal-only by construction, so it says where to look.
+
+    Asked for after a /stockup message that listed only Shufersal deals
+    with no way to reach the cross-chain ones.
+    """
+
+    def _deal(self):
+        return radar.StockUpDeal(
+            bought_name="x", catalog_name="x", shelf_price=20.0,
+            deal_price=10.0, description="d", pantryable=True,
+        )
+
+    def test_it_offers_a_link_to_the_other_chains(self):
+        text = radar.format_stockup_deals([self._deal()], "TestBot")
+        self.assertIn("מרשתות אחרות", text)
+        self.assertIn("start=chaindeals", text)
+
+    def test_no_link_when_no_bot_username_is_configured(self):
+        # A half-built link is worse than none: it looks tappable.
+        text = radar.format_stockup_deals([self._deal()], "")
+        self.assertNotIn("t.me", text)
+
+    def test_the_two_lists_stay_separate(self):
+        # /stockup answers "what is unusually cheap where I shop";
+        # /chaindeals answers "who else is cheaper". Merging them makes
+        # one list that answers neither cleanly.
+        stockup = radar.format_stockup_deals([self._deal()], "TestBot")
+        self.assertIn("שופרסל", stockup.splitlines()[0])
