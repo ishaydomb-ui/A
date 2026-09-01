@@ -1,0 +1,35 @@
+# Checks that the backup is actually working, from the outside.
+#
+# A stopped timer produces no failure and therefore no alert, so this
+# never asks systemd whether the timer looks healthy — it reads the
+# heartbeat auto_push.sh writes and what GitHub actually holds.
+[Unit]
+Description=Check that the grocery-automation backup is fresh and landing
+Documentation=file:/home/codex/grocery-automation/scripts/backup_doctor.py
+After=network-online.target
+Wants=network-online.target
+OnFailure=grocery-alert@%N.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/grocery-automation
+EnvironmentFile=%h/grocery-automation/.env
+Environment=TZ=Asia/Jerusalem
+# Exit 1 means "problems found and reported", which is the script doing
+# its job — not a crash. Only a real crash should trip OnFailure=.
+SuccessExitStatus=0 1
+ExecStart=/usr/bin/python3 %h/grocery-automation/scripts/backup_doctor.py
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=%h/grocery-automation
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=grocery-doctor

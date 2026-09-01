@@ -1,0 +1,15 @@
+[Unit]
+Description=Periodically push grocery-automation to GitHub
+Documentation=file:/home/codex/grocery-automation/README.md
+
+[Timer]
+# Every 30 minutes. The service itself is cheap (one fetch + a local ref
+# check, push only when something is actually pending), so this doesn't
+# meaningfully add load — it's the interval a missed backup could cost,
+# not a resource concern.
+OnCalendar=*:0/30
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

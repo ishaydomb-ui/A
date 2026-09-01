@@ -1,0 +1,32 @@
+# One notifier shared by every grocery unit's OnFailure=.
+#
+# A failed unit sits red and nobody looks: systemd's own reporting is
+# pull-based, and this box is administered from a phone. %i carries the
+# name of the unit that failed, so one template serves all of them.
+#
+# Note this pattern was written here rather than inherited — the peer
+# familyos-backup.service has no OnFailure= either, so there was nothing
+# proven to copy for this particular gap.
+[Unit]
+Description=Send a Telegram alert when %i failed
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/grocery-automation
+EnvironmentFile=%h/grocery-automation/.env
+Environment=TZ=Asia/Jerusalem
+ExecStart=/usr/bin/python3 %h/grocery-automation/scripts/notify.py \
+    "🛑 *%i* נכשל בשרת. בדקו עם: systemctl --user status %i"
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=grocery-alert

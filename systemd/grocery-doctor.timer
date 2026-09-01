@@ -1,0 +1,15 @@
+# Hourly. The conditions it looks for are measured in hours, so checking
+# more often would only add noise; checking daily would let a stopped
+# backup sit unnoticed for most of a day.
+[Unit]
+Description=Check the grocery-automation backup hourly
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+Persistent=true
+RandomizedDelaySec=3min
+Unit=grocery-doctor.service
+
+[Install]
+WantedBy=timers.target

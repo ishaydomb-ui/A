@@ -12,3 +12,8 @@ data/sessions/*_profile/
 
 # Personal data: the real base list stays local; the .example file is the template.
 data/base_list.yaml
+
+# Machine-local watchdog state. Committing it would churn on every
+# timer run and conflict between hosts; it describes this box only.
+data/backup_heartbeat.json
+data/backup_doctor_state.json

@@ -3,6 +3,9 @@ Description=Grocery Telegram bot (shopping list, prices, promotions)
 Documentation=file:/home/codex/grocery-automation/README.md
 After=network-online.target
 Wants=network-online.target
+# A failed unit otherwise sits red with nobody looking — this box is
+# administered from a phone, and systemd reports only when asked.
+OnFailure=grocery-alert@%N.service
 
 [Service]
 Type=simple

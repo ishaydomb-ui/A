@@ -1,5 +1,5 @@
 [Unit]
-Description=Refresh Shufersal price/promotion catalog from the public feed
+Description=Push grocery-automation commits to GitHub if any are pending
 Documentation=file:/home/codex/grocery-automation/README.md
 After=network-online.target
 Wants=network-online.target
@@ -10,15 +10,20 @@ OnFailure=grocery-alert@%N.service
 [Service]
 Type=oneshot
 WorkingDirectory=%h/grocery-automation
-EnvironmentFile=%h/grocery-automation/.env
 Environment=TZ=Asia/Jerusalem
-ExecStart=%h/grocery-automation/.venv/bin/python -m grocery_bot.cli refresh-prices
+# No GIT_SSH_COMMAND override needed: ssh already reads ~/.ssh/config by
+# default, which is where the github-grocery host alias (deploy key) is
+# defined.
+ExecStart=%h/grocery-automation/scripts/auto_push.sh
 
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
+# Needs write access to the whole repo, not just data/: a push updates
+# .git internals (refs, objects), not the application's own state.
+ReadWritePaths=%h/grocery-automation
+# Read-only is enough for the deploy key under ~/.ssh.
 ProtectHome=read-only
-ReadWritePaths=%h/grocery-automation/data
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
@@ -27,4 +32,4 @@ LockPersonality=true
 
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=grocery-prices
+SyslogIdentifier=grocery-backup
