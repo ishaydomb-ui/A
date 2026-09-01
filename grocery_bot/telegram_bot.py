@@ -19,7 +19,7 @@ from telegram.ext import (
     filters,
 )
 
-from . import ask, hotdeals, waste
+from . import ask, hotdeals, threshold, waste
 from .adapters.base import StoreAdapter
 from .adapters.shufersal import ShufersalAdapter
 from .catalog import (
@@ -788,6 +788,42 @@ class GroceryBot:
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(buttons),
         )
+        await self._send_threshold_check(chat_id, context, results, cart)
+
+    async def _send_threshold_check(self, chat_id, context, results, cart) -> None:
+        """The last chance to catch a missed threshold or a one-short deal.
+
+        Sent after the cart view and before the household goes to pay,
+        because that is the only moment the advice can still be acted on.
+        The ₪599 gift was missed on both of the last two orders, each time
+        while multi-buy offers sat one unit short in the same basket.
+        """
+        total = (cart or {}).get("total")
+        if not total:
+            return
+        codes = [
+            str(getattr(r, "product_code", "") or "").removeprefix("P_")
+            for r in results
+            if r.status == "added"
+        ]
+        codes = [c for c in codes if c]
+        if not codes:
+            return
+        try:
+            result = await asyncio.to_thread(
+                threshold.check, self.storage, float(total), codes
+            )
+            if not (result.upsells or result.worth_chasing):
+                return
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=threshold.format_check(result),
+                parse_mode="Markdown",
+            )
+        except Exception:
+            # Never let an advisory step break the hand-off: the cart is
+            # already built and the household needs the link above.
+            logger.exception("Threshold check failed; cart hand-off unaffected")
 
     async def _do_report_waste(self, update, context, parsed, requested_by: str) -> None:
         """Record what was thrown away. Never comments on the waste itself.

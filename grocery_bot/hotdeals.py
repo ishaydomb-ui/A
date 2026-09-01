@@ -25,6 +25,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .chains import display_name, is_regular
+from .multibuy import _promotion_horizon
 
 # A cut worth a message on something they already buy. Below this it is
 # ordinary price movement and the weekly comparison already covers it.
@@ -200,8 +201,9 @@ def _promotion_deals(storage, frequent: set) -> list[HotDeal]:
             "SELECT p.item_code, p.discounted_price, p.min_qty, c.name, c.price "
             "FROM catalog_promotions p JOIN catalog_products c "
             "  ON c.item_code = p.item_code "
-            "WHERE p.discounted_price > 0 AND p.ends_at != '' AND p.ends_at < '2027' "
-            "  AND p.discounted_price < p.min_qty * c.price"
+            "WHERE p.discounted_price > 0 AND p.ends_at != '' AND p.ends_at < ? "
+            "  AND p.discounted_price < p.min_qty * c.price",
+            (_promotion_horizon(),),
         ).fetchall()
 
     deals = []

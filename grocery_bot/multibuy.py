@@ -38,6 +38,18 @@ MIN_UNIT_SAVING = 0.50
 # A multi-buy that demands a lot of units is a different decision from
 # "take one more" — six tins is a storage question, not a price one.
 MAX_SENSIBLE_QTY = 6
+# Gift-coupon rows sit in the same table as real promotions and are dated
+# years out ("קופון 50ש\"ח מתנה", valid to 2031); they are not price cuts
+# and would dominate every result. They are excluded by how far away the
+# end date is, not by a hardcoded year — the original `< '2027'` test
+# would have quietly stopped finding any promotion at all in 2027.
+MAX_PROMOTION_HORIZON_DAYS = 400
+
+
+def _promotion_horizon(today=None) -> str:
+    from datetime import date, timedelta
+
+    return ((today or date.today()) + timedelta(days=MAX_PROMOTION_HORIZON_DAYS)).isoformat()
 
 
 @dataclass(frozen=True)
@@ -156,10 +168,10 @@ def _promotions_for(storage, item_code: str) -> list[dict]:
             "FROM catalog_promotions p "
             "LEFT JOIN stock_items s ON s.product_code = 'P_' || p.item_code "
             "WHERE p.item_code = ? AND p.discounted_price > 0 "
-            "  AND p.ends_at != '' AND p.ends_at < '2027' "
+            "  AND p.ends_at != '' AND p.ends_at < ? "
             "  AND p.discounted_price < p.min_qty * ("
             "      SELECT price FROM catalog_products WHERE item_code = p.item_code)",
-            (str(item_code),),
+            (str(item_code), _promotion_horizon()),
         ).fetchall()
     return [dict(row) for row in rows]
 
