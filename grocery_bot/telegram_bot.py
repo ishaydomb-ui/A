@@ -22,6 +22,7 @@ from telegram.ext import (
 from . import ask, cardreminder, hotdeals, threshold, waste
 from .adapters.base import StoreAdapter
 from .adapters.shufersal import ShufersalAdapter
+from .adapters.tivtaam import TivTaamAdapter
 from .catalog import (
     find_cheaper_equivalents,
     find_cycle_alternatives,
@@ -113,14 +114,14 @@ def _describe_parsed(item: ParsedItem) -> str:
 
 ADAPTER_CLASSES: dict[str, type[StoreAdapter]] = {
     "shufersal": ShufersalAdapter,
-    # "tiv_taam": TivTaamAdapter,  # Phase 2
+    "tivtaam": TivTaamAdapter,
 }
 
 
 def _build_adapter_factories(config: Config):
     session_paths = {
         "shufersal": config.shufersal_storage_state_path,
-        "tiv_taam": config.tivtaam_storage_state_path,
+        "tivtaam": config.tivtaam_storage_state_path,
     }
     factories = {}
     for store in config.enabled_stores:

@@ -60,7 +60,7 @@ def is_regular(chain: str) -> bool:
 # other chain is price data only: its deals are real and worth knowing,
 # but "add it" cannot mean anything there, and saying so up front is the
 # difference between useful information and a promise that quietly fails.
-CART_CAPABLE = {"shufersal"}
+CART_CAPABLE = {"shufersal", "tivtaam"}
 
 
 def can_fill_cart(chain: str) -> bool:
