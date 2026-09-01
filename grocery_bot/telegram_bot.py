@@ -19,6 +19,7 @@ from telegram.ext import (
     filters,
 )
 
+from . import ask
 from .adapters.base import StoreAdapter
 from .adapters.shufersal import ShufersalAdapter
 from .catalog import (
@@ -267,10 +268,39 @@ class GroceryBot:
                 "הקטלוג עדיין ריק — הריצו /refresh_prices כדי למשוך את המחירים מהסניף."
             )
             return
+        # "האם חרדל ב-20 שקל זה טוב?" is a different question from "how much
+        # is mustard": it carries a price to judge, and answering it needs
+        # the other chains and any promotion, not just a catalogue lookup.
+        _, quoted = ask.parse_question(query)
+        if quoted is not None:
+            verdict = await asyncio.to_thread(
+                ask.evaluate, self.storage, query, self._selfpoint_prices
+            )
+            await update.message.reply_text(
+                ask.format_verdict(verdict, history_days=self._price_history_days()),
+                parse_mode="Markdown",
+            )
+            return
+
         results = await asyncio.to_thread(self.storage.search_with_deals, query, 6)
         await update.message.reply_text(
             format_search_answer(query, results), parse_mode="Markdown"
         )
+
+    @staticmethod
+    def _selfpoint_prices(store_key: str):
+        from .adapters.selfpoint import SelfPointPrices
+
+        return SelfPointPrices(store_key)
+
+    def _price_history_days(self) -> int:
+        """How many days of price history exist, so the answer can be honest
+        about whether a trend claim is supportable at all."""
+        from contextlib import closing
+
+        with closing(self.storage._connect()) as conn:  # noqa: SLF001
+            row = conn.execute("SELECT COUNT(DISTINCT day) AS d FROM price_history").fetchone()
+        return int(row["d"] or 0)
 
     async def deals(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/deals — genuine promotions on anything in the standing list."""
