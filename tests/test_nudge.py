@@ -283,3 +283,58 @@ class CardPromptTimingTest(unittest.TestCase):
         self.storage.record_last_purchase("shufersal", [("P_1", "2026-09-01")])
         text = nudge.compose(self.storage, 7, date(2026, 9, 20))
         self.assertIn("הטענת את הכרטיס", text)
+
+
+class ExtendedListBiasTest(unittest.TestCase):
+    """The wider list exists to escape the short list's bias, not repeat it.
+
+    Caught by the user asking whether the link actually widens anything.
+    It did not: it inherited _dedupe's ordering, which ranks by
+    (relevant, stockable, saving) and floats the hand-written stockable
+    categories — mostly nappies and cleaning — to the top. On real data
+    181 deals on never-bought products were available and five were
+    shown, while thirteen of twenty slots went to that one pattern list.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.storage = Storage(str(Path(self.tmp.name) / "t.sqlite3"))
+        rows, prices = [], []
+        # Ten deep discounts on nappies, ten on unrelated foods.
+        for n in range(10):
+            rows.append((f"N{n}", f"חיתולי האגיס מידה {n}", 60.0))
+            prices.append({"barcode": f"N{n}", "name": "x", "price": 30.0,
+                           "observed_at": "2026-09-01"})
+            rows.append((f"F{n}", f"מוצר{n} כלשהו", 40.0))
+            prices.append({"barcode": f"F{n}", "name": "y", "price": 12.0,
+                           "observed_at": "2026-09-01"})
+        with self.storage._connect() as conn:  # noqa: SLF001 - test fixture
+            conn.executemany(
+                "INSERT INTO catalog_products (item_code, name, price) VALUES (?,?,?)",
+                rows,
+            )
+            conn.commit()
+        self.storage.record_store_prices("ramilevy", prices)
+
+    def test_the_wide_list_is_dominated_by_novel_products(self):
+        extended = hotdeals.find_extended(self.storage, chains=["ramilevy"])
+        self.assertTrue(extended)
+        novel = [d for d in extended if not d.relevant]
+        self.assertGreaterEqual(len(novel), len(extended) // 2)
+
+    def test_one_category_cannot_fill_the_wide_list(self):
+        extended = hotdeals.find_extended(self.storage, chains=["ramilevy"])
+        nappies = [d for d in extended if "האגיס" in d.name]
+        self.assertLessEqual(len(nappies), 1)
+
+    def test_the_short_list_still_prefers_what_is_theirs(self):
+        # The wide list changing must not have loosened the short one.
+        relevant, _ = hotdeals.find(self.storage, chains=["ramilevy"])
+        self.assertTrue(all(d.relevant for d in relevant))
+
+    def test_nothing_appears_in_both_lists(self):
+        relevant, exceptional = hotdeals.find(self.storage, chains=["ramilevy"])
+        extended = hotdeals.find_extended(self.storage, chains=["ramilevy"])
+        shown = {d.barcode for d in relevant} | {d.barcode for d in exceptional}
+        self.assertFalse(shown & {d.barcode for d in extended})

@@ -270,17 +270,44 @@ def find(storage, chains=None) -> tuple[list[HotDeal], list[HotDeal]]:
 
 
 def find_extended(storage, chains=None, limit: int = EXTENDED_LIMIT) -> list[HotDeal]:
-    """Everything else worth seeing, for the "more deals" link.
+    """The wider list behind the link — deliberately the *least* filtered.
 
-    The message itself carries ten, because a long message is skimmed and
-    then ignored. This carries the rest behind a link nobody has to open,
-    which is the point: it costs nothing when they are not interested and
-    it is there when they are, so nothing found has to be thrown away.
+    This exists to escape the bias in the short list, so it must not
+    inherit its ordering. It did at first: `_dedupe` ranks by
+    (relevant, stockable, saving), which floats the hand-written
+    "stockable" categories to the top, and those are mostly nappies and
+    cleaning products. Measured on real data, 181 deals on products this
+    household has never bought were available and the list showed five of
+    them; thirteen of twenty slots went to that one pattern list.
+
+    The household asked for this precisely so they would hear about
+    strawberries and a deodorant one of them uses. So here the ranking is
+    by discount alone, with one slot per product family, and novel
+    products are placed first — the short list already covers what is
+    theirs, and repeating it here would waste the only view that can
+    surprise them.
     """
     deals = _dedupe(scan(storage, chains))
     relevant, exceptional = find(storage, chains)
     shown = {d.barcode for d in relevant} | {d.barcode for d in exceptional}
-    return [d for d in deals if d.barcode not in shown][:limit]
+    candidates = [d for d in deals if d.barcode not in shown]
+
+    # Novel first, then by depth of discount. Saving in shekels would
+    # re-introduce the same bias by another route: the expensive keepers
+    # are expensive, so they would win on absolute money every time.
+    candidates.sort(key=lambda d: (not d.relevant, d.discount), reverse=True)
+    candidates.sort(key=lambda d: (d.relevant, -d.discount))
+
+    picked, families = [], set()
+    for deal in candidates:
+        family = _family(deal.name)
+        if family in families:
+            continue
+        families.add(family)
+        picked.append(deal)
+        if len(picked) >= limit:
+            break
+    return picked
 
 
 def format_extended(deals: list[HotDeal]) -> str:
@@ -316,12 +343,19 @@ _FAMILY_ALIASES = {
 
 
 def _family(name: str) -> str:
-    """The shopping decision a product belongs to, not its brand."""
+    """The shopping decision a product belongs to, not its brand.
+
+    Outside the named categories the first word is the grouping. Two
+    words was too fine to be useful: "פינוקיות קרם פסק זמן" and
+    "פינוקיות בטעם טורטית" counted as different families and took two of
+    twenty slots in a list whose only job is variety.
+    """
     text = name or ""
     for pattern in STOCKABLE_PATTERNS:
         if pattern in text:
             return _FAMILY_ALIASES.get(pattern, pattern)
-    return " ".join(text.split()[:2])
+    words = text.split()
+    return words[0] if words else ""
 
 
 def _dedupe(deals: list[HotDeal]) -> list[HotDeal]:
