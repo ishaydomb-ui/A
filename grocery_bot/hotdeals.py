@@ -47,6 +47,11 @@ IMPLAUSIBLE_DISCOUNT = 0.90
 RELEVANT_LIMIT = 5
 EXCEPTIONAL_LIMIT = 5
 
+# The long list behind the link. Everything that cleared a bar but did
+# not make the ten, so the short message stays short and nothing found is
+# thrown away.
+EXTENDED_LIMIT = 20
+
 # For an expensive keeper, the shekels matter more than the percentage:
 # 15% off nappies is worth more than half off a tin of corn.
 MIN_ABSOLUTE_SAVING = 12.0
@@ -249,6 +254,36 @@ def find(storage, chains=None) -> tuple[list[HotDeal], list[HotDeal]]:
         if len(exceptional) >= EXCEPTIONAL_LIMIT:
             break
     return relevant, exceptional
+
+
+def find_extended(storage, chains=None, limit: int = EXTENDED_LIMIT) -> list[HotDeal]:
+    """Everything else worth seeing, for the "more deals" link.
+
+    The message itself carries ten, because a long message is skimmed and
+    then ignored. This carries the rest behind a link nobody has to open,
+    which is the point: it costs nothing when they are not interested and
+    it is there when they are, so nothing found has to be thrown away.
+    """
+    deals = _dedupe(scan(storage, chains))
+    relevant, exceptional = find(storage, chains)
+    shown = {d.barcode for d in relevant} | {d.barcode for d in exceptional}
+    return [d for d in deals if d.barcode not in shown][:limit]
+
+
+def format_extended(deals: list[HotDeal]) -> str:
+    from .mdtext import escape
+
+    if not deals:
+        return "אין כרגע מבצעים נוספים מעבר למה שכבר שלחתי."
+    lines = [f"*עוד {len(deals)} מבצעים*", ""]
+    for deal in deals:
+        tag = "" if is_regular(deal.chain) else " \u26a1"
+        lines.append(
+            f"\u2022 *{escape(deal.name)}* \u2014 \u20aa{deal.price:.2f} "
+            f"\u05d1{escape(display_name(deal.chain))}{tag} "
+            f"_(\u20aa{deal.saving:.2f}, {deal.discount * 100:.0f}%)_"
+        )
+    return "\n".join(lines)
 
 
 # Several patterns describe one shopping decision. Without this the cap

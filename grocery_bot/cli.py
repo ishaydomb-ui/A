@@ -500,7 +500,13 @@ def _nudge(storage: Storage, args: list[str]) -> int:
             except ValueError:
                 pass
 
-    decision = nudge.decide(storage, last_nudged=last_nudged)
+    import os
+
+    decision = nudge.decide(
+        storage,
+        last_nudged=last_nudged,
+        bot_username=os.environ.get("TELEGRAM_BOT_USERNAME", ""),
+    )
     if decision.due:
         print(decision.text)
     elif "--why" in args:

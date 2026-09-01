@@ -89,6 +89,7 @@ def decide(
     today: date | None = None,
     last_nudged: date | None = None,
     store: str = "shufersal",
+    bot_username: str = "",
 ) -> NudgeDecision:
     """Should the household be nudged, and with what?"""
     today = today or datetime.now(timezone.utc).date()
@@ -103,11 +104,17 @@ def decide(
     if last_nudged and (today - last_nudged).days < QUIET_PERIOD_DAYS:
         return NudgeDecision(False, days, reason="already nudged recently")
 
-    return NudgeDecision(True, days, text=compose(storage, days, today, store))
+    return NudgeDecision(
+        True, days, text=compose(storage, days, today, store, bot_username)
+    )
 
 
 def compose(
-    storage, days: int, today: date | None = None, store: str = "shufersal"
+    storage,
+    days: int,
+    today: date | None = None,
+    store: str = "shufersal",
+    bot_username: str = "",
 ) -> str:
     """The message itself."""
     lines = [
@@ -133,5 +140,15 @@ def compose(
     text = hotdeals.format_deals(relevant, exceptional)
     if text:
         lines += ["", text]
+        # A link rather than more lines: it costs nothing when they are
+        # not interested, and nothing found has to be discarded. A
+        # Telegram deep link needs no hosting and opens straight onto the
+        # long list.
+        extra = len(hotdeals.find_extended(storage))
+        if extra and bot_username:
+            lines += [
+                "",
+                f"[עוד {extra} מבצעים](https://t.me/{bot_username}?start=alldeals)",
+            ]
 
     return "\n".join(lines)

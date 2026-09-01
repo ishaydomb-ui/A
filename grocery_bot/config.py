@@ -36,6 +36,7 @@ class Config:
     # interrupting the user (the project's "minimum user dependency" rule).
     # Optional: with them unset the bot still runs, it just can't recover
     # on its own once the saved session expires.
+    bot_username: str = ""
     shufersal_username: str = ""
     shufersal_password: str = ""
 
@@ -63,6 +64,7 @@ class Config:
             headless=os.environ.get("PLAYWRIGHT_HEADLESS", "true").lower() != "false",
             shufersal_price_store_id=os.environ.get("SHUFERSAL_PRICE_STORE_ID", "9"),
             playwright_proxy=os.environ.get("PLAYWRIGHT_PROXY", ""),
+            bot_username=os.environ.get("TELEGRAM_BOT_USERNAME", ""),
             shufersal_username=os.environ.get("SHUFERSAL_USERNAME", ""),
             shufersal_password=os.environ.get("SHUFERSAL_PASSWORD", ""),
         )

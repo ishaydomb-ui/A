@@ -19,7 +19,7 @@ from telegram.ext import (
     filters,
 )
 
-from . import ask, waste
+from . import ask, hotdeals, waste
 from .adapters.base import StoreAdapter
 from .adapters.shufersal import ShufersalAdapter
 from .catalog import (
@@ -228,6 +228,12 @@ class GroceryBot:
         self.storage = storage
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        # A Telegram deep link (t.me/<bot>?start=alldeals) arrives as
+        # /start with a payload. That is what makes "more deals" a real
+        # link rather than a command to remember, and it needs no hosting.
+        if context.args and context.args[0] == "alldeals":
+            await self.all_deals(update, context)
+            return
         await update.message.reply_text(
             "היי! פשוט דברו איתי רגיל, בלי פקודות. למשל:\n\n"
             "• *תוסיף 300 גרם פסטרמה* — מוסיף לרשימה עם משקל\n"
@@ -312,6 +318,20 @@ class GroceryBot:
             return
         found = await asyncio.to_thread(find_deals_for_base_list, self.storage, items)
         await update.message.reply_text(format_deals_report(found), parse_mode="Markdown")
+
+    async def all_deals(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/alldeals — the long list behind the "more deals" link.
+
+        The nudge carries ten deals because a long message is skimmed and
+        then ignored. Everything else lives here, one tap away, so nothing
+        found has to be discarded and nothing unwanted has to be read.
+        """
+        if not _authorized(self.config, update):
+            return
+        deals = await asyncio.to_thread(hotdeals.find_extended, self.storage)
+        await update.message.reply_text(
+            hotdeals.format_extended(deals), parse_mode="Markdown"
+        )
 
     async def refresh_prices(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/refresh_prices — re-download the branch's price + promo snapshot."""
@@ -1566,6 +1586,7 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("list", bot.list_base_items))
     application.add_handler(CommandHandler("price", bot.price))
     application.add_handler(CommandHandler("deals", bot.deals))
+    application.add_handler(CommandHandler("alldeals", bot.all_deals))
     application.add_handler(CommandHandler("refresh_prices", bot.refresh_prices))
     application.add_handler(CommandHandler("propose", bot.propose_cycle))
     application.add_handler(CommandHandler("stockup", bot.stockup))
