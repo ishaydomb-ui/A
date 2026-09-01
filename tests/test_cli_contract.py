@@ -1,4 +1,5 @@
 import os
+import pathlib
 import subprocess
 import sys
 import tempfile
@@ -173,3 +174,40 @@ class CartCommandContractTest(unittest.TestCase):
         )
         for forbidden in ("_checkout", "place_order", "submit_order", "pay("):
             self.assertNotIn(forbidden, code)
+
+
+class CardConfirmationContractTest(unittest.TestCase):
+    """The other bot passes the raw reply; we decide what it means."""
+
+    def setUp(self):
+        import tempfile
+        from grocery_bot.storage import Storage
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.storage = Storage(str(pathlib.Path(self.tmp.name) / "t.sqlite3"))
+
+    def test_a_confirmation_is_recorded(self):
+        from grocery_bot import cardreminder, cli
+
+        cli._confirm_card(self.storage, ["כן, הטענתי"])
+        self.assertTrue(cardreminder.confirmed(self.storage))
+
+    def test_a_negation_records_nothing(self):
+        # "לא הטענתי" contains "הטענתי"; taking it as a yes would silence
+        # the reminder for a month the card was never loaded.
+        from grocery_bot import cardreminder, cli
+
+        cli._confirm_card(self.storage, ["לא הטענתי עדיין"])
+        self.assertFalse(cardreminder.confirmed(self.storage))
+
+    def test_no_argument_confirms_for_a_caller_that_already_decided(self):
+        from grocery_bot import cardreminder, cli
+
+        cli._confirm_card(self.storage, [])
+        self.assertTrue(cardreminder.confirmed(self.storage))
+
+    def test_it_is_on_the_token_free_path(self):
+        from grocery_bot import cli
+
+        self.assertIn("confirm-card", cli._DB_ONLY_COMMANDS)

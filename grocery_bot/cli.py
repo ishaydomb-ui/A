@@ -16,6 +16,8 @@ Run with: python -m grocery_bot.cli <command>
                           (falls back to the list if not found; never checks out)
     nudge                 the overdue-shop message, or nothing if not due
                           [--last-nudged YYYY-MM-DD] [--why]
+    confirm-card ["<reply>"]  record that the ₪700 card was loaded this
+                          month, so the question stops until next month
     list-items            print the pending shopping list, one per line
     recipe <dish>         ingredients for a dish [--by NAME] [--all] [--preview]
     recipe-text           same, from recipe text on stdin (OCR/screenshot/paste)
@@ -514,6 +516,28 @@ def _nudge(storage: Storage, args: list[str]) -> int:
     return 0
 
 
+def _confirm_card(storage: Storage, args: list[str]) -> int:
+    """Record that the benefit card was loaded this month.
+
+    Called by the other bot when someone answers the monthly card
+    question. Pass the person's raw reply rather than deciding yourself:
+    "לא הטענתי" contains "הטענתי" and only reads as a negation if the
+    negation is checked first, which this does.
+
+    With no arguments it confirms unconditionally, for a caller that has
+    already decided.
+    """
+    from . import cardreminder
+
+    reply = " ".join(a for a in args if not a.startswith("--")).strip()
+    if reply and not cardreminder.looks_confirmed(reply):
+        print("not a confirmation; nothing recorded")
+        return 0
+    cardreminder.confirm(storage)
+    print(f"recorded: card loaded for {cardreminder.current_month()}")
+    return 0
+
+
 _DB_ONLY_COMMANDS = {
     "add-item": lambda storage, args: _add_item(storage, args),
     "remove-item": _remove_item,
@@ -526,6 +550,7 @@ _DB_ONLY_COMMANDS = {
     # Reads only what earlier syncs already wrote, so the other bot can
     # call it on a timer without a token or a store session.
     "nudge": _nudge,
+    "confirm-card": _confirm_card,
 }
 
 # Needs the store session and the Israeli exit, so it cannot live on the
