@@ -298,9 +298,15 @@ def _known_products(storage: Storage, store: str) -> dict:
 
 def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
     """Human-readable (Hebrew) summary suitable for a Telegram message."""
+    from .chains import display_name
+
     lines: list[str] = []
     for store, report in reports.items():
-        lines.append(f"*{store}*")
+        # The chain name, in Hebrew, not the internal key. Only one chain
+        # can be filled today, so "תוסיף לסל" always means that one — and
+        # a deal spotted at another chain would be filled here, at this
+        # chain's price, unless the reply says where it went.
+        lines.append(f"*{display_name(store)}*")
         if report.added:
             lines.append(f"✅ נוספו ({len(report.added)}): " + ", ".join(r.item_name for r in report.added))
             # An automatic pick must be visible: it replaced a question the

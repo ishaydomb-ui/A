@@ -98,7 +98,11 @@ def format_stockup_deals(deals: list[StockUpDeal]) -> str:
             "אין כרגע מבצעים חריגים (25%+ הנחה) על מוצרים שאתם קונים. "
             "אבדוק שוב אחרי רענון המחירים הבא."
         )
-    lines = ["📦 *שווה לאגור* — מבצעים חריגים על דברים שאתם קונים", ""]
+    # Every deal here comes from the Shufersal price feed, so the chain
+    # is named once at the top. Without it the list reads as chain-neutral
+    # while the cross-chain deals list beside it names a chain per line —
+    # and a reader cannot tell which prices these are.
+    lines = ["📦 *שווה לאגור בשופרסל* — מבצעים חריגים על דברים שאתם קונים", ""]
     for deal in deals:
         mark = "🧺 " if deal.pantryable else ""
         lines.append(

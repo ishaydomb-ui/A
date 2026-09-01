@@ -56,6 +56,17 @@ def is_regular(chain: str) -> bool:
     return CHAIN_NAMES.get(chain, (chain, False))[1]
 
 
+# Chains this project can actually put something into a cart at. Every
+# other chain is price data only: its deals are real and worth knowing,
+# but "add it" cannot mean anything there, and saying so up front is the
+# difference between useful information and a promise that quietly fails.
+CART_CAPABLE = {"shufersal"}
+
+
+def can_fill_cart(chain: str) -> bool:
+    return chain in CART_CAPABLE
+
+
 @dataclass(frozen=True)
 class FeedResult:
     chain: str

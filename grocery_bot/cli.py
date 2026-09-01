@@ -464,10 +464,16 @@ def _add_to_cart(storage: Storage, args: list[str]) -> int:
         print("no store adapters configured", file=sys.stderr)
         return 1
 
+    from .chains import display_name
+
     reports = add_terms_to_cart(storage, factories, [(term, quantity)])
-    for report in reports.values():
+    for store, report in reports.items():
         for result in report.added:
-            print(f"added to cart: {result.item_name}")
+            # Always name the chain. There is exactly one cart-capable
+            # chain today, so "add it" silently means Shufersal — and a
+            # deal shown at another chain would be filled here at this
+            # chain's price without anyone noticing the substitution.
+            print(f"added to the {display_name(store)} cart: {result.item_name}")
             return 0
         for result in report.ambiguous:
             print(f"ambiguous: {result.item_name} — added to the list instead")

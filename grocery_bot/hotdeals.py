@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .chains import display_name, is_regular
+from .chains import can_fill_cart, display_name, is_regular
 from .multibuy import _promotion_horizon
 
 # A cut worth a message on something they already buy. Below this it is
@@ -389,7 +389,12 @@ def format_deals(relevant: list[HotDeal], exceptional: list[HotDeal] | None = No
 
     def line(deal: HotDeal) -> str:
         where = display_name(deal.chain)
+        # A deal at a chain with no cart integration cannot be acted on by
+        # asking me — say so beside the price rather than letting "תוסיף
+        # לסל" silently add the Shufersal version at the Shufersal price.
         tag = "" if is_regular(deal.chain) else " ⚡"
+        if not can_fill_cart(deal.chain):
+            tag += " 🔗"
         return (
             f"• *{escape(deal.name)}* — ₪{deal.price:.2f} ב{escape(where)}{tag} "
             f"מול ₪{deal.reference_price:.2f} "
@@ -405,6 +410,9 @@ def format_deals(relevant: list[HotDeal], exceptional: list[HotDeal] | None = No
             lines.append("")
         lines += ["*מבצעים חריגים — שווה מבט גם אם לא קניתם*", ""]
         lines += [line(d) for d in exceptional]
-    if any(not is_regular(d.chain) for d in relevant + exceptional):
+    shown = relevant + exceptional
+    if any(not is_regular(d.chain) for d in shown):
         lines += ["", "_⚡ = רשת שאתם לא קונים בה בדרך כלל_"]
+    if any(not can_fill_cart(d.chain) for d in shown):
+        lines += ["_🔗 = אין חיבור לסל שם — צריך להזמין ידנית באתר של הרשת_"]
     return "\n".join(lines)
