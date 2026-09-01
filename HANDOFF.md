@@ -1,0 +1,105 @@
+# HANDOFF — current state of grocery-automation
+
+Living document. Rewritten on every **עוגן**, not appended to: a handover
+note that grows into a diary stops being read. History lives in git and
+in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
+question only — *if someone picked this up right now, what would they
+need to know?*
+
+**Last anchored:** 2026-09-01
+**Conversation id:** `df559a44-e7ec-4e8f-9462-046d0a364d36`
+**Branch:** `claude/online-grocery-automation-b7pq4g`
+
+---
+
+## 1. Where things stand
+
+**Running in production on the Contabo VPS**, as user systemd units:
+
+| Unit | What it does |
+|---|---|
+| `grocery-bot.service` | The Telegram bot (active) |
+| `grocery-prices.timer` | Refreshes the Shufersal price feed, a few times a day |
+| `grocery-backup.timer` | Pushes commits to GitHub every 30 min |
+| `grocery-doctor.timer` | Hourly backup health check (new, 2026-09-01) |
+| `grocery-alert@.service` | `OnFailure=` notifier shared by all of the above |
+
+**Store access:**
+- **Shufersal** — logged in, cart add/remove verified, public price feed
+  working (5,821 products). Order history readable.
+- **Tiv Taam** — logged in (session survives with no browser running).
+  Account, orders, coupons, smart list all readable.
+- **Victory** — prices readable with **no login at all**; account login
+  still outstanding (see §3).
+
+**Everything needs the Israeli exit** (`PLAYWRIGHT_PROXY`, Tailscale
+SOCKS5 on `localhost:1055`). Without it the chains return block pages
+with HTTP 200, which reads like broken selectors.
+
+## 2. In flight
+
+Nothing is half-built. The last completed pieces, newest first:
+
+- Backup monitoring — heartbeat, freshness doctor, `OnFailure=` alerts,
+  all-clear on recovery. Verified end to end.
+- `shelflife.py` — when cupboard staples are actually due again.
+- `pricecontrol.py` — prefer the price-controlled staple where one exists.
+- `ask.py` — one-off price questions across all three chains.
+- `multibuy.py` — whether "הוסף וחסוך" is genuinely worth taking.
+- `compare.py` + `selfpoint.py` — cross-chain comparison on EAN barcode.
+
+## 3. Blocked, and on what
+
+- **Victory account login.** Needs the same manual noVNC flow as Tiv Taam
+  (checkbox reCAPTCHA). The user could not reach
+  `http://localhost:6080/vnc.html` from the phone — the stack is running
+  and serving locally, so it is the SSH port-forward of 6080. **Victory
+  price comparison does not depend on this** and already works; an
+  account would add only order history and cart filling.
+
+## 4. Handover procedure
+
+Run on **"העברה"**, after the anchor. Written 2026-09-01; the user
+referred to a section 4 that did not exist yet, so this is a proposed
+procedure — correct it rather than work around it.
+
+1. **Anchor first.** Nothing below is worth doing on top of unsaved work.
+2. **Verify the tree is genuinely clean** — `git status`, and confirm the
+   push landed on origin rather than trusting the command's exit code.
+3. **Confirm production still runs.** `systemctl --user list-timers` and
+   `systemctl --user list-units --failed`. A handover that leaves a dead
+   timer behind hands over a silent failure.
+4. **Refresh §1–§3 of this file** so they describe reality now, not when
+   they were written.
+5. **State the open questions waiting on the user** (§5). These are the
+   things a new session cannot derive from the code and would otherwise
+   silently re-litigate.
+6. **Record the conversation id** above, so the transcript can be found.
+7. **Name what is deliberately not done**, with the reasoning — otherwise
+   the next session rediscovers a decision as though it were a bug. The
+   clearest current example: uncommitted work is reported, never
+   auto-committed, because this repo pushes to a code host and holds
+   store credentials.
+
+## 5. Open questions for the user
+
+- **Which Victory branch do they actually shop at?** Prices are per
+  branch; Ramat Gan (קניון איילון, id 2447) is pinned as a guess and
+  there are four Tel Aviv stores.
+- **What TivCoins balance does the app show?** To reconcile against the
+  computed 3% accrual.
+- **Waste reporting** — design agreed (free text anytime; one targeted
+  question at the end of a hand-off; never a checklist), not yet built.
+
+## 6. Things that will bite a new session
+
+Full list in [`docs/ADDING_A_STORE.md`](./docs/ADDING_A_STORE.md). The
+three that cost the most time:
+
+- **A geo-block returns HTTP 200**, so it looks like broken selectors.
+- **"Forbidden" can mean "you forgot a parameter"** — Self-Point's
+  products endpoint wants an Elasticsearch-shaped `filters` argument and
+  needs no login at all.
+- **`xdotool` is not installed here.** It once produced a confident,
+  wrong "zero windows on the display" diagnosis. Use `xwininfo` or a real
+  screenshot.

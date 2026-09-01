@@ -1,8 +1,10 @@
 # CLAUDE.md
 
 Instructions for any Claude Code session working in this repo. Read this
-before doing anything else. Project background, decisions, and roadmap
-live in [`GOALS.md`](./GOALS.md); setup/run instructions live in
+before doing anything else. Current state, what is blocked and the open
+questions live in [`HANDOFF.md`](./HANDOFF.md) — read that second.
+Project background, decisions, and roadmap live in
+[`GOALS.md`](./GOALS.md); setup/run instructions live in
 [`README.md`](./README.md). This file is about *how to work*, not *what
 the project is*.
 
@@ -67,6 +69,44 @@ week belongs in a file before the next tool call, not after the next ten.
   the memory directory.
 - Anything about how the code behaves → a comment or a test, where it
   cannot drift away from the code it describes.
+
+## Trigger words
+
+Three words the user types to control saving and session handover. They
+are commands, not topics of conversation.
+
+### "עוגן" (anchor) — save everything now
+
+Set by the user 2026-09-01. Do all of this, then stop:
+
+1. Update `HANDOFF.md` — current state, what is in flight, what is
+   blocked, and the open questions waiting on the user.
+2. Commit everything outstanding, in focused commits.
+3. Push. If a bundle mechanism exists, build it too.
+4. Record the conversation id in `HANDOFF.md`.
+
+**Report back in one line: what was saved, and what was already clean.**
+Do not summarise the session and do not open a new conversation. The
+point is only to leave nothing hanging in the air.
+
+Why one line: an anchor is a checkpoint the user fires mid-work, often
+several times a day. A summary each time buries the one fact they asked
+for — whether anything was actually at risk.
+
+### "compact" — anchor, then advise
+
+Do the anchor above, then propose what is worth preserving in the
+compaction summary *before* the user runs it. They run it, not you.
+
+Compaction writes nothing to disk, so anything living only in the
+transcript degrades to a sentence and then to nothing. Name the specific
+measurements, decisions and open threads that would be lost, so the user
+can decide what to carry forward.
+
+### "העברה" (handover) — anchor, then the full procedure
+
+Do the anchor, then follow the handover procedure in section 4 of
+`HANDOFF.md`.
 
 ## Hard safety rule — non-negotiable
 
