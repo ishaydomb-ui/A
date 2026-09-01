@@ -135,3 +135,41 @@ class RecipeContractTests(unittest.TestCase):
         for argv in (["recipe"], ["recipe-text"], ["meal-plan", "--preview"]):
             result = _run(argv, self.db)
             self.assertNotIn("TELEGRAM_BOT_TOKEN", result.stdout + result.stderr, argv)
+
+
+class CartCommandContractTest(unittest.TestCase):
+    """The second bot's cart surface, and the boundary around it."""
+
+    def test_add_to_cart_is_advertised_in_the_help(self):
+        # The other bot's authors read this to discover the surface.
+        import pathlib
+
+        self.assertIn(
+            "add-to-cart", pathlib.Path("grocery_bot/cli.py").read_text()[:2000]
+        )
+
+    def test_add_to_cart_is_not_on_the_token_free_path(self):
+        # It needs the store session and the Israeli exit, so listing it
+        # as DB-only would make it fail confusingly for the other bot.
+        from grocery_bot import cli
+
+        self.assertNotIn("add-to-cart", cli._DB_ONLY_COMMANDS)
+        self.assertIn("add-to-cart", cli._STORE_COMMANDS)
+
+    def test_list_commands_still_need_no_telegram_token(self):
+        from grocery_bot import cli
+
+        for name in ("add-item", "remove-item", "list-items"):
+            self.assertIn(name, cli._DB_ONLY_COMMANDS)
+
+    def test_no_checkout_verb_is_reachable_from_the_cli(self):
+        # The hard rule: automation fills carts, never pays. Guarded by a
+        # test so a future edit has to delete this deliberately.
+        import pathlib
+
+        source = pathlib.Path("grocery_bot/cli.py").read_text()
+        code = "\n".join(
+            line for line in source.splitlines() if not line.strip().startswith("#")
+        )
+        for forbidden in ("_checkout", "place_order", "submit_order", "pay("):
+            self.assertNotIn(forbidden, code)

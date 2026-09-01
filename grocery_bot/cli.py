@@ -12,6 +12,8 @@ Run with: python -m grocery_bot.cli <command>
     add-item <text>       add to the shopping list [--by NAME] [--qty N]
                           (the integration point for the household's other bot)
     remove-item <text>    remove one item by fuzzy name ("תוריד חלב מהרשימה")
+    add-to-cart <text>    put it straight into the open store cart [--qty N]
+                          (falls back to the list if not found; never checks out)
     list-items            print the pending shopping list, one per line
     recipe <dish>         ingredients for a dish [--by NAME] [--all] [--preview]
     recipe-text           same, from recipe text on stdin (OCR/screenshot/paste)
@@ -34,6 +36,7 @@ from .catalog import (
     refresh_catalog,
 )
 from .config import Config
+from .orchestrator import add_terms_to_cart
 from .storage import Storage
 
 
@@ -59,6 +62,10 @@ def main(argv: list[str] | None = None) -> int:
     if command in _DB_ONLY_COMMANDS:
         storage = Storage(os.environ.get("GROCERY_BOT_DB_PATH", "data/grocery_bot.sqlite3"))
         return _DB_ONLY_COMMANDS[command](storage, rest)
+
+    if command in _STORE_COMMANDS:
+        storage = Storage(os.environ.get("GROCERY_BOT_DB_PATH", "data/grocery_bot.sqlite3"))
+        return _STORE_COMMANDS[command](storage, rest)
 
     config = Config.from_env()
     storage = Storage(config.db_path)
@@ -404,6 +411,70 @@ def _list_items(storage: Storage, args: list[str]) -> int:
 
 # Commands needing only the database — no Telegram token, no network. The
 # integration surface for the household's other bot.
+def _add_to_cart(storage: Storage, args: list[str]) -> int:
+    """Put an item straight into the real store cart.
+
+    The other half of the integration surface for the household's second
+    bot. `add-item` puts something on the list for the next cycle; this
+    reaches the cart that is open right now, which is what "תוסיף לסל"
+    means when the shop is already half-built.
+
+    Needs the store session and the Israeli exit, so unlike `add-item` it
+    is not on the token-free path — it is listed separately and fails with
+    a clear message rather than a stack trace when those are missing.
+
+    The hard rule is unchanged and unchangeable here: this adds to a cart
+    and can never reach a checkout or payment step. See CLAUDE.md.
+    """
+    words, skip, quantity = [], False, 1
+    for index, argument in enumerate(args):
+        if skip:
+            skip = False
+            continue
+        if argument == "--qty" and index + 1 < len(args):
+            try:
+                quantity = max(1, int(args[index + 1]))
+            except ValueError:
+                quantity = 1
+            skip = True
+            continue
+        if argument.startswith("--"):
+            skip = True
+            continue
+        words.append(argument)
+
+    term = " ".join(words).strip()
+    if not term:
+        print("usage: add-to-cart <text> [--qty N]", file=sys.stderr)
+        return 2
+
+    # Imported here rather than at module load: the adapter pulls in
+    # Playwright, and the token-free commands the other bot calls must not
+    # pay for that.
+    from .telegram_bot import _build_adapter_factories
+
+    config = Config.from_env()
+    factories = _build_adapter_factories(config)
+    if not factories:
+        print("no store adapters configured", file=sys.stderr)
+        return 1
+
+    reports = add_terms_to_cart(storage, factories, [(term, quantity)])
+    for report in reports.values():
+        for result in report.added:
+            print(f"added to cart: {result.item_name}")
+            return 0
+        for result in report.ambiguous:
+            print(f"ambiguous: {result.item_name} — added to the list instead")
+            storage.add_adhoc_request(text=term, requested_by="")
+            return 0
+    # Not found or errored: the request must not vanish, so it lands on
+    # the list where the next cycle will retry it.
+    storage.add_adhoc_request(text=term, requested_by="")
+    print(f"not found in the store: {term} — added to the list instead")
+    return 0
+
+
 _DB_ONLY_COMMANDS = {
     "add-item": lambda storage, args: _add_item(storage, args),
     "remove-item": _remove_item,
@@ -413,6 +484,12 @@ _DB_ONLY_COMMANDS = {
     "recipe": _recipe,
     "recipe-text": _recipe_text,
     "meal-plan": _meal_plan,
+}
+
+# Needs the store session and the Israeli exit, so it cannot live on the
+# token-free path — but it is still part of the second bot's surface.
+_STORE_COMMANDS = {
+    "add-to-cart": _add_to_cart,
 }
 
 
