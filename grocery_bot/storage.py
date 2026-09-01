@@ -204,6 +204,17 @@ CREATE TABLE IF NOT EXISTS store_prices (
 CREATE INDEX IF NOT EXISTS idx_store_prices_barcode
     ON store_prices(barcode);
 
+-- Monthly confirmations of a benefit the bot cannot observe in advance.
+-- The loadable card only shows up in the data after an order is paid, by
+-- which point an unloaded month is already lost, so the household is
+-- asked and their answer recorded.
+CREATE TABLE IF NOT EXISTS benefit_confirmations (
+    kind TEXT NOT NULL,
+    month TEXT NOT NULL,           -- YYYY-MM
+    confirmed_at TEXT NOT NULL,
+    PRIMARY KEY (kind, month)
+);
+
 -- What the household reported throwing away. The only signal here that
 -- cannot be derived from any store: order history shows what was bought,
 -- never what was eaten.
@@ -621,6 +632,24 @@ class Storage:
                 "SELECT * FROM stock_items WHERE store = ? ORDER BY share DESC", (store,)
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def confirm_benefit(self, kind: str, month: str) -> None:
+        """Record that the household used a benefit this month."""
+        with closing(self._connect()) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO benefit_confirmations (kind, month, confirmed_at) "
+                "VALUES (?, ?, ?)",
+                (kind, month, datetime.now(timezone.utc).isoformat()),
+            )
+            conn.commit()
+
+    def benefit_confirmed(self, kind: str, month: str) -> bool:
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                "SELECT 1 FROM benefit_confirmations WHERE kind = ? AND month = ?",
+                (kind, month),
+            ).fetchone()
+        return row is not None
 
     def record_waste(self, rows: list[tuple]) -> int:
         """Store waste reports: (item_name, fraction, reported_on, by)."""

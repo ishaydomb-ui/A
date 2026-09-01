@@ -27,7 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
-from . import hotdeals, shelflife
+from . import cardreminder, hotdeals, shelflife
 
 # The household orders roughly weekly to every ten days, in their own
 # words. Six days is early enough to act on and late enough not to nag —
@@ -122,8 +122,16 @@ def compose(
         lines += ["", "*כנראה נגמר במזווה:*"]
         lines += [f"• {item.name}" for item in due[:6]]
 
-    deals = hotdeals.find(storage)
-    if deals:
-        lines += ["", hotdeals.format_deals(deals)]
+    # The card question rides here rather than having its own channel:
+    # it must be asked *before* the shop, and this is the message that
+    # already arrives then.
+    prompt = cardreminder.decide(storage, today)
+    if prompt.should_ask:
+        lines += ["", prompt.text]
+
+    relevant, exceptional = hotdeals.find(storage)
+    text = hotdeals.format_deals(relevant, exceptional)
+    if text:
+        lines += ["", text]
 
     return "\n".join(lines)

@@ -130,5 +130,123 @@ class HotDealTest(unittest.TestCase):
         self.assertEqual(hotdeals.format_deals([]), "")
 
 
+class TwoBucketTest(unittest.TestCase):
+    """Deals the household buys, and deals that are simply remarkable."""
+
+    def _deal(self, name, price, reference, often=False, chain="ramilevy"):
+        return hotdeals.HotDeal(
+            barcode=name, name=name, chain=chain, price=price,
+            reference_price=reference, bought_often=often,
+        )
+
+    def test_a_novel_product_qualifies_only_when_remarkable(self):
+        # The household is happy to try something new at a good price,
+        # but does not want a catalogue.
+        mild = self._deal("תותים", 8.0, 10.0)
+        deep = self._deal("אפרול 1 ליטר", 69.90, 120.90)
+        self.assertFalse(mild.exceptional)
+        self.assertTrue(deep.exceptional)
+
+    def test_a_familiar_product_qualifies_on_a_lower_bar(self):
+        self.assertTrue(self._deal("מלפפון", 7.0, 10.0, often=True).worth_reporting)
+
+    def test_an_implausible_discount_is_a_feed_error_not_a_deal(self):
+        # A 95%-off line is a misplaced decimal, and reporting it burns
+        # the trust the rest of the list depends on.
+        self.assertFalse(self._deal("משהו", 1.0, 100.0).plausible)
+        self.assertFalse(self._deal("משהו", 1.0, 100.0).exceptional)
+
+    def test_something_they_buy_never_appears_under_never_bought(self):
+        # Yellow peppers are tier A for this household and landed under
+        # "even if you have not bought it" purely because five nappy
+        # deals outranked them. Exercised through the real split rather
+        # than by asserting a property of one object.
+        import tempfile as _tempfile
+
+        tmp = _tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        storage = Storage(str(Path(tmp.name) / "t.sqlite3"))
+        with storage._connect() as conn:  # noqa: SLF001 - test fixture
+            conn.execute(
+                "INSERT INTO catalog_products (item_code, name, price) VALUES (?,?,?)",
+                ("PEP", "פלפל צהוב", 12.90),
+            )
+            conn.execute(
+                "INSERT INTO stock_items (store, product_code, product_name, tier, share) "
+                "VALUES ('shufersal', 'P_PEP', 'פלפל צהוב', 'A', 0.9)"
+            )
+            conn.commit()
+        storage.record_store_prices(
+            "ramilevy",
+            [{"barcode": "PEP", "name": "פלפל צהוב", "price": 4.0,
+              "observed_at": "2026-09-01"}],
+        )
+        relevant, exceptional = hotdeals.find(storage, chains=["ramilevy"])
+        self.assertIn("פלפל צהוב", [d.name for d in relevant])
+        self.assertNotIn("פלפל צהוב", [d.name for d in exceptional])
+
+    def test_promotions_are_a_deal_source_not_just_other_chains(self):
+        # A 2+1 at their own shop leaves the shelf price untouched, so
+        # cross-chain comparison alone cannot see the commonest Israeli
+        # deal there is.
+        import inspect
+
+        self.assertIn("_promotion_deals", inspect.getsource(hotdeals.scan))
+
+    def test_message_separates_the_two_lists(self):
+        text = hotdeals.format_deals(
+            [self._deal("חיתולי האגיס", 45.0, 60.90)],
+            [self._deal("אפרול", 69.90, 120.90)],
+        )
+        self.assertIn("מבצעים על מה שאתם קונים", text)
+        self.assertIn("גם אם לא קניתם", text)
+
+
+class CardReminderTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.storage = Storage(str(Path(self.tmp.name) / "t.sqlite3"))
+
+    def test_asks_when_the_month_is_unconfirmed(self):
+        from grocery_bot import cardreminder
+
+        prompt = cardreminder.decide(self.storage, date(2026, 9, 1))
+        self.assertTrue(prompt.should_ask)
+        self.assertIn("700", prompt.text)
+
+    def test_stops_asking_once_confirmed(self):
+        from grocery_bot import cardreminder
+
+        cardreminder.confirm(self.storage, today=date(2026, 9, 1))
+        self.assertFalse(cardreminder.decide(self.storage, date(2026, 9, 20)).should_ask)
+
+    def test_asks_again_next_month(self):
+        from grocery_bot import cardreminder
+
+        # The allowance does not roll over, so each month is its own
+        # decision and its own ₪49.
+        cardreminder.confirm(self.storage, today=date(2026, 9, 1))
+        self.assertTrue(cardreminder.decide(self.storage, date(2026, 10, 1)).should_ask)
+
+    def test_reads_a_yes(self):
+        from grocery_bot import cardreminder
+
+        for reply in ("הטענתי", "כן טענתי", "סידרתי את זה"):
+            self.assertTrue(cardreminder.looks_confirmed(reply), reply)
+
+    def test_a_negation_is_never_a_yes(self):
+        from grocery_bot import cardreminder
+
+        # "לא הטענתי" contains "הטענתי" and must not be read as done.
+        for reply in ("לא הטענתי", "עוד לא", "לא הספקתי"):
+            self.assertFalse(cardreminder.looks_confirmed(reply), reply)
+
+    def test_empty_reply_is_not_a_confirmation(self):
+        from grocery_bot import cardreminder
+
+        self.assertFalse(cardreminder.looks_confirmed(""))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -26,9 +26,26 @@ from dataclasses import dataclass
 
 from .chains import display_name, is_regular
 
-# A cut worth a message. Below this it is ordinary price movement and the
-# weekly comparison already covers it.
+# A cut worth a message on something they already buy. Below this it is
+# ordinary price movement and the weekly comparison already covers it.
 MIN_DISCOUNT = 0.20
+
+# The bar for a product the household has never bought. Much higher,
+# because the only reason to mention it is that it is remarkable: the
+# household said they are happy to try something new at a good enough
+# price, not that they want a catalogue.
+EXCEPTIONAL_DISCOUNT = 0.40
+EXCEPTIONAL_MIN_SAVING = 8.0
+
+# Past this, it is almost always a feed error rather than a price — a
+# 95%-off line is a misplaced decimal, and reporting it burns trust that
+# the rest of the list depends on.
+IMPLAUSIBLE_DISCOUNT = 0.90
+
+# How many of each kind go in a message. Two short lists are read; one
+# long list is skimmed and then ignored.
+RELEVANT_LIMIT = 5
+EXCEPTIONAL_LIMIT = 5
 
 # For an expensive keeper, the shekels matter more than the percentage:
 # 15% off nappies is worth more than half off a tin of corn.
@@ -90,7 +107,7 @@ class HotDeal:
 
     @property
     def worth_reporting(self) -> bool:
-        if self.saving <= 0:
+        if not self.plausible:
             return False
         # An expensive keeper clears on shekels; everything else has to
         # clear on percentage, so a cheap item cannot shout.
@@ -99,21 +116,34 @@ class HotDeal:
         return self.discount >= MIN_DISCOUNT and self.saving >= 2.0
 
     @property
+    def relevant(self) -> bool:
+        """Is this about the household's own shopping?"""
+        return self.bought_often or self.stockable
+
+    @property
+    def plausible(self) -> bool:
+        return 0 < self.discount < IMPLAUSIBLE_DISCOUNT
+
+    @property
+    def exceptional(self) -> bool:
+        """Remarkable enough to mention even if they have never bought it."""
+        return (
+            self.plausible
+            and self.discount >= EXCEPTIONAL_DISCOUNT
+            and self.saving >= EXCEPTIONAL_MIN_SAVING
+        )
+
+    @property
     def reason(self) -> str:
         if self.stockable:
             return "לא מתקלקל, שווה לאגור"
         if self.bought_often:
             return "אתם קונים את זה הרבה"
-        return "הנחה עמוקה"
+        return "הנחה חריגה"
 
 
-def find(storage, chains=None, limit: int = 8) -> list[HotDeal]:
-    """Deep discounts across every chain, on things this household cares about.
-
-    The reference price is Shufersal's current shelf price, because it is
-    the chain the household actually uses and therefore the price they
-    would otherwise pay.
-    """
+def scan(storage, chains=None) -> list[HotDeal]:
+    """Every worthwhile discount across every chain with data."""
     frequent = {
         row["product_name"]
         for store in ("shufersal", "tivtaam")
@@ -138,23 +168,112 @@ def find(storage, chains=None, limit: int = 8) -> list[HotDeal]:
                 reference_price=reference["price"],
                 bought_often=reference["name"] in frequent,
             )
-            # Only surface something they buy, or something worth
-            # stocking: a bargain on an item they never buy is noise.
-            if not (deal.bought_often or deal.stockable):
-                continue
-            if deal.worth_reporting:
+            if deal.relevant and deal.worth_reporting:
+                deals.append(deal)
+            elif deal.exceptional:
                 deals.append(deal)
 
-    deals.sort(key=lambda d: (d.stockable, d.saving), reverse=True)
-    return _dedupe(deals)[:limit]
+    deals.extend(_promotion_deals(storage, frequent))
+    return deals
+
+
+def _promotion_deals(storage, frequent: set) -> list[HotDeal]:
+    """Deals that are a promotion rather than a cheaper chain.
+
+    Cross-chain price comparison cannot see these at all: a 2+1 on pasta
+    at the household's own shop leaves the shelf price untouched, so
+    without this the most ordinary kind of Israeli deal — the one the
+    household actually asked about — would never appear.
+
+    The per-unit price is what matters, so a "3 for ₪15" is compared as
+    ₪5, not ₪15.
+    """
+    from contextlib import closing
+
+    with closing(storage._connect()) as conn:  # noqa: SLF001 - storage-internal
+        rows = conn.execute(
+            "SELECT p.item_code, p.discounted_price, p.min_qty, c.name, c.price "
+            "FROM catalog_promotions p JOIN catalog_products c "
+            "  ON c.item_code = p.item_code "
+            "WHERE p.discounted_price > 0 AND p.ends_at != '' AND p.ends_at < '2027' "
+            "  AND p.discounted_price < p.min_qty * c.price"
+        ).fetchall()
+
+    deals = []
+    for row in rows:
+        quantity = float(row["min_qty"] or 1)
+        unit_price = float(row["discounted_price"]) / (quantity or 1)
+        deal = HotDeal(
+            barcode=row["item_code"],
+            name=row["name"],
+            chain="shufersal",
+            price=round(unit_price, 2),
+            reference_price=float(row["price"]),
+            bought_often=row["name"] in frequent,
+        )
+        if (deal.relevant and deal.worth_reporting) or deal.exceptional:
+            deals.append(deal)
+    return deals
+
+
+def find(storage, chains=None) -> tuple[list[HotDeal], list[HotDeal]]:
+    """Two short lists rather than one long one.
+
+    The household was explicit about the risk here: a deal list built only
+    from what they already buy would never surface strawberries, a 2+1 on
+    pasta, or the deodorant one of them uses — and they *do* want those,
+    because they are happy to try something new at a good enough price.
+
+    But a single merged list solves that by becoming a catalogue nobody
+    reads. So the answer is two buckets with different bars: things that
+    are theirs, and things that are simply remarkable.
+    """
+    deals = _dedupe(scan(storage, chains))
+    relevant = [d for d in deals if d.relevant][:RELEVANT_LIMIT]
+    # "Never bought" has to mean never bought. Filtering only on what
+    # already made the first list put yellow peppers — a tier-A product
+    # for this household — under the heading "even if you have not bought
+    # it", purely because five nappy deals outranked it.
+    # One per family here rather than two: the whole point of this list is
+    # breadth, and two sun creams at the same price is one idea taking two
+    # of the five slots.
+    exceptional, families = [], set()
+    for deal in deals:
+        if not deal.exceptional or deal.relevant:
+            continue
+        family = _family(deal.name)
+        if family in families:
+            continue
+        families.add(family)
+        exceptional.append(deal)
+        if len(exceptional) >= EXCEPTIONAL_LIMIT:
+            break
+    return relevant, exceptional
+
+
+# Several patterns describe one shopping decision. Without this the cap
+# was dodged by accident: "12 האגיס חיתולי שחיה" matched "חיתול" while
+# "האגיס אקסטרה קר" matched "האגיס", so three nappy lines counted as two
+# different families and filled the list anyway.
+_FAMILY_ALIASES = {
+    "חיתול": "חיתולים", "פמפרס": "חיתולים", "האגיס": "חיתולים",
+    "טיטול": "חיתולים",
+    "סימילאק": "תמל", "מטרנה": "תמל", "תמ\"ל": "תמל", "תמל": "תמל",
+    "נייר טואלט": "נייר", "מגבת נייר": "נייר", "טישו": "נייר",
+    "אבקת כביסה": "כביסה", "ג'ל כביסה": "כביסה", "מרכך כביסה": "כביסה",
+    "שמפו": "טיפוח", "מרכך שיער": "טיפוח", "משחת שיניים": "טיפוח",
+    "דאודורנט": "טיפוח", "סבון": "טיפוח",
+    "מגבונ": "מגבונים", "מגבון": "מגבונים",
+}
 
 
 def _family(name: str) -> str:
-    """A crude product family, used only to stop one category dominating."""
+    """The shopping decision a product belongs to, not its brand."""
+    text = name or ""
     for pattern in STOCKABLE_PATTERNS:
-        if pattern in (name or ""):
-            return pattern
-    return " ".join((name or "").split()[:2])
+        if pattern in text:
+            return _FAMILY_ALIASES.get(pattern, pattern)
+    return " ".join(text.split()[:2])
 
 
 def _dedupe(deals: list[HotDeal]) -> list[HotDeal]:
@@ -165,7 +284,9 @@ def _dedupe(deals: list[HotDeal]) -> list[HotDeal]:
         if current is None or deal.price < current.price:
             best[deal.barcode] = deal
 
-    ordered = sorted(best.values(), key=lambda d: (d.stockable, d.saving), reverse=True)
+    ordered = sorted(
+        best.values(), key=lambda d: (d.relevant, d.stockable, d.saving), reverse=True
+    )
     seen: dict[str, int] = {}
     diverse = []
     for deal in ordered:
@@ -177,21 +298,31 @@ def _dedupe(deals: list[HotDeal]) -> list[HotDeal]:
     return diverse
 
 
-def format_deals(deals: list[HotDeal]) -> str:
+def format_deals(relevant: list[HotDeal], exceptional: list[HotDeal] | None = None) -> str:
     from .mdtext import escape
 
-    if not deals:
+    exceptional = exceptional or []
+    if not relevant and not exceptional:
         return ""
-    lines = ["*מבצעים ששווה להסתכל עליהם*", ""]
-    for deal in deals:
+
+    def line(deal: HotDeal) -> str:
         where = display_name(deal.chain)
         tag = "" if is_regular(deal.chain) else " ⚡"
-        lines.append(
+        return (
             f"• *{escape(deal.name)}* — ₪{deal.price:.2f} ב{escape(where)}{tag} "
             f"מול ₪{deal.reference_price:.2f} "
-            f"_(חיסכון ₪{deal.saving:.2f}, {deal.discount * 100:.0f}% · {deal.reason})_"
+            f"_(חיסכון ₪{deal.saving:.2f}, {deal.discount * 100:.0f}%)_"
         )
-    if any(not is_regular(d.chain) for d in deals):
-        lines.append("")
-        lines.append("_⚡ = רשת שאתם לא קונים בה בדרך כלל_")
+
+    lines = []
+    if relevant:
+        lines += ["*מבצעים על מה שאתם קונים*", ""]
+        lines += [line(d) for d in relevant]
+    if exceptional:
+        if lines:
+            lines.append("")
+        lines += ["*מבצעים חריגים — שווה מבט גם אם לא קניתם*", ""]
+        lines += [line(d) for d in exceptional]
+    if any(not is_regular(d.chain) for d in relevant + exceptional):
+        lines += ["", "_⚡ = רשת שאתם לא קונים בה בדרך כלל_"]
     return "\n".join(lines)
