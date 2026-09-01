@@ -19,7 +19,7 @@ from telegram.ext import (
     filters,
 )
 
-from . import ask, hotdeals, threshold, waste
+from . import ask, cardreminder, hotdeals, threshold, waste
 from .adapters.base import StoreAdapter
 from .adapters.shufersal import ShufersalAdapter
 from .catalog import (
@@ -789,6 +789,49 @@ class GroceryBot:
             reply_markup=InlineKeyboardMarkup(buttons),
         )
         await self._send_threshold_check(chat_id, context, results, cart)
+        await self._send_card_prompt(chat_id, context)
+
+    async def _send_card_prompt(self, chat_id, context) -> None:
+        """Ask about the ₪700 card at the moment it can still be loaded.
+
+        The same question also rides on the six-day nudge, but those are
+        two different clocks: the card allowance is monthly and the nudge
+        fires on shopping cadence, so a month where the household shops
+        often can pass with the question arriving late. This is not a
+        second proactive message — it appears inside a hand-off they
+        started themselves, at the one moment it is most actionable:
+        after the cart is built and before they go and pay.
+
+        A button rather than a parsed reply, so nothing has to infer that
+        an incoming message was meant as an answer to this.
+        """
+        try:
+            prompt = await asyncio.to_thread(cardreminder.decide, self.storage)
+            if not prompt.should_ask:
+                return
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=prompt.text,
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("✅ הטענתי", callback_data="cardok")]]
+                ),
+            )
+        except Exception:
+            logger.exception("Card prompt failed; cart hand-off unaffected")
+
+    async def on_card_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """One tap records the load and ends the question for this month."""
+        query = update.callback_query
+        if not _authorized(self.config, update):
+            await query.answer()
+            return
+        await asyncio.to_thread(cardreminder.confirm, self.storage)
+        await query.answer("נרשם")
+        await query.edit_message_text(
+            "✅ *רשמתי שהטענת את הכרטיס החודש* — לא אשאל שוב עד החודש הבא.",
+            parse_mode="Markdown",
+        )
 
     async def _send_threshold_check(self, chat_id, context, results, cart) -> None:
         """The last chance to catch a missed threshold or a one-short deal.
@@ -1642,6 +1685,9 @@ def build_application(config: Config, storage: Storage) -> Application:
     )
     application.add_handler(
         CallbackQueryHandler(bot.on_recipe_button, pattern=r"^(rcpall|rcpmiss|rcpno):")
+    )
+    application.add_handler(
+        CallbackQueryHandler(bot.on_card_button, pattern=r"^cardok$")
     )
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bot.handle_message))
     if application.job_queue is not None:

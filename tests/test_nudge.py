@@ -250,3 +250,36 @@ class CardReminderTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CardPromptTimingTest(unittest.TestCase):
+    """A monthly question riding on a shopping-cadence trigger.
+
+    Flagged by the bot that delivers the nudge: the card allowance is
+    monthly and the nudge fires six days after a shop, so a month of
+    frequent shopping can pass with the question arriving late. The
+    answer is not a second proactive message — it is to also ask inside
+    a hand-off the household started themselves.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.storage = Storage(str(Path(self.tmp.name) / "t.sqlite3"))
+
+    def test_the_two_surfaces_share_one_monthly_state(self):
+        from grocery_bot import cardreminder
+
+        # Confirming anywhere silences it everywhere for that month, so
+        # the household is never asked twice about one allowance.
+        self.assertTrue(cardreminder.decide(self.storage, date(2026, 9, 1)).should_ask)
+        cardreminder.confirm(self.storage, today=date(2026, 9, 1))
+        self.assertFalse(cardreminder.decide(self.storage, date(2026, 9, 20)).should_ask)
+        self.storage.record_last_purchase("shufersal", [("P_1", "2026-09-01")])
+        text = nudge.compose(self.storage, 7, date(2026, 9, 20))
+        self.assertNotIn("הטענת את הכרטיס", text)
+
+    def test_an_unconfirmed_month_still_asks_in_the_nudge(self):
+        self.storage.record_last_purchase("shufersal", [("P_1", "2026-09-01")])
+        text = nudge.compose(self.storage, 7, date(2026, 9, 20))
+        self.assertIn("הטענת את הכרטיס", text)
