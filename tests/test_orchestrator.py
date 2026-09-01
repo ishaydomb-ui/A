@@ -259,3 +259,61 @@ class SessionGateTests(unittest.TestCase):
         reports = run_order_cycle(self.storage, {"shufersal": lambda: adapter})
 
         self.assertEqual(len(reports["shufersal"].added), 1)
+
+
+class AdhocSurvivesAFailedCycleTests(unittest.TestCase):
+    """A request the household was told was added must not evaporate.
+
+    Reported from the phone: "a large part of the products you said you
+    added to the list were not in it". The cycle marked a `not_found`
+    ad-hoc request as consumed, so it vanished from both the list and the
+    cart and was never retried.
+    """
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.storage = Storage(str(Path(self._tmpdir.name) / "test.sqlite3"))
+        self.addCleanup(self._tmpdir.cleanup)
+
+    def _pending(self) -> list[str]:
+        return [r.text for r in self.storage.list_pending_adhoc()]
+
+    def test_not_found_request_stays_pending_for_the_next_cycle(self) -> None:
+        self.storage.add_adhoc_request("קינואה", requested_by="לירן")
+        run_order_cycle(
+            self.storage, {"fake_store": lambda: FakeAdapter({"קינואה": "not_found"})}
+        )
+        self.assertEqual(self._pending(), ["קינואה"])
+
+    def test_a_later_cycle_can_still_buy_it(self) -> None:
+        self.storage.add_adhoc_request("קינואה", requested_by="לירן")
+        run_order_cycle(
+            self.storage, {"fake_store": lambda: FakeAdapter({"קינואה": "not_found"})}
+        )
+        fake = FakeAdapter({"קינואה": "added"})
+        run_order_cycle(self.storage, {"fake_store": lambda: fake})
+        self.assertIn(("קינואה", 1), fake.added_calls)
+        self.assertEqual(self._pending(), [])
+
+    def test_added_request_is_consumed(self) -> None:
+        self.storage.add_adhoc_request("חלב", requested_by="ישי")
+        run_order_cycle(
+            self.storage, {"fake_store": lambda: FakeAdapter({"חלב": "added"})}
+        )
+        self.assertEqual(self._pending(), [])
+
+    def test_ambiguous_request_is_consumed_because_a_question_was_asked(self) -> None:
+        # The user is now holding the decision; re-asking every cycle would
+        # be worse than letting the answer resolve it.
+        self.storage.add_adhoc_request("טונה", requested_by="ישי")
+        run_order_cycle(
+            self.storage, {"fake_store": lambda: FakeAdapter({"טונה": "ambiguous"})}
+        )
+        self.assertEqual(self._pending(), [])
+
+    def test_report_says_the_item_is_still_on_the_list(self) -> None:
+        self.storage.add_adhoc_request("קינואה", requested_by="לירן")
+        reports = run_order_cycle(
+            self.storage, {"fake_store": lambda: FakeAdapter({"קינואה": "not_found"})}
+        )
+        self.assertIn("נשאר ברשימה", format_report_summary(reports))

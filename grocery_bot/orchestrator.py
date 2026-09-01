@@ -103,7 +103,15 @@ def run_order_cycle(
                 )
                 result.requested_by = adhoc.requested_by
                 report.record(result)
-                if result.status in ("added", "ambiguous", "not_found"):
+                # Only a request that actually reached the cart is done
+                # with. "not_found" used to count as resolved, which meant
+                # the household was told "נוסף לרשימה", the cycle quietly
+                # failed to find it, and the request vanished from both the
+                # list and the cart with nobody told. A request that was not
+                # bought stays pending so the next cycle tries again.
+                # "ambiguous" is kept because a question was actually put to
+                # the user, and answering it is what consumes the request.
+                if result.status in ("added", "ambiguous"):
                     resolved_adhoc.add(adhoc.id)
                 done += 1
                 _progress(done, total_items, result)
@@ -309,8 +317,13 @@ def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
                 f"❓ דורש בחירה ({len(report.ambiguous)}): " + ", ".join(r.item_name for r in report.ambiguous)
             )
         if report.not_found:
+            # Say it stays on the list. Otherwise a long report reads as
+            # "these are gone", and the household has no way to know the
+            # request is still queued for the next cycle.
             lines.append(
-                f"⚠️ לא נמצא ({len(report.not_found)}): " + ", ".join(r.item_name for r in report.not_found)
+                f"⚠️ לא נמצא ({len(report.not_found)}): "
+                + ", ".join(r.item_name for r in report.not_found)
+                + "\n   _נשאר ברשימה — אנסה שוב בפעם הבאה._"
             )
         if report.errors:
             lines.append(f"🛑 שגיאה ({len(report.errors)}): " + ", ".join(r.item_name for r in report.errors))
