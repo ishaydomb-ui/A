@@ -200,15 +200,14 @@ evidence.**
   computed 3% accrual.
 - **Waste reporting** — design agreed (free text anytime; one targeted
   question at the end of a hand-off; never a checklist), not yet built.
-- **Tiv Taam has no `cart_summary`, so its hand-off total is an
-  estimate.** The multi-chain hand-off is built and live (2026-09-02,
-  user chose one button per chain over a single declared checkout chain),
-  but `adapters/tivtaam.py` has only `_cart_count` — no reader for the
-  cart's real total. So the Tiv Taam section shows the shelf-price sum
-  and says "הערכה בלבד" rather than the authoritative number including
-  delivery. Shufersal shows the real one. Writing that reader needs
-  selectors verified against the live cart page, which means a real
-  logged-in run, not a guess from here.
+- **Miri does not call most of this CLI, and the user is specifying
+  that side.** `docs/MIRI_INTEGRATION.md` is the contract, written
+  2026-09-02 for the user to take to the familyos session. Today Miri
+  routes free text to `add-item` and card replies to `confirm-card`;
+  `meal-plan`, `recipe`, `recipe-text`, `price` and `deals` all work,
+  are token-free, and are called by nobody. Concretely: "תכנן לי תפריט
+  שבועי" said to Miri lands as a list item with that name. **Waiting on
+  the user / the familyos session — nothing to do here.**
 
 ## 6. Things that will bite a new session
 
