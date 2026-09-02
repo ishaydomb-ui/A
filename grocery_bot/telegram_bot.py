@@ -1659,6 +1659,7 @@ async def _register_bot_metadata(application: Application) -> None:
             BotCommand("list", "הרשימה המלאה והמעודכנת"),
             BotCommand("propose", "הצעת קנייה לפי מחלקות — מסמנים מה צריך"),
             BotCommand("stockup", "שווה לאגור — מבצעים חריגים לקנייה מראש"),
+            BotCommand("chaindeals", "מבצעים מכל הרשתות, לא רק שופרסל"),
             BotCommand("cheaper", "השוואת ₪ לק\"ג — יש חלופה זולה יותר?"),
             BotCommand("list_full", "רשימה להדבקה בהזמנה מהירה"),
             BotCommand("digest", "כל הקנייה בהודעה אחת — רשימה, מבצעים, חלופות"),
