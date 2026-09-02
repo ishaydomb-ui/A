@@ -6,7 +6,7 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-01 16:27 (Asia/Jerusalem host time)
+**Last anchored:** 2026-09-02 09:09 (Asia/Jerusalem host time)
 **Conversation id:** `df559a44-e7ec-4e8f-9462-046d0a364d36`
 **Branch:** `claude/online-grocery-automation-b7pq4g`
 
@@ -130,6 +130,32 @@ decides.* A button cannot be wrong about what a tap meant, so it wins in
 a one-to-one flow like this bot's. In the shared family group a button
 raises a second question — whose tap counts? — so מירי routes replies by
 intent there instead. Neither is the better technique in general.
+
+## 4b. Stray system-scope units — not ours, and red
+
+Two units in `/etc/systemd/system/` carry this project's name, were
+installed by someone else on 2026-09-01 evening, and have failed on every
+trigger since:
+
+- `grocery-doctor.service` — a copy of our user unit. It uses `%h`, which
+  at system scope resolves to `/root`, so its paths cannot exist.
+  `Result: resources`.
+- `grocery-backup-daily.service` — runs `/usr/local/bin/grocery-backup.sh`,
+  which bundles to Drive. Not ours.
+
+**Our backup is unaffected and healthy.** Ours are user-scope units that
+push to GitHub, touch rclone nowhere, and run as codex by construction.
+Verified: heartbeat fresh, doctor reports healthy, branch level with
+origin, and all four `OnFailure=` targets load.
+
+Worth knowing before anyone "restores" that second backup rather than
+deleting it: it has never once succeeded — `gdrive:Backups/grocery` does
+not exist — and even had it run, `git bundle create ... HEAD` captures a
+single branch rather than `--all`. It was confidence without coverage,
+which is worse than no second backup at all.
+
+Removing them needs sudo, which this session does not have. It is the
+user's call, and they are someone else's work.
 
 ## 5. Open questions for the user
 
