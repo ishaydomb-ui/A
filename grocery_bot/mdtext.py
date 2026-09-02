@@ -29,3 +29,27 @@ def escape(text: str) -> str:
     for char in _SPECIAL:
         out = out.replace(char, "\\" + char)
     return out
+
+
+# Legacy Markdown has no backslash escape. `escape` still helps in plain
+# text — the reader sees a stray backslash but the message survives — but
+# inside a *bold* span it is actively harmful: the escaped asterisk closes
+# the bold early, the next one opens an entity that never closes, and
+# Telegram rejects the whole message. That is how the cross-chain deals
+# button did nothing at all: the handler ran and the send failed.
+#
+# For names that go inside an entity, the asterisk is replaced rather than
+# escaped. In Israeli product names it is a multiplication sign —
+# "2*75 מ\"ל" means two of 75ml — so × is what it actually meant, and the
+# line reads better than the escaped form ever did.
+_MULTIPLY = "×"
+
+
+def safe_name(text: str) -> str:
+    """Store text that is safe *inside* bold or italic, not just beside it."""
+    if not text:
+        return ""
+    out = str(text).replace("*", _MULTIPLY)
+    for char in ("_", "`", "[", "]"):
+        out = out.replace(char, " ")
+    return out

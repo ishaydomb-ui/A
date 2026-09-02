@@ -311,7 +311,7 @@ def find_extended(storage, chains=None, limit: int = EXTENDED_LIMIT) -> list[Hot
 
 
 def format_extended(deals: list[HotDeal]) -> str:
-    from .mdtext import escape
+    from .mdtext import safe_name
 
     if not deals:
         return "אין כרגע מבצעים נוספים מעבר למה שכבר שלחתי."
@@ -319,8 +319,8 @@ def format_extended(deals: list[HotDeal]) -> str:
     for deal in deals:
         tag = "" if is_regular(deal.chain) else " \u26a1"
         lines.append(
-            f"\u2022 *{escape(deal.name)}* \u2014 \u20aa{deal.price:.2f} "
-            f"\u05d1{escape(display_name(deal.chain))}{tag} "
+            f"\u2022 *{safe_name(deal.name)}* \u2014 \u20aa{deal.price:.2f} "
+            f"\u05d1{safe_name(display_name(deal.chain))}{tag} "
             f"_(\u20aa{deal.saving:.2f}, {deal.discount * 100:.0f}%)_"
         )
     return "\n".join(lines)
@@ -381,7 +381,7 @@ def _dedupe(deals: list[HotDeal]) -> list[HotDeal]:
 
 
 def format_deals(relevant: list[HotDeal], exceptional: list[HotDeal] | None = None) -> str:
-    from .mdtext import escape
+    from .mdtext import safe_name
 
     exceptional = exceptional or []
     if not relevant and not exceptional:
@@ -396,7 +396,7 @@ def format_deals(relevant: list[HotDeal], exceptional: list[HotDeal] | None = No
         if not can_fill_cart(deal.chain):
             tag += " 🔗"
         return (
-            f"• *{escape(deal.name)}* — ₪{deal.price:.2f} ב{escape(where)}{tag} "
+            f"• *{safe_name(deal.name)}* — ₪{deal.price:.2f} ב{safe_name(where)}{tag} "
             f"מול ₪{deal.reference_price:.2f} "
             f"_(חיסכון ₪{deal.saving:.2f}, {deal.discount * 100:.0f}%)_"
         )
