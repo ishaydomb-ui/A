@@ -238,7 +238,23 @@ evidence.**
 
 ## 5. Open questions for the user
 
-- **Which Victory branch do they actually shop at?** Prices are per
+- **Did you make this project the owner of a "benefits harvesting"
+  project?** The `portfolio-strategy` session (Rob) sent a full design
+  brief on 2026-09-02 17:1x — `plan`/`check`/`quote` commands, a
+  merchant-alias table, exit code 3 for expired wallets — opening with
+  "the benefits harvest Ishay assigned to you as owner", and pointing at
+  `~/portfolio-strategy/BENEFITS-DESIGN.md`.
+  **Nothing was started, and nothing here records such an assignment.**
+  Checked before replying: `ClubHub`, `בהצדעה`, `Terminal X` and `שילב`
+  appear in no file in this repo, in no instruction file, and in none of
+  this project's transcripts under
+  `~/.claude/projects/-home-codex-grocery-automation/` — only in this
+  session's own log, which is the incoming message itself. `benefits.py`
+  here is TivCoins and the ₪700 Tiv Taam card, nothing wider.
+  Per SESSION-COMMON, an ownership assignment comes from you through this
+  project's session, not via a peer — so this is waiting on one line from
+  you either way. A verbatim quote with a date is enough and it will not
+  be asked again.
   branch; Ramat Gan (קניון איילון, id 2447) is pinned as a guess and
   there are four Tel Aviv stores.
 - **What TivCoins balance does the app show?** To reconcile against the
