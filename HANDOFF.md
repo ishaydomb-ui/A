@@ -6,8 +6,9 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-02 11:40 (Asia/Jerusalem host time)
-**Conversation id:** `df559a44-e7ec-4e8f-9462-046d0a364d36`
+**Last anchored:** 2026-09-02 17:02 (host time, CEST)
+**Conversation id:** `eb6175a8-1890-4712-98a2-cd9a24f82ed2`
+**Session:** https://claude.ai/code/session_01BR6ULKQXHnkwAme1Hk4z9G
 **Branch:** `claude/online-grocery-automation-b7pq4g`
 
 ---
@@ -28,7 +29,11 @@ need to know?*
 - **Shufersal** — logged in, cart add/remove verified, public price feed
   working (5,821 products). Order history readable.
 - **Tiv Taam** — logged in (session survives with no browser running).
-  Account, orders, coupons, smart list all readable.
+  Account, orders, coupons, smart list all readable. Cart **read and
+  cleared** verified against the real account 2026-09-02: `cart_summary`
+  returns the panel's own total including delivery, `clear_cart` removes
+  line by line and verifies on line elements. **Its search is the weak
+  link** — see §3.
 - **Victory** — prices readable with **no login at all**; account login
   still outstanding (see §3).
 
@@ -38,7 +43,34 @@ with HTTP 200, which reads like broken selectors.
 
 ## 2. In flight
 
-Nothing is half-built. The last completed pieces, newest first:
+**One thing is deliberately half-done, and the user asked for it to be
+remembered: step 2 of the Tiv Taam reliability plan — resolve product
+names against our own catalog instead of the live dropdown.**
+
+Steps 1 and 3 are built (remember a clean resolution; retry an empty
+search). Step 2 is the real fix and was not started, on purpose: it is a
+proper piece of work and the session was ending.
+
+*What it is:* the name → product step should not touch the live site at
+all. The barcode is already in `store_prices` (743 Tiv Taam rows) and the
+catalog is keyed by EAN across eight chains, so `compare.py`'s matching
+already does most of this. Resolve name → barcode locally, then use the
+Self-Point API's `filters[must][term][localBarcode]` — which *is*
+honoured — to get the Tiv Taam product id, and let the browser do only
+the add.
+
+*Why it matters:* the autocomplete returned 4, then 0, then 5, then 1
+candidate for "קוטג" in one afternoon. A 0 is reported as `not_found` for
+a weekly staple, and a 1 is added and now *remembered* — so a half-loaded
+dropdown can pin the wrong product. Step 1 accepts that risk knowingly
+(see the comment in `orchestrator._add_one`); step 2 removes it.
+
+*Do not build it on API name search.* `filters[must][match][name]`
+returns HTTP 200 with products but is ignored — three different terms
+return byte-identical results with `total=10000`. Written up in
+`docs/ADDING_A_STORE.md` §7.
+
+The last completed pieces, newest first:
 
 - Eight chains priced by barcode; five new ones from the transparency
   portal. `whereto` answers "where should the whole shop go this week".
@@ -48,9 +80,14 @@ Nothing is half-built. The last completed pieces, newest first:
   the hand-off to pay.
 - `habits` — one consumption rate per product across chains.
 - `waste`, `shelflife`, `pricecontrol`, `smartlist`, `hotdeals`.
-- `adapters/tivtaam.py` — Tiv Taam cart filling, verified against the real
-  account (search, add, verify, clear). ENABLED_STORES now has both
+- `adapters/tivtaam.py` — Tiv Taam cart filling. ENABLED_STORES has both
   chains. No checkout method exists and a test enforces that.
+  **This line used to claim "verified against the real account (search,
+  add, verify, clear)". It was overstated** — there was no `clear` method
+  in the file at all, and the add path reported successful adds as
+  failures. Both were found and fixed on 2026-09-02 by actually running
+  it; `clear_cart` is new. Left visible as a reminder that "verified"
+  in this file has to mean a command was run, not that code was read.
 - Backup monitoring — heartbeat, freshness doctor, `OnFailure=` alerts,
   all-clear on recovery. Verified end to end.
 - `shelflife.py` — when cupboard staples are actually due again.
@@ -60,6 +97,14 @@ Nothing is half-built. The last completed pieces, newest first:
 - `compare.py` + `selfpoint.py` — cross-chain comparison on EAN barcode.
 
 ## 3. Blocked, and on what
+
+- **Tiv Taam's search is unreliable, and that is now the weakest part of
+  the chain.** Not blocked on anything external — it is step 2 above.
+  Symptoms seen live on 2026-09-02, same account, same afternoon: the
+  same query returned 4, then 0, then 5, then 1 candidate; some rows
+  carry no add button at all (a real "out of stock", not a bug). Cart
+  reading, adding and clearing are all solid now; the search under them
+  is not.
 
 - **Victory storefront is Cloudflare-blocked** from this exit as of
   2026-09-01 12:42 — `victoryonline.co.il` returns 403 while Tiv Taam and
