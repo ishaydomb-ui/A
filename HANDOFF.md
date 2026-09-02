@@ -6,7 +6,7 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-02 09:09 (Asia/Jerusalem host time)
+**Last anchored:** 2026-09-02 11:40 (Asia/Jerusalem host time)
 **Conversation id:** `df559a44-e7ec-4e8f-9462-046d0a364d36`
 **Branch:** `claude/online-grocery-automation-b7pq4g`
 
@@ -48,6 +48,9 @@ Nothing is half-built. The last completed pieces, newest first:
   the hand-off to pay.
 - `habits` — one consumption rate per product across chains.
 - `waste`, `shelflife`, `pricecontrol`, `smartlist`, `hotdeals`.
+- `adapters/tivtaam.py` — Tiv Taam cart filling, verified against the real
+  account (search, add, verify, clear). ENABLED_STORES now has both
+  chains. No checkout method exists and a test enforces that.
 - Backup monitoring — heartbeat, freshness doctor, `OnFailure=` alerts,
   all-clear on recovery. Verified end to end.
 - `shelflife.py` — when cupboard staples are actually due again.
@@ -167,6 +170,26 @@ user's call, and they are someone else's work. The full set:
     sudo systemctl disable --now \
       grocery-doctor.timer grocery-doctor.service \
       grocery-backup-daily.timer grocery-backup-daily.service
+
+## 4c. Two traps this session kept falling into
+
+Both cost the user real time, and both are the same shape: **a check that
+returns the same result whether or not the thing is true is not
+evidence.**
+
+- `systemctl is-active` proved the bot was running, not that it ran the
+  new code — a 30-minute-old process satisfied it, and a change was
+  reported live while never being served. Use `scripts/restart_bot.sh`,
+  which compares the main PID either side and fails if it did not change.
+- A rendered Telegram link proved it looked tappable, not that tapping it
+  did anything: a `t.me` deep link opened from inside the bot's own chat
+  arrives as a bare `/start` with the payload stripped. The cross-chain
+  list is now the plain `/chaindeals` command, registered in the menu.
+- A failed-units listing cannot show a *waiting* timer, so "no timer
+  exists" was concluded from a listing that could never have shown one.
+- An unbounded `until [ -f X ]` loop cannot tell "not ready" from "never
+  coming": one waited 23 hours for a file whose producer had already
+  died. Bound every such loop.
 
 ## 5. Open questions for the user
 
