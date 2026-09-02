@@ -200,6 +200,23 @@ evidence.**
   computed 3% accrual.
 - **Waste reporting** — design agreed (free text anytime; one targeted
   question at the end of a hand-off; never a checklist), not yet built.
+- **The Telegram hand-off still shows one chain, but two get filled.**
+  Found 2026-09-02 by reading the code after the CLI was fixed, not by a
+  failure. `add_terms_to_cart` and `run_order_cycle` both loop over every
+  enabled adapter, and `ENABLED_STORES=shufersal,tivtaam`, so a cycle
+  leaves **two real carts**. The per-chain text report is correct
+  (`format_report_summary` heads each block with the chain name), but
+  three things below it are still Shufersal-only: the
+  "🛒 פתיחת הסל בשופרסל" button at `telegram_bot.py:839` and `:1341`
+  (`SHUFERSAL_CART_URL`), the cart total in `_read_cart` (`:1379`, reads
+  `factories["shufersal"]` and returns None for anything else), and the
+  "אין כרגע חיבור לשופרסל" message on the offline path (`:812`).
+  So the household is handed one link and one total for two carts.
+  **It needs a product decision before a fix:** two buttons and two
+  totals, or one chain declared the checkout chain with the other kept
+  only for price comparison. `whereto` already computes which chain the
+  week's shop should go to, so the second option is close to free — but
+  which it should be is the user's call, not an implementation detail.
 
 ## 6. Things that will bite a new session
 
