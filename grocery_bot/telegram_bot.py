@@ -34,7 +34,11 @@ from .catalog import (
     format_search_answer,
     refresh_catalog,
 )
-from .cartview import MIN_EDIT_INTERVAL_SECONDS, render_final, render_progress
+from .cartview import (
+    MIN_EDIT_INTERVAL_SECONDS,
+    render_final_by_store,
+    render_progress,
+)
 from .checklist import render_department, render_panel, render_summary
 from .config import Config
 from .digest import compose as compose_digest
@@ -809,8 +813,11 @@ class GroceryBot:
                     text=item.name, requested_by=requested_by,
                     amount=item.amount, unit=item.unit, brand=item.brand,
                 )
+            # The blocked thing is the Israeli exit node, which every chain
+            # needs — naming Shufersal here described one symptom of a
+            # condition that takes all of them down together.
             await update.message.reply_text(
-                f"🕒 אין כרגע חיבור לשופרסל ({status.detail}).\n"
+                f"🕒 אין כרגע חיבור לרשתות ({status.detail}).\n"
                 "הוספתי אותם לרשימה — הם ייכנסו לסל אוטומטית כשהחיבור יחזור."
             )
             return
@@ -830,20 +837,27 @@ class GroceryBot:
         await update.message.reply_text(
             format_report_summary(reports) or "לא היה מה להוסיף.", parse_mode="Markdown"
         )
-        cart = await asyncio.to_thread(self._read_cart, factories)
-        results = [r for report in reports.values() for r in report.results]
-        await self._send_cart_state(update.effective_chat.id, context, results, cart)
+        carts = await asyncio.to_thread(self._read_carts, factories)
+        await self._send_cart_state(update.effective_chat.id, context, reports, carts)
         await self._send_pending_ambiguities(update, context)
 
-    async def _send_cart_state(self, chat_id, context, results, cart) -> None:
-        buttons = [[InlineKeyboardButton("🛒 פתיחת הסל בשופרסל", url=SHUFERSAL_CART_URL)]]
+    async def _send_cart_state(self, chat_id, context, reports, carts) -> None:
+        buttons = self._cart_buttons(reports)
         await context.bot.send_message(
             chat_id=chat_id,
-            text=render_final(results, cart),
+            text=render_final_by_store(reports, carts),
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(buttons),
         )
-        await self._send_threshold_check(chat_id, context, results, cart)
+        # The ₪599 gift is Shufersal's, and DEFAULT_GIFT_THRESHOLD is its
+        # number — so this is checked against the Shufersal basket alone.
+        # Feeding it a Tiv Taam total would announce a gift that chain
+        # does not offer, on a total it does not apply to.
+        shufersal = reports.get("shufersal")
+        if shufersal is not None:
+            await self._send_threshold_check(
+                chat_id, context, list(shufersal.results), carts.get("shufersal")
+            )
         await self._send_card_prompt(chat_id, context)
 
     async def _send_card_prompt(self, chat_id, context) -> None:
@@ -1288,9 +1302,8 @@ class GroceryBot:
             await _redraw("🛑 המחזור נכשל עם שגיאה לא צפויה — בדקו את הלוגים בשרת.")
             return None
 
-        cart = await asyncio.to_thread(self._read_cart, factories)
-        results = [r for report in reports.values() for r in report.results]
-        await self._finish_live_view(chat_id, context, view.message_id, results, cart)
+        carts = await asyncio.to_thread(self._read_carts, factories)
+        await self._finish_live_view(chat_id, context, view.message_id, reports, carts)
         return reports
 
     async def _run_terms_with_live_view(self, chat_id, context, factories, terms):
@@ -1332,18 +1345,17 @@ class GroceryBot:
             await _redraw("🛑 המילוי נכשל — בדקו את הלוגים בשרת.")
             return None
 
-        cart = await asyncio.to_thread(self._read_cart, factories)
-        results = [r for report in reports.values() for r in report.results]
-        await self._finish_live_view(chat_id, context, view.message_id, results, cart)
+        carts = await asyncio.to_thread(self._read_carts, factories)
+        await self._finish_live_view(chat_id, context, view.message_id, reports, carts)
         return reports
 
-    async def _finish_live_view(self, chat_id, context, message_id, results, cart) -> None:
-        buttons = [[InlineKeyboardButton("🛒 פתיחת הסל בשופרסל", url=SHUFERSAL_CART_URL)]]
+    async def _finish_live_view(self, chat_id, context, message_id, reports, carts) -> None:
+        buttons = self._cart_buttons(reports)
         try:
             await context.bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=message_id,
-                text=render_final(results, cart),
+                text=render_final_by_store(reports, carts),
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup(buttons),
             )
@@ -1376,18 +1388,46 @@ class GroceryBot:
         lines.append("_לא נוסף לסל — להוסיף באפליקציה אם רלוונטי._")
         await _send_markdown(context, chat_id, "\n".join(lines))
 
-    def _read_cart(self, factories) -> dict | None:
-        """Read the authoritative cart total, if the store is reachable."""
-        make_adapter = factories.get("shufersal")
-        if make_adapter is None:
-            return None
-        try:
-            with make_adapter() as adapter:
-                reader = getattr(adapter, "cart_summary", None)
-                return reader() if reader else None
-        except Exception:
-            logger.exception("Could not read the cart for the final view")
-            return None
+    def _read_carts(self, factories) -> dict:
+        """Read each chain's authoritative cart total, where it can be read.
+
+        One entry per enabled chain, missing where the adapter has no
+        `cart_summary` or the store was unreachable. A chain with no
+        reading falls back to the shelf-price estimate in the renderer,
+        which says so — better than borrowing another chain's total, which
+        is what a single shared reading amounted to.
+        """
+        carts: dict = {}
+        for store, make_adapter in factories.items():
+            try:
+                with make_adapter() as adapter:
+                    reader = getattr(adapter, "cart_summary", None)
+                    if reader is not None:
+                        carts[store] = reader()
+            except Exception:
+                logger.exception("Could not read the %s cart for the final view", store)
+        return carts
+
+    @staticmethod
+    def _cart_buttons(reports) -> list[list[InlineKeyboardButton]]:
+        """One button per chain that actually has something in its cart.
+
+        Only chains with a real cart page get a button, and only when the
+        run put something there — an empty chain's link is an invitation
+        to go and look at nothing.
+        """
+        from .chains import cart_url, display_name
+
+        buttons = []
+        for store, report in reports.items():
+            url = cart_url(store)
+            if url and report.added:
+                buttons.append(
+                    [InlineKeyboardButton(f"🛒 פתיחת הסל ב{display_name(store)}", url=url)]
+                )
+        return buttons or [
+            [InlineKeyboardButton("🛒 פתיחת הסל בשופרסל", url=SHUFERSAL_CART_URL)]
+        ]
 
     async def _send_alternatives(self, chat_id: int, context, reports) -> None:
         """Point out cheaper promoted substitutes for what was just added.

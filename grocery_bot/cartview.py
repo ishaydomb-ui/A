@@ -100,14 +100,12 @@ def render_progress(results: list, done: int, total: int, when: datetime | None 
     return "\n".join(lines)
 
 
-def render_final(results: list, cart: dict | None, when: datetime | None = None) -> str:
-    """The finished view, preferring the store's own total over our sum."""
-    stamp = (when or datetime.now()).strftime("%H:%M")
+def _cart_body(results: list, cart: dict | None) -> list[str]:
+    """One chain's rows and its total. Shared by both final renderers."""
     added = [r for r in results if r.status == "added"]
     problems = [r for r in results if r.status != "added"]
 
-    lines = [f"🛒 *העגלה מוכנה* · {stamp}", ""]
-    lines += [_row(r) for r in added[:MAX_VISIBLE_ROWS]]
+    lines = [_row(r) for r in added[:MAX_VISIBLE_ROWS]]
     if len(added) > MAX_VISIBLE_ROWS:
         lines.append(f"_…ועוד {len(added) - MAX_VISIBLE_ROWS} פריטים_")
 
@@ -127,6 +125,14 @@ def render_final(results: list, cart: dict | None, when: datetime | None = None)
         # Say why the real number is missing rather than passing an
         # estimate off as the total.
         lines.append("_לא הצלחתי לקרוא את הסל באתר, אז זו הערכה בלבד._")
+    return lines
+
+
+def render_final(results: list, cart: dict | None, when: datetime | None = None) -> str:
+    """The finished view for a single chain."""
+    stamp = (when or datetime.now()).strftime("%H:%M")
+    lines = [f"🛒 *העגלה מוכנה* · {stamp}", ""]
+    lines += _cart_body(results, cart)
 
     # The hand-off matters as much as the list: this is the moment the
     # user switches to the store's app, and without saying so explicitly
@@ -134,4 +140,42 @@ def render_final(results: list, cart: dict | None, when: datetime | None = None)
     lines.append("")
     lines.append("*מה עכשיו:* להיכנס לשופרסל, לעבור על הסל, ולשלם.")
     lines.append("⚠️ _לא בוצעה קנייה — הסל מוכן לבדיקה ותשלום שלך._")
+    return "\n".join(lines)
+
+
+def render_final_by_store(
+    reports: dict, carts: dict | None = None, when: datetime | None = None
+) -> str:
+    """The finished view when more than one chain was filled.
+
+    A cycle runs against every enabled chain, so it leaves a real cart at
+    each one. The earlier version of this message flattened them into a
+    single list with a single total, which described no cart that actually
+    existed: the user was handed one number for two baskets and one link
+    to one of them. Each chain now gets its own section, its own total and
+    its own missing items, because choosing between them is the decision
+    this message exists to support.
+
+    Falls through to the single-chain view when only one chain was filled,
+    so an ordinary Shufersal-only run does not grow a redundant heading.
+    """
+    from .chains import display_name
+
+    carts = carts or {}
+    stores = [store for store, report in reports.items() if report.results]
+    if len(stores) <= 1:
+        store = stores[0] if stores else None
+        results = list(reports[store].results) if store else []
+        return render_final(results, carts.get(store), when)
+
+    stamp = (when or datetime.now()).strftime("%H:%M")
+    lines = [f"🛒 *הסלים מוכנים* · {stamp}"]
+    for store in stores:
+        lines.append("")
+        lines.append(f"*{display_name(store)}*")
+        lines += _cart_body(list(reports[store].results), carts.get(store))
+
+    lines.append("")
+    lines.append("*מה עכשיו:* לבחור רשת, לעבור על הסל שלה, ולשלם.")
+    lines.append("⚠️ _לא בוצעה קנייה — הסלים מוכנים לבדיקה ותשלום שלך._")
     return "\n".join(lines)

@@ -62,9 +62,23 @@ def is_regular(chain: str) -> bool:
 # difference between useful information and a promise that quietly fails.
 CART_CAPABLE = {"shufersal", "tivtaam"}
 
+# Where the household goes to review and pay. Kept here rather than in the
+# bot because the hand-off message needs one button per chain it filled,
+# and a URL that lives next to the button is a URL that gets forgotten
+# when a chain is added — which is how a Tiv Taam cart came to be filled
+# and then advertised with a Shufersal link.
+CART_URLS = {
+    "shufersal": "https://www.shufersal.co.il/online/he/cart/cartsummary",
+    "tivtaam": "https://www.tivtaam.co.il/cart",
+}
+
 
 def can_fill_cart(chain: str) -> bool:
     return chain in CART_CAPABLE
+
+
+def cart_url(chain: str) -> str | None:
+    return CART_URLS.get(chain)
 
 
 @dataclass(frozen=True)
