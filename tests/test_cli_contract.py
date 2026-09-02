@@ -68,9 +68,17 @@ class IntegrationContractTests(unittest.TestCase):
         result = _run(["add-item", "--by", "לירן"], self.db)
         self.assertEqual(result.returncode, 2)
 
-    def test_a_telegram_command_still_reports_the_missing_token(self) -> None:
-        """The token is still required where it is genuinely needed."""
-        result = _run(["deals"], self.db)
+    def test_a_config_command_still_reports_the_missing_token(self) -> None:
+        """The token is still required where it is genuinely needed.
+
+        This used to assert `deals` fails without a token. It no longer
+        does, on purpose: `deals` only reads the catalog, and making the
+        other bot hold our Telegram secret to read it was the bug. The
+        guard is still worth keeping, so it now names a command that
+        genuinely goes through Config.from_env() — `build-stock` needs the
+        store configuration, not just the database.
+        """
+        result = _run(["build-stock"], self.db)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("TELEGRAM_BOT_TOKEN", result.stderr + result.stdout)
 
@@ -211,3 +219,158 @@ class CardConfirmationContractTest(unittest.TestCase):
         from grocery_bot import cli
 
         self.assertIn("confirm-card", cli._DB_ONLY_COMMANDS)
+
+
+class PriceAndDealsContractTest(unittest.TestCase):
+    """Answering "how much is X" must not need this bot's Telegram token.
+
+    Both commands read the catalog `refresh-prices` already wrote, so
+    nothing about them needs the store, the exit node or the token. They
+    sat behind Config.from_env() only because that is where every command
+    that was not list-manipulation happened to land, and the household's
+    other bot therefore could not ask a price without holding our secret
+    — and got a raw stack trace rather than a message when it tried.
+    """
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        self.db = str(Path(self._tmpdir.name) / "t.sqlite3")
+
+    def test_both_are_on_the_token_free_path(self) -> None:
+        from grocery_bot import cli
+
+        self.assertIn("price", cli._DB_ONLY_COMMANDS)
+        self.assertIn("deals", cli._DB_ONLY_COMMANDS)
+
+    def test_price_runs_without_a_telegram_token(self) -> None:
+        result = _run(["price", "קוטג"], self.db)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("TELEGRAM_BOT_TOKEN", result.stderr)
+
+    def test_deals_runs_without_a_telegram_token(self) -> None:
+        result = _run(["deals"], self.db)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("TELEGRAM_BOT_TOKEN", result.stderr)
+
+    def test_an_empty_catalog_answers_rather_than_crashing(self) -> None:
+        # The other bot may call this before the first refresh-prices.
+        # "not found" is an answer; a traceback is not.
+        result = _run(["price", "משהו שלא קיים"], self.db)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(result.stdout.strip())
+
+    def test_price_without_a_query_is_a_usage_error_not_a_crash(self) -> None:
+        result = _run(["price"], self.db)
+        self.assertEqual(result.returncode, 2)
+
+
+class AddToCartReportsEveryChainTest(unittest.TestCase):
+    """`add-to-cart` fills every enabled chain, so it must name them all.
+
+    The loop in `add_terms_to_cart` runs against each enabled adapter, so
+    with Shufersal and Tiv Taam both on there are two real carts when it
+    returns. Reporting only the first chain that succeeded told the
+    household "added to Shufersal" while a second cart had also been
+    filled — the one thing the caller cannot afford to be wrong about,
+    since the whole reason to name the chain is that prices differ.
+    """
+
+    def setUp(self):
+        import tempfile
+        from grocery_bot.storage import Storage
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.storage = Storage(str(pathlib.Path(self.tmp.name) / "t.sqlite3"))
+
+    def _reports(self, monkeypatched):
+        """Patch out the store round-trip; this is about the reporting."""
+        from grocery_bot import cli
+
+        original = cli.add_terms_to_cart
+        cli.add_terms_to_cart = lambda *a, **k: monkeypatched
+        self.addCleanup(lambda: setattr(cli, "add_terms_to_cart", original))
+
+        import grocery_bot.telegram_bot as tb
+
+        original_factories = tb._build_adapter_factories
+        tb._build_adapter_factories = lambda config: {"shufersal": None, "tivtaam": None}
+        self.addCleanup(
+            lambda: setattr(tb, "_build_adapter_factories", original_factories)
+        )
+
+        from grocery_bot.config import Config
+
+        original_from_env = Config.from_env
+        Config.from_env = staticmethod(lambda: None)
+        self.addCleanup(lambda: setattr(Config, "from_env", original_from_env))
+
+    def _report(self, store, added=(), ambiguous=()):
+        from grocery_bot.orchestrator import OrderCycleReport
+        from grocery_bot.models import CartAddResult
+
+        report = OrderCycleReport(store=store)
+        for name in added:
+            report.record(CartAddResult(item_name=name, store=store, status="added"))
+        for name in ambiguous:
+            report.record(
+                CartAddResult(item_name=name, store=store, status="ambiguous")
+            )
+        return report
+
+    def test_both_chains_are_named_when_both_took_the_item(self):
+        import io
+        from contextlib import redirect_stdout
+        from grocery_bot import cli
+
+        self._reports(
+            {
+                "shufersal": self._report("shufersal", added=["קוטג 5%"]),
+                "tivtaam": self._report("tivtaam", added=["קוטג' 5%"]),
+            }
+        )
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = cli._add_to_cart(self.storage, ["קוטג"])
+        self.assertEqual(code, 0)
+        text = out.getvalue()
+        self.assertIn("שופרסל", text)
+        self.assertIn("טיב טעם", text)
+
+    def test_a_later_chain_succeeding_is_not_hidden_by_an_earlier_miss(self):
+        # The old loop returned on the first chain's *ambiguous* result and
+        # queued the item on the list, even though the next chain had
+        # already put it in a real cart.
+        import io
+        from contextlib import redirect_stdout
+        from grocery_bot import cli
+
+        self._reports(
+            {
+                "shufersal": self._report("shufersal", ambiguous=["קוטג"]),
+                "tivtaam": self._report("tivtaam", added=["קוטג' 5%"]),
+            }
+        )
+        out = io.StringIO()
+        with redirect_stdout(out):
+            cli._add_to_cart(self.storage, ["קוטג"])
+        self.assertIn("טיב טעם", out.getvalue())
+        self.assertEqual(self.storage.list_pending_adhoc(), [])
+
+    def test_nowhere_took_it_so_it_lands_on_the_list(self):
+        import io
+        from contextlib import redirect_stdout
+        from grocery_bot import cli
+
+        self._reports(
+            {
+                "shufersal": self._report("shufersal"),
+                "tivtaam": self._report("tivtaam"),
+            }
+        )
+        out = io.StringIO()
+        with redirect_stdout(out):
+            cli._add_to_cart(self.storage, ["פטריות שיטאקי"])
+        self.assertIn("added to the list", out.getvalue())
+        self.assertEqual(len(self.storage.list_pending_adhoc()), 1)

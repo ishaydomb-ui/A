@@ -302,10 +302,11 @@ def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
 
     lines: list[str] = []
     for store, report in reports.items():
-        # The chain name, in Hebrew, not the internal key. Only one chain
-        # can be filled today, so "תוסיף לסל" always means that one — and
-        # a deal spotted at another chain would be filled here, at this
-        # chain's price, unless the reply says where it went.
+        # The chain name, in Hebrew, not the internal key. Two chains are
+        # cart-capable now (Shufersal and Tiv Taam) and a cycle fills both,
+        # so "תוסיף לסל" is never about one cart — and a deal spotted at
+        # one chain would be filled at the other's price, unless the reply
+        # says where each item went.
         lines.append(f"*{display_name(store)}*")
         if report.added:
             lines.append(f"✅ נוספו ({len(report.added)}): " + ", ".join(r.item_name for r in report.added))

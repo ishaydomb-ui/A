@@ -26,6 +26,14 @@ Run with: python -m grocery_bot.cli <command>
 `refresh-prices` is the one meant for a scheduler — the feed publishes a
 new full snapshot a few times a day, and a stale catalog quietly gives
 wrong prices rather than failing loudly.
+
+**What the household's other bot (מירי) can call.** Everything in
+`_DB_ONLY_COMMANDS` needs nothing but `GROCERY_BOT_DB_PATH`: add-item,
+remove-item, list-items, price, deals, recipe, recipe-text, meal-plan,
+nudge, confirm-card. No Telegram token, no store session, no exit node —
+that project has no use for this one's secrets. `add-to-cart` is the
+exception and is listed separately in `_STORE_COMMANDS`: it reaches the
+real carts, so it needs the store sessions and the Israeli exit.
 """
 from __future__ import annotations
 
@@ -81,18 +89,6 @@ def main(argv: list[str] | None = None) -> int:
             f"branch {meta.get('branch')}: {meta.get('product_count')} products "
             f"from {meta.get('price_file')}"
         )
-        return 0
-
-    if command == "price":
-        if not rest:
-            return _usage()
-        query = " ".join(rest)
-        print(format_search_answer(query, storage.search_with_deals(query, limit=8)))
-        return 0
-
-    if command == "deals":
-        items = storage.list_active_base_items()
-        print(format_deals_report(find_deals_for_base_list(storage, items)))
         return 0
 
     if command == "import-base-list":
@@ -467,22 +463,36 @@ def _add_to_cart(storage: Storage, args: list[str]) -> int:
     from .chains import display_name
 
     reports = add_terms_to_cart(storage, factories, [(term, quantity)])
+
+    # `add_terms_to_cart` fills *every* enabled chain, so with Shufersal
+    # and Tiv Taam both on there are two real carts afterwards. This used
+    # to print the first chain that succeeded and return, which reported
+    # one cart while having filled two — the caller then told the
+    # household "added to Shufersal" and nobody knew about the other. Say
+    # every chain that took it; naming the chain is the whole point, since
+    # a deal spotted at one chain is otherwise filled at another chain's
+    # price with no sign of the substitution.
+    added_anywhere = False
     for store, report in reports.items():
         for result in report.added:
-            # Always name the chain. There is exactly one cart-capable
-            # chain today, so "add it" silently means Shufersal — and a
-            # deal shown at another chain would be filled here at this
-            # chain's price without anyone noticing the substitution.
             print(f"added to the {display_name(store)} cart: {result.item_name}")
-            return 0
-        for result in report.ambiguous:
-            print(f"ambiguous: {result.item_name} — added to the list instead")
-            storage.add_adhoc_request(text=term, requested_by="")
-            return 0
-    # Not found or errored: the request must not vanish, so it lands on
-    # the list where the next cycle will retry it.
+            added_anywhere = True
+    if added_anywhere:
+        return 0
+
+    # Nowhere took it. Ambiguity and a plain miss both end on the list —
+    # the request must not vanish — but they are different answers and
+    # the caller is told which.
+    ambiguous_at = [
+        display_name(store) for store, report in reports.items() if report.ambiguous
+    ]
     storage.add_adhoc_request(text=term, requested_by="")
-    print(f"not found in the store: {term} — added to the list instead")
+    if ambiguous_at:
+        print(
+            f"ambiguous at {', '.join(ambiguous_at)}: {term} — added to the list instead"
+        )
+    else:
+        print(f"not found in the store: {term} — added to the list instead")
     return 0
 
 
@@ -522,6 +532,21 @@ def _nudge(storage: Storage, args: list[str]) -> int:
     return 0
 
 
+def _price(storage: Storage, args: list[str]) -> int:
+    query = " ".join(_positional(args)).strip()
+    if not query:
+        print("usage: price <query>")
+        return 2
+    print(format_search_answer(query, storage.search_with_deals(query, limit=8)))
+    return 0
+
+
+def _deals(storage: Storage, args: list[str]) -> int:
+    items = storage.list_active_base_items()
+    print(format_deals_report(find_deals_for_base_list(storage, items)))
+    return 0
+
+
 def _confirm_card(storage: Storage, args: list[str]) -> int:
     """Record that the benefit card was loaded this month.
 
@@ -557,6 +582,14 @@ _DB_ONLY_COMMANDS = {
     # call it on a timer without a token or a store session.
     "nudge": _nudge,
     "confirm-card": _confirm_card,
+    # Both answer from the catalog `refresh-prices` already wrote, so
+    # neither needs the store, the exit node or this bot's token. They sat
+    # behind Config.from_env() only because that is where every non-list
+    # command happened to land, and the household's other bot could not
+    # ask "how much is cottage cheese" without holding our Telegram
+    # secret — a credential it has no use for.
+    "price": _price,
+    "deals": _deals,
 }
 
 # Needs the store session and the Israeli exit, so it cannot live on the
