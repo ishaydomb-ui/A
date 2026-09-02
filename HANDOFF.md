@@ -111,6 +111,15 @@ The last completed pieces, newest first:
   `api.self-point.com` stay fine. Likely provoked by my own automated
   loads. **Victory prices still work**, because they come from the API.
   Credentials are stored; retry the login later or from another exit.
+  **Rate-based WAF blocks are per-destination-site, not per-source-IP.**
+  Confirmed 2026-09-02: the `portfolio-strategy` session hit
+  `behatsdaa.org.il` ~10× through the *shared* exit node and earned a 403
+  there, while at that same moment Shufersal (`/online/he/login`, 200,
+  230KB) and Tiv Taam (200) stayed clean through the same IP. So another
+  project's load on a different domain does not collaterally block the
+  stores — but hammering one store *does* block that store (this is the
+  Victory case above, same-site). The exit is shared by three projects;
+  pace store loads accordingly.
 - **Victory account login.** Needs the same manual noVNC flow as Tiv Taam
   (checkbox reCAPTCHA). The user could not reach
   `http://localhost:6080/vnc.html` from the phone — the stack is running
