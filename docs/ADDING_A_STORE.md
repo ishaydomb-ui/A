@@ -126,3 +126,46 @@ the error page rather than only its status code.
   discount cap changes the answer part-way through a basket.
 - Two carts open at once — the digest and cart view assume one store
   today.
+
+## 6. Traps from the Tiv Taam cart reader (2026-09-02)
+
+All five cost real time on one afternoon against the live account. Every
+one has the same shape as the traps already listed: **a check that
+returns the same answer whether or not the thing is true.**
+
+- **A chain may have no cart page at all.** Shufersal has
+  `/online/he/cart/cartsummary`; Tiv Taam has nothing equivalent.
+  `https://www.tivtaam.co.il/cart` redirects to the homepage — with an
+  empty cart *and* with two items in it, so the redirect is not an
+  empty-cart behaviour. The cart is a side panel opened from the header.
+  A cart button pointing at `/cart` was shipped that morning and landed
+  the household on the homepage; check that a "cart URL" actually shows
+  the cart before putting it behind a button.
+- **`(\d+)\s*מוצרים` matches the category nav.** Searching the page body
+  for a count found "33 מוצרים" and "39 מוצרים" in unrelated links and
+  "מוצרים בפיקוח" in the footer. Scope the read to the cart element —
+  and identify that element by its own wording ("בעגלה", "סך הכל"), not
+  by taking `.first` of a selector that matches several things. Taking
+  the first match read 0 on a cart that held an item.
+- **The header count lags, so it cannot verify an add.** Two products
+  were reported as "the click did not change the cart" while both were
+  sitting in the real cart afterwards. Under-reporting an add is the
+  expensive direction: the orchestrator re-queues the item and the
+  household is told it never went in. Count the cart's own line
+  elements (`.product-in-cart`), which are in the DOM whether the panel
+  is open or shut.
+- **A "clear" that verifies on a lagging count will claim success on a
+  cart it did not empty.** For a method whose whole job is putting the
+  household's cart back as it found it, that is the worst available
+  failure. Verify on line elements, and reload before believing the
+  answer.
+- **The cart toggle *toggles*.** Clicking it on an already-open panel
+  closes it, which produced the right number of lines with every field
+  blank — a hidden element has no `innerText`. Check whether the panel
+  is already rendered before clicking, and poll for rendered text rather
+  than sleeping a fixed interval.
+- **`_open()`-style "have I visited yet" guards make every later read
+  stale.** One `self._opened = True` was behind a summary reporting a
+  pre-clear total, a successful add reported as a failure, and a clear
+  reporting success — three symptoms, one cause. Anything that reads
+  state after an interaction needs a real reload.

@@ -34,7 +34,49 @@ from .base import StoreAdapter
 logger = logging.getLogger(__name__)
 
 SITE = "https://www.tivtaam.co.il/"
-CART_URL = "https://www.tivtaam.co.il/cart"
+
+# **Tiv Taam has no cart page.** Verified 2026-09-02 against the real
+# account: https://www.tivtaam.co.il/cart redirects to the homepage — with
+# an empty cart *and* with two items in it, so the redirect is not an
+# empty-cart behaviour. The cart is a side panel opened from the header
+# (`sideNavCtrl.toggleCart()`), and its contents live in the header
+# summary whether or not the panel is open. Shufersal's /cart/cartsummary
+# has no equivalent here, so anything that wants "the cart" reads the
+# header rather than navigating.
+CART_URL = SITE
+
+# The header cart summary: "N מוצרים בעגלה", "סך הכל", "₪39.90". Reading
+# the element rather than scanning the page body matters — the body says
+# "33 מוצרים" and "39 מוצרים" in unrelated category links, and "מוצרים
+# בפיקוח" in the footer, any of which a loose regex picks up first.
+CART_SUMMARY_SELECTOR = "[ng-click*='toggleCart'], .summary.clean-cart-button"
+# The cart header is identified by its own wording, not by position. A
+# bare `.first` over the selector above picks whichever candidate comes
+# first in the DOM, which is not always the cart — and when it picked
+# another one, the count read 0 with a full cart. That made `clear_cart`
+# report success on a cart it had not emptied, and made a successful add
+# report "the click did not change the cart".
+CART_SUMMARY_MARKERS = ("בעגלה", "סך הכל")
+# Per-line remove, from the panel's own markup:
+# ng-click="...announceCartLineRemoved(line); $root.cart.removeLine(line)"
+CART_LINE_REMOVE_SELECTOR = "button.delete.hover-action"
+# The panel's broom, ng-click="...sideNavCtrl.clearCart()". Kept for
+# reference: clicking it did *not* empty the cart in testing, so
+# `clear_cart` removes line by line instead.
+CART_CLEAR_SELECTOR = ".clean-cart-icon"
+CART_TOGGLE_SELECTOR = ".toggle-cart, .cart-icon"
+# A guard on the removal loop, not a cart-size limit. An unbounded
+# "until the cart is empty" loop cannot tell "not finished" from "never
+# going to finish" — the same trap that once waited 23 hours for a file.
+MAX_CART_LINES_TO_CLEAR = 60
+# The header count lags the click by a second or two, so an add is
+# verified by polling rather than by one read after a fixed sleep.
+ADD_VERIFY_POLLS = 6
+ADD_VERIFY_POLL_MS = 2000
+# Clearing reloads and re-opens the panel between rounds; the list
+# re-renders as lines go, and one pass stopped after the first item.
+CLEAR_ROUNDS = 5
+PANEL_RENDER_POLLS = 6
 
 # Cookie consent sits over the page and silently eats the first click on
 # anything, which reads as "the add button did nothing".
@@ -279,9 +321,21 @@ class TivTaamAdapter(StoreAdapter):
                     item_name=name, store=self.name, status="not_found",
                     detail="no add control on the row — probably out of stock",
                 )
-            before = self._cart_count()
+            # Counted on the line elements, never on the header. The
+            # header count lags the click and was seen reading 0 on a cart
+            # that held an item, which reported real adds as "the click
+            # did not change the cart" — on 2026-09-02 two products sat in
+            # the cart while both had been reported as failures. Under-
+            # reporting an add is the expensive direction: the item gets
+            # re-queued and the household is told it never went in.
+            before = self._cart_line_count()
             button.first.click(timeout=15000)
-            self._page.wait_for_timeout(4000)
+            after = before
+            for _ in range(ADD_VERIFY_POLLS):
+                self._page.wait_for_timeout(ADD_VERIFY_POLL_MS)
+                after = self._cart_line_count()
+                if after > before:
+                    break
 
             for _ in range(max(0, int(quantity) - 1)):
                 try:
@@ -289,9 +343,7 @@ class TivTaamAdapter(StoreAdapter):
                     self._page.wait_for_timeout(2000)
                 except Exception:
                     break
-
-            after = self._cart_count()
-            if before is not None and after is not None and after <= before:
+            if after <= before:
                 return CartAddResult(
                     item_name=name, store=self.name, status="error",
                     detail="the click did not change the cart",
@@ -305,15 +357,246 @@ class TivTaamAdapter(StoreAdapter):
                 item_name=name, store=self.name, status="error", detail=str(exc)[:200]
             )
 
+    def _summary_text(self) -> str | None:
+        """The header cart summary's own text, or None if it is not there.
+
+        Scoped to the element on purpose. The old version searched the
+        whole page body for `(\\d+)\\s*מוצרים`, which the category nav
+        ("33 מוצרים", "39 מוצרים") and the footer ("מוצרים בפיקוח") also
+        satisfy — and, worse, returned 0 when it matched nothing at all.
+        That turned "I could not read the cart" into "the cart is empty",
+        which is the same failure this project has written up twice: a
+        check that returns the same answer whether or not the thing is
+        true. None now means unreadable and 0 means empty, and the two are
+        no longer the same value.
+        """
+        try:
+            nodes = self._page.locator(CART_SUMMARY_SELECTOR)
+            best = None
+            for index in range(min(nodes.count(), 10)):
+                try:
+                    text = nodes.nth(index).inner_text(timeout=3_000)
+                except Exception:
+                    continue
+                if not text:
+                    continue
+                if any(marker in text for marker in CART_SUMMARY_MARKERS):
+                    return text
+                best = best or text
+            # Nothing carried the cart's wording. Returning the first
+            # candidate anyway would be the old bug — a number read off
+            # some other element — so this is unreadable, not empty.
+            return None if best is None else (best if "מוצרים" in best else None)
+        except Exception:
+            return None
+
     def _cart_count(self) -> int | None:
         """How many products the cart bar reports, or None if unreadable."""
         import re
 
-        try:
-            found = re.search(r"(\d+)\s*מוצרים", self._page.locator("body").inner_text())
-            return int(found.group(1)) if found else 0
-        except Exception:
+        text = self._summary_text()
+        if text is None:
             return None
+        found = re.search(r"(\d+)\s*מוצרים", text)
+        return int(found.group(1)) if found else 0
+
+    def _cart_line_count(self) -> int:
+        """How many line elements the cart holds, panel open or shut.
+
+        The authoritative signal, and the one an add is verified against.
+        The header count lags a click and was observed reading 0 on a cart
+        that held an item — which reported two successful adds as
+        failures. A `.product-in-cart` element is the line itself: it is
+        present in the DOM whether or not the panel has slid into view, so
+        this costs nothing and does not need the panel opened.
+        """
+        try:
+            return self._page.locator(".product-in-cart").count()
+        except Exception:
+            return 0
+
+    def cart_summary(self) -> dict:
+        """Read the cart the household is about to pay for.
+
+        Same contract as the Shufersal adapter so the hand-off renderer
+        needs no per-chain branching: {ok, items, total, url}. The total is
+        the panel's own "₪39.90 כולל דמי משלוח", which already includes
+        delivery — summing what we added would quietly disagree with what
+        they are about to pay.
+
+        Line names come from the panel, which must be opened to render
+        them; the count and total are in the header regardless, so a cart
+        that will not open still yields a usable total rather than
+        nothing.
+
+        Never raises, and never touches the checkout control sitting in
+        the same panel (`.button.highlight.order` / `.checkout`). Reading
+        the total is explicitly allowed; going further into that flow is
+        not.
+        """
+        import re
+
+        try:
+            # Load fresh rather than trusting whatever this adapter was
+            # last looking at: a summary taken after a `clear_cart`
+            # otherwise reported the pre-clear total from a stale DOM.
+            self._reopen()
+            text = self._summary_text()
+            if text is None:
+                return {"ok": False, "items": [], "total": None, "url": CART_URL}
+
+            count_match = re.search(r"(\d+)\s*מוצרים", text)
+            count = int(count_match.group(1)) if count_match else 0
+
+            total = None
+            price_match = re.search(r"₪\s*([\d,]+(?:\.\d+)?)", text)
+            if price_match:
+                total = float(price_match.group(1).replace(",", ""))
+
+            items = self._cart_line_names()
+            if not items and count:
+                # The panel would not open, but the header still knows how
+                # many lines there are. Say so with placeholders rather
+                # than reporting an empty cart with a non-zero total.
+                items = [{"name": "", "qty": ""} for _ in range(count)]
+            return {"ok": True, "items": items, "total": total, "url": CART_URL}
+        except Exception:
+            logger.exception("Tiv Taam: could not read the cart")
+            return {"ok": False, "items": [], "total": None, "url": CART_URL}
+
+    def _cart_line_names(self) -> list[dict]:
+        """Open the cart panel and read its line items. [] if it will not.
+
+        A line renders as `qty | brand | name | size | price`, so the
+        product name is the third row of the container's text and the
+        quantity is the first. Reading them positionally rather than by
+        class because only the container carries a stable class
+        (`.product-in-cart`); the rows inside it do not.
+        """
+        try:
+            if not self._open_cart_panel():
+                return []
+            return self._page.evaluate(
+                """() => Array.from(
+                    document.querySelectorAll('.product-in-cart')
+                ).map(line => {
+                    const parts = (line.innerText || '')
+                        .split('\\n').map(s => s.trim()).filter(Boolean);
+                    return {
+                        qty: parts[0] || '',
+                        brand: parts[1] || '',
+                        name: parts[2] || '',
+                        price: parts[4] || '',
+                    };
+                })"""
+            )
+        except Exception:
+            logger.debug("Tiv Taam: cart panel would not open", exc_info=True)
+            return []
+
+    def clear_cart(self) -> bool:
+        """Empty the cart, and verify it actually emptied.
+
+        Added 2026-09-02. HANDOFF claimed "search, add, verify, clear" was
+        verified against the real account, but no clear method existed
+        here — whatever clearing happened that day was done by hand. The
+        control is the panel's own broom (`sideNavCtrl.clearCart()`).
+
+        Returns False rather than raising if the cart could not be
+        emptied, and never reports success on a click alone: the count is
+        read back, because a click that silently does nothing is the
+        failure mode this adapter already guards against on the way in.
+        """
+        try:
+            # Each round reloads the site and re-opens the panel before
+            # touching anything. That outer reload is what made this work:
+            # removing a line re-renders the list, and continuing to click
+            # into a half-updated panel silently stopped after the first
+            # item while reporting the cart empty.
+            for _ in range(CLEAR_ROUNDS):
+                self._reopen()
+                if not self._page.locator(".product-in-cart").count():
+                    return True
+                if not self._open_cart_panel():
+                    continue
+
+                # Per-line removal rather than the panel's broom
+                # (`sideNavCtrl.clearCart()`). The broom was tried first
+                # and did not empty the cart; each line's own delete
+                # button did. Re-reading the buttons every iteration
+                # matters — the list re-renders, so a locator captured up
+                # front goes stale.
+                for _ in range(MAX_CART_LINES_TO_CLEAR):
+                    buttons = self._page.locator(CART_LINE_REMOVE_SELECTOR)
+                    if not buttons.count():
+                        break
+                    try:
+                        buttons.first.click(timeout=8_000)
+                    except Exception:
+                        break
+                    self._page.wait_for_timeout(3_500)
+
+            # Verify on the line elements, not on the header count. The
+            # header read 0 on a cart that still held an item, which made
+            # an earlier version of this method report success on a cart
+            # it had not emptied — the worst possible lie for a method
+            # whose whole job is leaving the household's cart as it found
+            # it. A line element is the item itself.
+            self._reopen()
+            return not self._page.locator(".product-in-cart").count()
+        except Exception:
+            logger.exception("Tiv Taam: could not clear the cart")
+            return False
+
+    def _open_cart_panel(self) -> bool:
+        """Make the cart panel actually render. False if it would not.
+
+        The panel's elements are in the DOM before it slides in, and a
+        hidden element has no text and cannot be clicked — so "the line
+        exists" is not "the panel is open". Everything that touches a line
+        goes through here, because the delete buttons are unclickable
+        until this returns True.
+        """
+        lines = self._page.locator(".product-in-cart")
+
+        def rendered() -> bool:
+            try:
+                return bool(
+                    lines.count() and lines.first.inner_text(timeout=2_000).strip()
+                )
+            except Exception:
+                return False
+
+        if rendered():
+            return True
+        toggle = self._page.locator(CART_TOGGLE_SELECTOR).first
+        if not toggle.count():
+            return False
+        try:
+            # The control *toggles*: clicking it on an already-open panel
+            # closes it, which is how a freshly-filled cart came back with
+            # the right number of lines and every field blank.
+            toggle.click(timeout=10_000)
+        except Exception:
+            return False
+        for _ in range(PANEL_RENDER_POLLS):
+            if rendered():
+                return True
+            self._page.wait_for_timeout(2_000)
+        return False
+
+    def _reopen(self) -> None:
+        """Load the site fresh, discarding whatever the page last showed.
+
+        `_open()` returns immediately once the site has been visited, so
+        every read after an interaction saw a DOM that might not have
+        caught up — the single cause behind a summary reporting a
+        pre-clear total, a successful add reported as a failure, and a
+        clear reporting success on a cart it had not emptied.
+        """
+        self._opened = False
+        self._open()
+        self._page.wait_for_timeout(4_000)
 
     # -- teardown ---------------------------------------------------------
 

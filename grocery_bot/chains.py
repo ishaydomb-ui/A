@@ -69,7 +69,13 @@ CART_CAPABLE = {"shufersal", "tivtaam"}
 # and then advertised with a Shufersal link.
 CART_URLS = {
     "shufersal": "https://www.shufersal.co.il/online/he/cart/cartsummary",
-    "tivtaam": "https://www.tivtaam.co.il/cart",
+    # Tiv Taam has no cart *page*: /cart redirects to the homepage, both
+    # empty and with items in it (verified 2026-09-02 against the real
+    # account). The cart is a side panel opened from the header, so the
+    # honest link is the site itself, where the cart bar is the first
+    # thing at the top. A /cart link would land the household on the
+    # homepage looking for a basket that is one tap away in the header.
+    "tivtaam": "https://www.tivtaam.co.il/",
 }
 
 

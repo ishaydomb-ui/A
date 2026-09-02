@@ -78,7 +78,12 @@ class RowScopingTest(unittest.TestCase):
         adapter = tivtaam.TivTaamAdapter.__new__(tivtaam.TivTaamAdapter)
         adapter.name = "tivtaam"
         adapter._page = mock.MagicMock()
-        adapter._cart_count = mock.MagicMock(side_effect=[3, 3])
+        # Counted on the cart's line elements, not the header. The header
+        # count was seen reading 0 on a cart that held an item, which
+        # reported two real adds as failures against the live site on
+        # 2026-09-02; a returned value rather than a two-item side_effect
+        # because the check now polls for the DOM to catch up.
+        adapter._cart_line_count = mock.MagicMock(return_value=3)
         row = mock.MagicMock()
         row.locator.return_value.count.return_value = 1
         result = adapter._add_row(row, "קוטג", 1)
@@ -89,7 +94,7 @@ class RowScopingTest(unittest.TestCase):
         adapter = tivtaam.TivTaamAdapter.__new__(tivtaam.TivTaamAdapter)
         adapter.name = "tivtaam"
         adapter._page = mock.MagicMock()
-        adapter._cart_count = mock.MagicMock(side_effect=[0, 2])
+        adapter._cart_line_count = mock.MagicMock(side_effect=[0, 2])
         row = mock.MagicMock()
         row.locator.return_value.count.return_value = 1
         result = adapter._add_row(row, "קוטג", 1)
@@ -107,3 +112,91 @@ class RegistrationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CartSummaryContractTest(unittest.TestCase):
+    """Tiv Taam's cart reader, and the boundary it must not cross.
+
+    Verified against the real account on 2026-09-02: an empty cart reads
+    total 0.0 with no lines; one added product reads ₪42.20 (₪12.30 for
+    the item plus ₪29.90 delivery) with the line named
+    "במבה מאנצ בטעם חמוץ חריף 150 גרם"; clearing returns to 0.0 and no
+    lines. The delivery fee is why the panel's own total is read rather
+    than summing what we added.
+    """
+
+    def _adapter(self):
+        adapter = tivtaam.TivTaamAdapter.__new__(tivtaam.TivTaamAdapter)
+        adapter.name = "tivtaam"
+        adapter._page = mock.MagicMock()
+        adapter._opened = True
+        adapter._reopen = mock.MagicMock()
+        return adapter
+
+    def test_an_unreadable_summary_is_not_an_empty_cart(self):
+        # The distinction this adapter got wrong: the old reader returned
+        # 0 when it matched nothing, so "I cannot see the cart" and "the
+        # cart is empty" were the same value. ok=False says which.
+        adapter = self._adapter()
+        adapter._summary_text = mock.MagicMock(return_value=None)
+        summary = adapter.cart_summary()
+        self.assertFalse(summary["ok"])
+        self.assertIsNone(summary["total"])
+
+    def test_the_total_comes_from_the_panel_including_delivery(self):
+        adapter = self._adapter()
+        adapter._summary_text = mock.MagicMock(
+            return_value='1 מוצרים\n1 מוצרים בעגלה\nסך הכל\n₪42.20\nלתשלום'
+        )
+        adapter._cart_line_names = mock.MagicMock(
+            return_value=[{"qty": "1", "brand": "אסם", "name": "במבה", "price": "₪12.30"}]
+        )
+        summary = adapter.cart_summary()
+        self.assertTrue(summary["ok"])
+        self.assertEqual(summary["total"], 42.20)
+        self.assertEqual(len(summary["items"]), 1)
+
+    def test_an_empty_cart_reads_as_empty_not_as_broken(self):
+        adapter = self._adapter()
+        adapter._summary_text = mock.MagicMock(
+            return_value='0 מוצרים\n0 מוצרים בעגלה\nסך הכל\n₪0.00\nלתשלום'
+        )
+        adapter._cart_line_names = mock.MagicMock(return_value=[])
+        summary = adapter.cart_summary()
+        self.assertTrue(summary["ok"])
+        self.assertEqual(summary["total"], 0.0)
+        self.assertEqual(summary["items"], [])
+
+    def test_a_count_without_readable_lines_is_not_reported_as_empty(self):
+        # The header knows there are two lines but the panel would not
+        # open. Reporting zero items beside a non-zero total would read as
+        # a cart that costs money and contains nothing.
+        adapter = self._adapter()
+        adapter._summary_text = mock.MagicMock(
+            return_value='2 מוצרים\n2 מוצרים בעגלה\nסך הכל\n₪39.90\nלתשלום'
+        )
+        adapter._cart_line_names = mock.MagicMock(return_value=[])
+        summary = adapter.cart_summary()
+        self.assertEqual(len(summary["items"]), 2)
+
+    def test_clear_cart_verifies_on_lines_not_on_the_header_count(self):
+        # An earlier version trusted the header, which read 0 on a cart
+        # that still held an item — so it reported success on a cart it
+        # had not emptied. For a method whose whole job is putting the
+        # household's cart back as it found it, that is the worst
+        # available failure.
+        adapter = self._adapter()
+        adapter._open_cart_panel = mock.MagicMock(return_value=True)
+        adapter._cart_count = mock.MagicMock(return_value=0)
+        still_there = mock.MagicMock()
+        still_there.count.return_value = 1
+        adapter._page.locator.return_value = still_there
+        self.assertFalse(adapter.clear_cart())
+
+    # No checkout guard here on purpose: `SafetyTest` above already does
+    # it properly, parsing the module and stripping docstrings first —
+    # this file's own docstring names `_checkout` in order to forbid it,
+    # and a plain text search cannot tell a prohibition from a call. Worth
+    # knowing that the panel this reader opens also holds the pay button
+    # (`.button.highlight.order`, `sideNavCtrl.checkoutV2`): reading the
+    # total is allowed, and nothing here may go further.
