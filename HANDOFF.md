@@ -238,33 +238,30 @@ evidence.**
 
 ## 5. Open questions for the user
 
-- **Did you decide that this project owns "benefits harvesting"?**
-  The precise question, after the provenance was traced on 2026-09-02.
+- **Benefits harvesting — ownership is settled, permission to build is
+  not.** Ownership was confirmed on 2026-09-02 with a verbatim quote and
+  date (recorded in `GOALS.md` under החלטות שהתקבלו, so it is not
+  re-litigated): this project owns it, Miri only *reads* the output, and
+  it is not a new bot. Valid under SESSION-COMMON rule 3 — **do not ask
+  again.**
 
-  Rob (`portfolio-strategy`) sent a design brief — `plan`/`check`/`quote`,
-  a merchant-alias table, exit code 3 for expired wallets — framed as
-  work you had assigned here. **Nothing was started.** Checked first:
-  `ClubHub`, `בהצדעה`, `Terminal X` and `שילב` appear in no file in this
-  repo, no instruction file, and none of this project's transcripts —
-  only in this session's own log, i.e. the message itself. `benefits.py`
-  here is TivCoins and the ₪700 Tiv Taam card, nothing wider.
+  **Nothing has been built, and there is no green light.** Per Arthur,
+  the quote's context was agreement to **one manual run, then decide**;
+  the design brief from `portfolio-strategy` is a specification, not an
+  approval. Three things are open on your side before any harvest step:
+  1. **The eligibility file** — which clubs you are actually in.
+     ClubHub covers 100+; you are in roughly 6, so declaring them by hand
+     removes ~95% of the data. It cannot be derived from the budget
+     xlsx — הייטקזון and הר"י appear in no budget file.
+  2. **`holder`** — הר"י and לאומי בונוס are Liran's, and you cannot
+     redeem them. A benefit with no holder field is a benefit reported to
+     the wrong person.
+  3. **A success criterion** — what makes this worth having at all.
 
-  **Rob then corrected himself, and the trail is worth keeping:**
-  - The ownership claim originated with **Arthur** (`usage-audit-94`),
-    as *"ישי הכריע: גורדון הוא ה-owner (לא פרויקט חדש — הוא לא רוצה עוד
-    בוט), מירי קוראת בלבד"* — passed on **without a verbatim quote or a
-    date, and without checking with you**. Under SESSION-COMMON rule 3 a
-    decision relayed by a peer is valid *only* with quote and date, so it
-    does not stand. Rob has marked ownership open in his own files.
-  - **The architectural opinion itself you did ask for** — you told Rob
-    "חווה דעתך לגורדון כאסטרטג על הארכיטקטורה". So the content was
-    solicited; only the ownership wrapper was not.
-
-  So the open question is narrow: **did you decide this, and does it live
-  here?** One line with a date settles it and it will not be asked again.
-  Worth knowing before answering: the design deliberately rules out any
-  browse/discover command ("עדיף שנצא פחות מאשר שנאכל עם 20% הנחה"), and
-  it needs credentials for clubs this project does not currently touch.
+  Worth knowing before answering: the design deliberately has **no
+  browse/discover command**, on your own reasoning ("עדיף שנצא פחות מאשר
+  שנאכל עם 20% הנחה"). And it needs credentials for clubs this project
+  does not currently hold.
   branch; Ramat Gan (קניון איילון, id 2447) is pinned as a guess and
   there are four Tel Aviv stores.
 - **What TivCoins balance does the app show?** To reconcile against the
