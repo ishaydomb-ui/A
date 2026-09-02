@@ -154,8 +154,19 @@ not exist — and even had it run, `git bundle create ... HEAD` captures a
 single branch rather than `--all`. It was confidence without coverage,
 which is worse than no second backup at all.
 
+Both have **enabled timers at system scope**, so they are not dormant:
+`grocery-doctor.timer` fires hourly and fails hourly, and
+`grocery-backup-daily.timer` fires nightly at 02:00. Their `OnFailure`
+target does not exist there (an older `%n` produced
+`grocery-alert@grocery-doctor.service.service`), so every one of those
+failures is silent.
+
 Removing them needs sudo, which this session does not have. It is the
-user's call, and they are someone else's work.
+user's call, and they are someone else's work. The full set:
+
+    sudo systemctl disable --now \
+      grocery-doctor.timer grocery-doctor.service \
+      grocery-backup-daily.timer grocery-backup-daily.service
 
 ## 5. Open questions for the user
 
