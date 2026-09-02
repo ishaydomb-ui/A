@@ -317,3 +317,101 @@ class AdhocSurvivesAFailedCycleTests(unittest.TestCase):
             self.storage, {"fake_store": lambda: FakeAdapter({"קינואה": "not_found"})}
         )
         self.assertIn("נשאר ברשימה", format_report_summary(reports))
+
+
+class _ResolvesCleanlyAdapter(StoreAdapter):
+    """Search resolves to exactly one product, the ordinary happy path."""
+
+    name = "shufersal"
+
+    def __init__(self, code="P_777", resolved="חלב 3% בקרטון תנובה"):
+        self.code = code
+        self.resolved = resolved
+        self.search_calls = []
+        self.specific_calls = []
+
+    def is_session_valid(self) -> bool:
+        return True
+
+    def close(self) -> None:
+        pass
+
+    def search_and_add(self, term, quantity=1):
+        self.search_calls.append(term)
+        return CartAddResult(
+            item_name=self.resolved, store=self.name, status="added",
+            product_code=self.code, quantity=quantity,
+        )
+
+    def add_specific_product(self, label, quantity=1, product_code="", search_term=""):
+        self.specific_calls.append((label, product_code))
+        return CartAddResult(
+            item_name=label, store=self.name, status="added",
+            product_code=product_code, quantity=quantity,
+        )
+
+
+class _EchoesTheTermAdapter(_ResolvesCleanlyAdapter):
+    """An adapter that hands the search term back instead of a product."""
+
+    def search_and_add(self, term, quantity=1):
+        self.search_calls.append(term)
+        return CartAddResult(item_name=term, store=self.name, status="added")
+
+
+class CleanResolutionIsRememberedTests(unittest.TestCase):
+    """A term that resolves to one product should not be searched again.
+
+    Bulk-matches, auto-resolutions and answered questions were all
+    remembered; a plain successful search was not, so a settled product
+    went back through the store's search every cycle. At Shufersal that
+    is a wasted page load. At Tiv Taam it is a correctness problem: its
+    autocomplete returned 4, then 0, then 5 candidates for one query in a
+    single afternoon, and a 0 is reported as "not found" for something
+    the household buys weekly.
+    """
+
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._dir.cleanup)
+        self.storage = Storage(str(Path(self._dir.name) / "t.sqlite3"))
+        self.storage.add_base_list_item(name="חלב 3%")
+
+    def _cycle(self, adapter):
+        return run_order_cycle(self.storage, {"shufersal": lambda: adapter})
+
+    def test_a_clean_resolution_is_remembered(self):
+        self._cycle(_ResolvesCleanlyAdapter())
+        remembered = self.storage.preferred_for("shufersal", "חלב 3%")
+        self.assertIsNotNone(remembered)
+        self.assertEqual(remembered["product_code"], "P_777")
+
+    def test_the_second_cycle_does_not_search_again(self):
+        self._cycle(_ResolvesCleanlyAdapter())
+        second = _ResolvesCleanlyAdapter()
+        report = self._cycle(second)["shufersal"]
+        self.assertEqual(len(report.added), 1)
+        self.assertEqual(second.search_calls, [], "should have gone straight to the product")
+        self.assertEqual(second.specific_calls[0][1], "P_777")
+
+    def test_an_adapter_that_echoes_the_term_teaches_nothing(self):
+        # Remembering that "חלב 3%" means a product called "חלב 3%" would
+        # send the next cycle looking for a product by that exact name and
+        # resolve to nothing — worse than not remembering at all.
+        self._cycle(_EchoesTheTermAdapter())
+        self.assertIsNone(self.storage.preferred_for("shufersal", "חלב 3%"))
+
+    def test_a_resolved_name_without_a_code_is_still_worth_remembering(self):
+        # Tiv Taam's adapter returns the resolved product name but no
+        # code, and its add_specific_product matches on name — so the name
+        # alone is a usable memory there.
+        adapter = _ResolvesCleanlyAdapter(code="")
+        self._cycle(adapter)
+        remembered = self.storage.preferred_for("shufersal", "חלב 3%")
+        self.assertIsNotNone(remembered)
+        self.assertEqual(remembered["product_name"], "חלב 3% בקרטון תנובה")
+
+    def test_an_ambiguous_result_is_still_asked_about(self):
+        # The memory must not swallow a genuine choice.
+        self._cycle(_AlwaysAmbiguousAdapter())
+        self.assertIsNone(self.storage.preferred_for("shufersal", "חלב 3%"))

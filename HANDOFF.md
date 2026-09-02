@@ -200,14 +200,18 @@ evidence.**
   computed 3% accrual.
 - **Waste reporting** — design agreed (free text anytime; one targeted
   question at the end of a hand-off; never a checklist), not yet built.
-- **Miri does not call most of this CLI, and the user is specifying
-  that side.** `docs/MIRI_INTEGRATION.md` is the contract, written
-  2026-09-02 for the user to take to the familyos session. Today Miri
-  routes free text to `add-item` and card replies to `confirm-card`;
-  `meal-plan`, `recipe`, `recipe-text`, `price` and `deals` all work,
-  are token-free, and are called by nobody. Concretely: "תכנן לי תפריט
-  שבועי" said to Miri lands as a list item with that name. **Waiting on
-  the user / the familyos session — nothing to do here.**
+- ~~Miri does not call most of this CLI~~ **Closed 2026-09-02, and the
+  claim was wrong to begin with.** `docs/MIRI_INTEGRATION.md` is the
+  contract; all eleven commands are wired and reachable from Miri,
+  verified by reading `familyos/actions/groceries.py`, `bot/intent.py`
+  and `bot/telegram_bot.py`. The real gap was only `price`/`deals` being
+  stuck behind this bot's Telegram token, fixed here and wired there
+  (`familyos@9ac9538`).
+  **Worth keeping, because it will happen again:** the wrong claim came
+  from reading §4a of *this* file — a note here about the other project —
+  instead of that project's code. Per SESSION-COMMON, facts about another
+  project are not ours to assert; a note about someone else's system is
+  evidence of what was true when it was written, and nothing more.
 
 ## 6. Things that will bite a new session
 

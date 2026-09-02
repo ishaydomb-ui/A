@@ -249,6 +249,44 @@ def _add_one(
             return result
 
     result = adapter.search_and_add(term, quantity)
+    if result.status == "added":
+        # Remember a clean resolution too, not only a bulk-match, an
+        # auto-resolve or an answered question. Those three were wired up
+        # and this one was not, so a term that resolved to exactly one
+        # product went back through the store's search every single cycle.
+        #
+        # At Shufersal that is a wasted page load. At Tiv Taam it is a
+        # correctness problem: its search is an autocomplete dropdown that
+        # returned 4, then 0, then 5 candidates for the same query within
+        # one afternoon (2026-09-02), so re-searching a settled product
+        # rolls the dice again — and a 0 reads as "not found" for
+        # something the household buys every week.
+        #
+        # Guarded on a resolved identity: an adapter that echoes the
+        # search term back would otherwise teach the memory that "חלב"
+        # means a product called "חלב", which resolves to nothing.
+        #
+        # **Known risk, accepted deliberately.** "Resolved cleanly" means
+        # the search returned exactly one candidate — and at Tiv Taam the
+        # candidate list is itself unstable: "קוטג" returned 4, then 0,
+        # then 5, then 1 across one afternoon. So a single candidate can
+        # be an artefact of a half-loaded dropdown rather than a real
+        # unique match, and this will occasionally remember the wrong
+        # product. It is still the better trade: the alternative re-rolls
+        # that same dice every cycle *and* keeps asking. A wrong memory is
+        # corrected by the household answering the question once — the
+        # ambiguity flow overwrites it (see telegram_bot's chooser) — and
+        # `storage.forget_choice` exists for the same purpose.
+        # Reconsider if it turns out to bite: the honest fix is resolving
+        # names against our own catalog instead of the live dropdown.
+        if result.product_code or (result.item_name and result.item_name != term):
+            storage.remember_choice(
+                store=store,
+                term=term,
+                product_code=result.product_code,
+                product_name=result.item_name or term,
+            )
+        return result
     if result.status != "ambiguous":
         return result
 

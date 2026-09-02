@@ -22,18 +22,29 @@ a real answer ("not on the list"), not a failure to retry.
 
 ---
 
-## The gap this document exists to close
+## State of the wiring — corrected 2026-09-02
 
-Today Miri routes free text to `add-item` and card confirmations to
-`confirm-card`. Everything else below already works and is already
-called by nobody. On 2026-09-02 the user asked Miri whether a list of
-deals was worth taking; Miri relayed the question to a person rather
-than calling this CLI, and the answer never came.
+**All eleven commands below are wired and reachable from Miri.** Verified
+by reading the familyos code, not assumed: `actions/groceries.py` wraps
+each one, `bot/intent.py` classifies `grocery_recipe`,
+`grocery_meal_plan`, `grocery_price` and `grocery_deals` among others,
+and `bot/telegram_bot.py` dispatches to the wrappers.
 
-The concrete consequence: **"תכנן לי תפריט שבועי" said to Miri today most
-likely lands as a grocery list item called "תכנן לי תפריט שבועי".** The
-meal-plan capability exists on this side and is not reachable from that
-side.
+This section previously claimed the opposite — that Miri routed free text
+to `add-item` and called nothing else, so "תכנן לי תפריט שבועי" would land
+as a list item with that name. **That was wrong**, and the mistake is
+worth recording because of how it happened: it was inferred from
+`HANDOFF.md` §4a, a note in *this* repo describing the other project,
+rather than from the other project's code. A note about someone else's
+system is evidence of what was true when it was written, and nothing
+more. `actions/groceries.py` had wrapped meal-plan, recipe, recipe-text,
+add-to-cart, list-items, nudge and confirm-card since 2026-09-01 — a day
+before the claim was written.
+
+One real gap did exist and is now closed: `price` and `deals` sat behind
+`Config.from_env()` here and could not be called without this bot's
+Telegram token. That was fixed on this side and wired on the familyos
+side the same day (`familyos@9ac9538`).
 
 ---
 
@@ -100,7 +111,10 @@ one.
 
 Both were behind the Telegram token until 2026-09-02 and are now
 token-free — this is new, and the reason "כמה עולה קוטג" could not be
-asked through Miri before.
+asked through Miri before. Wired on that side in `familyos@9ac9538`,
+which also had to teach the classifier that "כמה עולה" (what does it
+cost now) is this, while "כמה הוצאנו על" (what did we spend) belongs to
+the budget bot.
 
 ### Cadence and the card
 

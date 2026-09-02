@@ -109,6 +109,13 @@ MAX_CANDIDATES = 6
 # so the wait is on relevance rather than on time.
 SEARCH_POLLS = 8
 SEARCH_POLL_MS = 2500
+# The dropdown returned 4, then 0, then 5 candidates for the same query
+# in one afternoon, so an empty result is retried before it is believed —
+# the caller turns [] into `not_found`, which files a weekly staple as
+# missing. Bounded, because an unbounded retry cannot tell "not ready"
+# from "never coming".
+SEARCH_ATTEMPTS = 3
+SEARCH_RETRY_MS = 3000
 
 
 class TivTaamAdapter(StoreAdapter):
@@ -226,7 +233,33 @@ class TivTaamAdapter(StoreAdapter):
     # -- searching --------------------------------------------------------
 
     def _rows(self, term: str):
-        """Search rows matching a term, as (row locator, product name).
+        """Search rows matching a term, with retries. [] only if it truly failed.
+
+        The dropdown is genuinely unreliable: on 2026-09-02 the same query
+        returned 4 candidates, then 0, then 5, within one afternoon and
+        against the same account. An empty result therefore does not mean
+        "this chain does not stock it" — and the caller turns [] into
+        `not_found`, which puts a weekly staple back on the list as
+        missing.
+
+        So a miss is retried with a widening gap before it is believed.
+        Each attempt re-types the query, because the failure is in the
+        autocomplete request rather than in the page.
+        """
+        for attempt in range(SEARCH_ATTEMPTS):
+            rows = self._rows_once(term)
+            if rows:
+                return rows
+            if attempt < SEARCH_ATTEMPTS - 1:
+                logger.info(
+                    "Tiv Taam: no rows for %r (attempt %d/%d); retrying",
+                    term, attempt + 1, SEARCH_ATTEMPTS,
+                )
+                self._page.wait_for_timeout(SEARCH_RETRY_MS * (attempt + 1))
+        return []
+
+    def _rows_once(self, term: str):
+        """One pass at the search box, as (row locator, product name).
 
         Typing is enough; the dropdown opens on input and pressing Enter
         navigates away from it. Waits on results that relate to the term
