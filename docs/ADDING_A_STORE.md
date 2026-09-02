@@ -196,3 +196,34 @@ happen against the live site at all. The barcode is already in
 eight chains, so resolving offline is deterministic and free, while the
 autocomplete returned 4, then 0, then 5 candidates for the same query
 within one afternoon.
+
+## 8. Login methods and how often they actually matter (2026-09-02)
+
+Checked when the user offered to be available for an SMS code, on the
+theory that a one-time-password login might be easier to automate than a
+password. It is not — and the numbers matter more than the mechanism.
+
+- **Shufersal offers no SMS sign-in.** The login page does carry OTP
+  markup, which looks promising until you read where it posts:
+  `/otp/send-otp-to-loyalty-member`, inside `loyaltyMemberDataForm`. It
+  is the loyalty-member identification / password-recovery flow, not an
+  alternative way to sign in to an existing account. Password login
+  already works fully headlessly here, so moving to SMS would replace
+  something automatic with something needing a human every time.
+- **A one-time password is strictly worse for automation than a stored
+  password**, whenever the password path works. It converts an unattended
+  step into a scheduled one. It is only worth wanting where the password
+  path is blocked — which at Tiv Taam it is, by a checkbox reCAPTCHA.
+- **Sessions are long-lived, so re-login is rare.** Measured rather than
+  assumed: the Shufersal state file was written 2026-08-29 and still
+  worked on 09-02; Tiv Taam's was written 08-31 and still worked on
+  09-02, and its cookies carry expiries out to **2027-10-05**. Tiv Taam
+  also runs from a persistent browser profile (`tivtaam_profile/`), which
+  is the real session — the JSON beside it is a snapshot, not the thing
+  in use.
+
+**So the answer to "would SMS help?" is no, and the useful question is a
+different one:** the human-in-the-loop cost here is not the login method,
+it is the rare re-login, and the one place it is genuinely blocking is
+Victory (§3 of HANDOFF) — which needs the noVNC port-forward, not a
+different credential type.
