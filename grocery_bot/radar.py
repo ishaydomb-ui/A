@@ -112,8 +112,14 @@ def format_stockup_deals(deals: list[StockUpDeal], bot_username: str = "") -> st
             f"(-{deal.discount * 100:.0f}%) — {deal.description}"
         )
     lines += ["", "_🧺 = נשמר בארון; שווה לקנות מראש. כלום לא נוסף לסל אוטומטית._"]
-    # No link here. A t.me deep link tapped from inside the bot's own chat
-    # sends a bare /start with the payload stripped, so it appears to do
-    # nothing — which is exactly what happened. The cross-chain list is
-    # offered as a button on the message instead; see telegram_bot.stockup.
+    # A plain command, not a deep link and not a callback button.
+    #
+    # A t.me deep link tapped from inside the bot's own chat arrives as a
+    # bare /start with the payload stripped, so it silently does nothing.
+    # A callback button works in principle but added a round trip of
+    # plumbing that still had to be debugged in the household's hands.
+    # Telegram renders "/chaindeals" as tappable text on its own, which
+    # is the whole feature with none of the machinery — and it keeps the
+    # long list out of this message, which was the point.
+    lines.append("_עוד מבצעים, מכל הרשתות:_ /chaindeals")
     return "\n".join(lines)

@@ -337,12 +337,24 @@ class GroceryBot:
             hotdeals.format_extended(deals), parse_mode="Markdown"
         )
 
+    async def on_any_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Log every callback that reaches the bot. Never answers or replies."""
+        query = update.callback_query
+        logger.info(
+            "callback received: data=%r from=%s",
+            getattr(query, "data", None),
+            update.effective_user.id if update.effective_user else "?",
+        )
+
     async def on_chain_deals_button(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
         """The button under /stockup — cross-chain deals, one tap."""
         query = update.callback_query
+        logger.info("chaindeals button pressed by %s", update.effective_user.id
+                    if update.effective_user else "?")
         if not _authorized(self.config, update):
+            logger.warning("chaindeals press refused: user not on the allowlist")
             await query.answer()
             return
         await query.answer()
@@ -620,16 +632,11 @@ class GroceryBot:
             return
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
         deals = await asyncio.to_thread(find_stockup_deals, self.storage)
-        # A callback button, not a deep link: a t.me link tapped from
-        # inside this chat sends a bare /start and looks broken.
+        # The footer names /chaindeals rather than carrying a button:
+        # Telegram makes a command tappable by itself, and that needs no
+        # callback plumbing to go wrong.
         await update.message.reply_text(
-            format_stockup_deals(deals),
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton(
-                    "🔎 מבצעים מרשתות אחרות", callback_data="chaindeals"
-                )]]
-            ),
+            format_stockup_deals(deals), parse_mode="Markdown"
         )
 
 
@@ -1740,6 +1747,13 @@ def build_application(config: Config, storage: Storage) -> Application:
     )
     application.add_handler(
         CallbackQueryHandler(bot.on_card_button, pattern=r"^cardok$")
+    )
+    # Group 1 runs in addition to group 0, so this sees every callback
+    # whether or not a real handler matched. Without it, "the button does
+    # nothing" is indistinguishable from "the press never arrived", and
+    # that ambiguity has already cost two rounds of guessing.
+    application.add_handler(
+        CallbackQueryHandler(bot.on_any_callback), group=1
     )
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bot.handle_message))
     if application.job_queue is not None:
