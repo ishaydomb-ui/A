@@ -169,3 +169,30 @@ returns the same answer whether or not the thing is true.**
   pre-clear total, a successful add reported as a failure, and a clear
   reporting success — three symptoms, one cause. Anything that reads
   state after an interaction needs a real reload.
+
+## 7. What is and is not available on the Self-Point API (2026-09-02)
+
+Checked while looking for a way around the flaky Tiv Taam autocomplete.
+Recorded because both results look like the opposite of what they are.
+
+- **The API does not search by name.** `filters[must][match][name]`
+  returns HTTP 200 with products, which looks like it worked — but
+  "קוטג", "במבה" and "טחינה גולמית" return **byte-identical products**
+  and `total=10000`. The `match` filter is ignored and the endpoint hands
+  back an unfiltered page. Same shape as the older trap: the endpoint
+  recommends rather than matches. Do not build name search on it.
+- **`filters[must][term][...]` on `id` and `localBarcode` *is* honoured** —
+  this is what `selfpoint.py` already uses in production for prices, and
+  it is the reliable lookup. So the API is good for
+  **barcode → product**, useless for **name → product**.
+- **`/product/<id>`, `/products/<id>` and `/p/<id>` all return HTTP 200**,
+  which proves nothing: this site soft-404s with the homepage. Anyone
+  testing a product-page route must check the *content*, exactly as with
+  the geo-block. Not yet verified either way.
+
+**The consequence for reliability:** the name → product step should not
+happen against the live site at all. The barcode is already in
+`store_prices` (743 Tiv Taam rows) and the catalog is keyed by EAN across
+eight chains, so resolving offline is deterministic and free, while the
+autocomplete returned 4, then 0, then 5 candidates for the same query
+within one afternoon.
