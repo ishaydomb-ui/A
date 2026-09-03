@@ -17,3 +17,11 @@ data/base_list.yaml
 # timer run and conflict between hosts; it describes this box only.
 data/backup_heartbeat.json
 data/backup_doctor_state.json
+
+# Benefits-harvest data (behatsdaa + other clubs). This is the household's
+# private financial data — voucher and card-load history, personal
+# catalogs — and this repo pushes to GitHub, so the entire directory is
+# kept out of git. Nothing under here is ever committed. Card details are
+# never brought here at all (a hard rule); this ignore is the second line
+# of defence, not the first.
+data/benefits/
