@@ -123,10 +123,22 @@ the budget bot.
 | `benefits-catalog [query] [--json]` | Harvested benefit-club stores: wallets, discount ceilings, cities |
 | `benefits-branches [query] [--json]` | Street addresses + phone for those stores (partial — the crawl is incremental) |
 
-This is the **rescued catalog from the behatsdaa harvest** (982 stores,
-manually tagged), not a live fetch — see `docs/BENEFITS.md` for what the
-harvest is and isn't yet. No query returns everything; a query does a
-plain substring match on store name/category (or address, for branches).
+**Two clubs are in there now**, and each row carries a `club`:
+**בהצדעה** (982 stores, manually tagged, rescued) and **מקס** (~11,300
+discounts harvested from MAX's public API, 2026-09-03). No query returns
+everything; a query does a plain substring match on store name, category,
+city or region (or address, for branches).
+
+**The two clubs carry different columns, on purpose.** behatsdaa rows
+have `ארנקים` and `תקרת הנחה כוללת ₪` because it is a prepaid wallet;
+MAX rows have `הנחה%`, `כתובת`, `עיר`, `אזור` and no ceiling, because a
+card-linked discount has no balance to cap. An empty ceiling on a MAX row
+means MAX has no such concept — not that the harvest missed it.
+
+**Filtering by club is exact-match on the `club` field, not a search
+term.** Searching "מקס" also matches "מקסיקנה", which is a behatsdaa
+restaurant — so `club` is deliberately excluded from the substring
+search. Use `--json` and filter on `club` when the distinction matters.
 `--json` returns the full row set as a JSON array — use it for bulk
 ingestion (the refinement work — addresses, relevance, whatever Miri
 builds on top — is explicitly *her* side, not duplicated here).

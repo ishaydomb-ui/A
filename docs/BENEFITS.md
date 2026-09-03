@@ -243,24 +243,51 @@ crawl-delay). Covers CAL and MAX explicitly. Two caveats:
   cadence, not the issuer's truth. First-party (MAX) beats it where
   available.
 
-### Harvest readiness — checked 2026-09-03, and the answer is "not yet"
+### MAX — harvested 2026-09-03, no login needed
+
+**Solved.** `scripts/harvest_max.py` pulls MAX's public "הטבות פלוס"
+catalog into `data/benefits/max_catalog.csv`, and it needs **no
+credentials, no session, and no Israeli exit node**.
+
+Ishay offered his MAX login (ID + last 8 card digits, with an SMS code to
+follow). **It was declined and never used** — the catalog is public
+marketing material aimed at non-customers, proved by driving the page and
+then the API anonymously. His account would have given a different and
+bigger thing (his card, his transactions) that a catalog does not need,
+and that the budget project already sees via statements. *Lesson worth
+keeping: "can I get this data?" and "should I log in?" are separate
+questions, and the first should be answered first.*
+
+**The endpoint, found in the page's own Angular TransferState blob rather
+than guessed** (a bare `GET` 404s without these params):
+
+    GET /api/benefitsPlus/getDiscountsPlus?isMobile=false&loadLobby=false&page=N
+
+- **11,341 discounts**, 12 per page, with an `isLast` flag.
+- Each record carries name, discount %, category, street address, city,
+  region, phone, website, description, update date — and latitude/
+  longitude. **Richer than ClubHub**, which has no addresses at all, and
+  richer per-branch than the behatsdaa catalog.
+- Permitted: `robots.txt` `Allow`s `/benefits/bizplus` and none of its
+  192 `Disallow` rules covers `/api`.
+- The harvester is slow on purpose (~1.2s + jitter between pages),
+  checkpointed after every page so it resumes instead of restarting, and
+  bounded at 1200 pages so a changed API cannot spin forever.
+
+### Harvest readiness for the rest — checked 2026-09-03
 
 Asked whether the other clubs could be catalogued into the behatsdaa
 shape right away. **No — what exists so far is the access map above, not
 a single merchant record from any of them.** What the probing established,
 so it is not redone:
 
-- **MAX has a first-party JSON API**, `/api/benefitsPlus/getDiscountsPlus`
-  (frontend proxies to `onlinelcapi.max.co.il`). Found by reading the
-  page, not guessing. `/api` is **not** among the 192 `Disallow` rules.
-  But the merchant list is **lazy-loaded** — a real browser load of
-  `/benefits/bizplus` fired no such call in 12s (only analytics), and the
-  547KB of HTML contains ~4 discount mentions, so it is not
-  server-rendered either. The call needs its trigger and parameters worked
-  out before anything can be harvested. Bare `GET` returns 404, `POST {}`
-  returns 302 — the signature is still unknown.
+- ~~MAX's API signature is unknown~~ — **solved, see above.** Worth
+  keeping one detail: the `/benefits/bizplus` page shows only a
+  **rotating carousel of 4 cards**, so scraping its DOM looks like a tiny
+  catalog and quietly gives a different 4 each visit. The list is not on
+  the page; it is behind the paged API.
 - **MAX needs no Israeli exit** — it answers 200 on a direct connection,
-  so harvesting it should not spend the household's home bandwidth (same
+  so harvesting it does not spend the household's home bandwidth (same
   reasoning as the price feeds).
 - **הר"י's public page is a landing page, not a catalog.**
   `ima.org.il/VIP/` returns 200 (Cloudflare, not blocking) and `robots.txt`
