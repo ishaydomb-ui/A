@@ -123,15 +123,28 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--max-pages", type=int, default=MAX_PAGES)
     parser.add_argument("--restart", action="store_true", help="ignore the checkpoint")
+    parser.add_argument(
+        "--rescan-from", type=int, default=None, metavar="PAGE",
+        help="re-read from PAGE, appending only rows not already collected. "
+             "For picking up something a finished run missed without "
+             "re-fetching the whole catalogue.",
+    )
     args = parser.parse_args()
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     state = {"next_page": 0, "seen": []} if args.restart else _load_checkpoint()
     start_page = int(state.get("next_page", 0))
     seen = set(state.get("seen", []))
+    if args.rescan_from is not None:
+        # Keep the collected rows and the dedupe set; just re-read from
+        # the given page and append whatever is genuinely new.
+        start_page = args.rescan_from
 
     # Append if resuming and the file already has rows; otherwise start clean.
-    resuming = start_page > 0 and OUT_CSV.exists()
+    # Append when continuing OR rescanning — `--rescan-from 0` is a real
+    # case (the promoted set lives on page 0), and treating page 0 as
+    # "fresh start" would truncate a completed harvest.
+    resuming = OUT_CSV.exists() and (start_page > 0 or args.rescan_from is not None)
     handle = OUT_CSV.open("a" if resuming else "w", encoding="utf-8-sig", newline="")
     writer = csv.DictWriter(handle, fieldnames=FIELDNAMES)
     if not resuming:
@@ -164,7 +177,15 @@ def main() -> int:
                     break
 
                 result = (response.json() or {}).get("result") or {}
-                discounts = result.get("discounts") or []
+                # `promotedDiscounts` is a SEPARATE list from `discounts`,
+                # not a subset of it, and it carries the highest rates —
+                # the first harvest maxed out at 20% while the promoted set
+                # held 21–28.5%, none of them present in the 10,977 rows.
+                # It is returned on page 0 only. Missing it silently loses
+                # exactly the deals worth knowing about.
+                discounts = (result.get("discounts") or []) + (
+                    result.get("promotedDiscounts") or []
+                )
                 if total is None:
                     total = result.get("totalDiscounts")
                     print(f"catalog reports {total} discounts", flush=True)
