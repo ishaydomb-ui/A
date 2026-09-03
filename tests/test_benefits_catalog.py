@@ -206,3 +206,95 @@ class CliContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+MAX_ROWS = [
+    {
+        "club": "מקס", "חנות": "שוקה - תל אביב", "הנחה%": "25.0",
+        "קטגוריה": "מזון ומשקאות", "כתובת": "אלנבי, 83, תל אביב - יפו",
+        "עיר": "תל אביב - יפו", "אזור": "תל אביב-יפו", "טלפון": "",
+        "אתר": "https://example.co.il", "תיאור": "מסעדה", "עודכן": "2026-09-01T00:00:00",
+        "business_id": "12345",
+    },
+]
+
+
+class MultiClubTests(unittest.TestCase):
+    """behatsdaa and MAX in one catalog, without flattening their shapes.
+
+    The two clubs genuinely carry different fields — behatsdaa has wallets
+    and a discount ceiling because it is a prepaid wallet; MAX has a branch
+    address and no ceiling because a card-linked discount has no balance to
+    cap. Merging them into one schema would invent data, so rows keep their
+    own columns and carry a `club` to tell them apart.
+    """
+
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        self.data_dir = Path(self._dir.name)
+        # behatsdaa's rescued file sits in a subdirectory; harvested clubs
+        # are written at the root. Both must be found.
+        rescue = self.data_dir / "lab_rescue"
+        rescue.mkdir()
+        _write_csv(rescue / "catalog_tagged.csv", CATALOG_ROWS)
+        _write_csv(self.data_dir / "max_catalog.csv", MAX_ROWS)
+        self._old = os.environ.get("BENEFITS_DATA_DIR")
+        os.environ["BENEFITS_DATA_DIR"] = str(self.data_dir)
+
+    def tearDown(self):
+        self._dir.cleanup()
+        if self._old is None:
+            os.environ.pop("BENEFITS_DATA_DIR", None)
+        else:
+            os.environ["BENEFITS_DATA_DIR"] = self._old
+
+    def test_both_clubs_load_together(self):
+        from grocery_bot.benefits_catalog import load_catalog
+        rows = load_catalog()
+        self.assertEqual(len(rows), len(CATALOG_ROWS) + len(MAX_ROWS))
+
+    def test_behatsdaa_rows_are_labelled_even_though_their_file_has_no_club_column(self):
+        from grocery_bot.benefits_catalog import load_catalog
+        clubs = {r.get("club") for r in load_catalog()}
+        self.assertIn("בהצדעה", clubs)
+        self.assertIn("מקס", clubs)
+
+    def test_search_finds_a_max_store(self):
+        from grocery_bot.benefits_catalog import search_catalog
+        hits = search_catalog("שוקה")
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0]["club"], "מקס")
+
+    def test_searching_a_club_name_is_not_a_club_filter(self):
+        # Caught by this test rather than in production: "מקס" is a
+        # substring of "מקסיקנה", so a substring search on the club name
+        # returns a *different* club's merchant. `club` is therefore left
+        # out of the searched fields, and filtering by club is an
+        # exact-match job on the field itself.
+        from grocery_bot.benefits_catalog import search_catalog
+        hits = search_catalog("מקס")
+        self.assertTrue(any(r["חנות"] == "רשת מקסיקנה" for r in hits),
+                        "substring search should still match the merchant name")
+        exact = [r for r in hits if r.get("club") == "מקס"]
+        self.assertNotEqual(len(hits), len(exact),
+                            "if these were equal the collision would be hidden")
+
+    def test_search_finds_a_max_row_by_city(self):
+        # City is a MAX-only column; searching it must not break on
+        # behatsdaa rows that have no such field.
+        from grocery_bot.benefits_catalog import search_catalog
+        hits = search_catalog("תל אביב - יפו")
+        self.assertTrue(any(r.get("club") == "מקס" for r in hits))
+
+    def test_a_max_row_renders_its_percent_and_address(self):
+        from grocery_bot.benefits_catalog import format_catalog_rows
+        text = format_catalog_rows(MAX_ROWS, "שוקה")
+        self.assertIn("25.0% הנחה", text)
+        self.assertIn("אלנבי", text)
+        self.assertIn("מקס", text)
+
+    def test_a_behatsdaa_row_still_renders_wallets_and_ceiling(self):
+        from grocery_bot.benefits_catalog import format_catalog_rows
+        text = format_catalog_rows(CATALOG_ROWS[:1], "מקסיקנה")
+        self.assertIn("פייטר", text)
+        self.assertIn("3000", text)

@@ -22,12 +22,28 @@ import csv
 import os
 from pathlib import Path
 
-DEFAULT_DATA_DIR = "data/benefits/lab_rescue"
+DEFAULT_DATA_DIR = "data/benefits"
+# Data arrived in two waves and lives in two places on purpose: the
+# behatsdaa files were *rescued* from another project (lab_rescue/), while
+# anything harvested since is written at the root. Rather than move
+# someone else's files around, both are searched.
+SEARCH_SUBDIRS = ("", "lab_rescue")
 MAX_RESULTS = 15
 
 
 def _data_dir() -> Path:
     return Path(os.environ.get("BENEFITS_DATA_DIR", DEFAULT_DATA_DIR))
+
+
+def _find(pattern: str) -> list[Path]:
+    """Files matching `pattern` across the benefits dir and its lab_rescue/."""
+    found: list[Path] = []
+    root = _data_dir()
+    for sub in SEARCH_SUBDIRS:
+        directory = root / sub if sub else root
+        if directory.is_dir():
+            found.extend(sorted(directory.glob(pattern)))
+    return found
 
 
 def _read_csv(path: Path) -> list[dict]:
@@ -38,8 +54,31 @@ def _read_csv(path: Path) -> list[dict]:
 
 
 def load_catalog() -> list[dict]:
-    """The manually-tagged store catalog: name, wallets, discount ceiling, cities."""
-    return _read_csv(_data_dir() / "catalog_tagged.csv")
+    """Every club's catalog, in one list, each row carrying its `club`.
+
+    Two shapes are merged deliberately rather than forced into one schema:
+
+    - **behatsdaa** (`lab_rescue/catalog_tagged.csv`) — 982 stores, manually
+      tagged with wallets and discount ceilings. Its rows have no `club`
+      column of their own, so one is added here.
+    - **מקס** (`max_catalog.csv`) — harvested from MAX's public API, which
+      carries per-branch address, city, region and phone but no ceiling,
+      because a card-linked discount has no wallet balance to cap.
+
+    Columns therefore differ between clubs, and that is honest: a caller
+    reading `תקרת הנחה כוללת ₪` on a MAX row gets nothing because MAX has
+    no such concept, not because the harvest missed it. Filter on `club`
+    when the distinction matters.
+    """
+    rows: list[dict] = []
+    for path in _find("catalog_tagged.csv"):
+        for row in _read_csv(path):
+            row.setdefault("club", "בהצדעה")
+            rows.append(row)
+    # MAX, and any club harvested later, land beside the rescued data.
+    for path in _find("*_catalog.csv"):
+        rows.extend(_read_csv(path))
+    return rows
 
 
 def load_branches() -> list[dict]:
@@ -51,7 +90,7 @@ def load_branches() -> list[dict]:
     address is one row, however many crawl files captured it.
     """
     seen: dict[tuple, dict] = {}
-    for path in sorted(_data_dir().glob("branches*.csv")):
+    for path in _find("branches*.csv"):
         for row in _read_csv(path):
             key = (row.get("chainID", ""), row.get("סניף", ""), row.get("כתובת", ""))
             seen.setdefault(key, row)
@@ -71,9 +110,18 @@ def search_catalog(query: str) -> list[dict]:
     q = (query or "").strip()
     if not q:
         return []
+    # `עיר` and `אזור` only exist on MAX rows, `תת-קטגוריה` only on
+    # behatsdaa's; `_matches` skips absent fields, so one field list serves
+    # both shapes without the caller needing to know which club it hit.
+    #
+    # `club` is deliberately NOT searched. It reads like a useful filter
+    # until you notice "מקס" is a substring of "מקסיקנה", so searching the
+    # club name silently returns another club's merchants. Filtering by
+    # club is an exact-match job on the `club` field — do it on the rows,
+    # not through this substring search.
     return [
         row for row in load_catalog()
-        if _matches(row, q, ("חנות", "קטגוריה", "תת-קטגוריה"))
+        if _matches(row, q, ("חנות", "קטגוריה", "תת-קטגוריה", "עיר", "אזור"))
     ]
 
 
@@ -95,19 +143,33 @@ def format_catalog_rows(rows: list[dict], query: str = "") -> str:
     for row in rows[:MAX_RESULTS]:
         name = (row.get("חנות") or "").strip()
         category = (row.get("קטגוריה") or row.get("תת-קטגוריה") or "").strip()
+        club = (row.get("club") or "").strip()
         wallets = (row.get("ארנקים") or "").strip()
         ceiling = (row.get("תקרת הנחה כוללת ₪") or "").strip()
         online = "אונליין" if (row.get("אונליין") or "").strip() == "כן" else ""
+        # behatsdaa lists the cities a chain operates in; MAX gives one
+        # branch with its own address. Show whichever the row actually has.
         cities = (row.get("ערים") or "").strip()
+        percent = str(row.get("הנחה%") or "").strip()
+        address = (row.get("כתובת") or "").strip()
+        city = (row.get("עיר") or "").strip()
 
         line = f"• {name}" + (f" — {category}" if category else "")
+        if club:
+            line += f"  [{club}]"
         details = []
         if wallets:
             details.append(wallets)
+        elif percent:
+            details.append(f"{percent}% הנחה")
         if ceiling:
             details.append(f"תקרה ₪{ceiling}")
         if online:
             details.append(online)
+        if address:
+            details.append(address)
+        elif city:
+            details.append(city)
         if cities:
             details.append(f"ערים: {cities}")
         if details:
