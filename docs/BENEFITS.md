@@ -195,6 +195,64 @@ session is achievable; the likely route was a headed/real browser, not a
 headless one. The open sub-problem is the noVNC phone-access issue, which
 is worth solving once since Victory needs it too.
 
+## The other clubs — access assessment, 2026-09-03
+
+Asked: can public aggregators cover מקס/כאל/לאומי בונוס at the depth we
+have for behatsdaa, or must we log into each? Checked rather than
+guessed. **The answer splits by club, because the clubs have different
+data models.**
+
+### The distinction that decides it: two data layers
+
+- **Catalog layer** — which merchant, what discount. **Public.**
+  Aggregators and issuers' own sites carry it.
+- **Account layer** — my balance, my remaining ceiling, what I have
+  already used, which voucher expires when. **Never public, login-only.**
+
+behatsdaa gave us both *because we logged in*. That is the entire reason
+that dataset is rich. An aggregator can never give the second layer.
+
+**So the real question per club is: does its value live in the account
+layer?** For a prepaid-wallet club (behatsdaa) it absolutely does — a
+15% wallet with ₪0 balance is worthless, and the money already found was
+in *unused ceilings and expired vouchers*, which is account state. For a
+card-linked discount club, there is often no balance to miss, and the
+catalog is most of the value.
+
+### Per club
+
+| Club | Model | Catalog access | Verdict |
+|---|---|---|---|
+| **מקס / MAX** | Card-linked discounts (הטבות פלוס, thousands of businesses) | `/benefits/bizplus` returns 200 and is **explicitly `Allow`ed in their robots.txt** | **Scrape first-party, no login.** Best case: authoritative and permitted |
+| **כאל / CAL** | Card-linked discounts | `cal-online.co.il` returns **HTTP 400 from AkamaiGHost** — with browser UA and headers too, root and `/benefits` alike | Edge-blocked to plain HTTP. Same class of wall as behatsdaa; needs a real browser at minimum. **Use ClubHub for CAL's catalog instead** |
+| **לאומי בונוס** | **Accrual** — bonus earned on card spend, redeemed for vouchers at 10–20% uplift | n/a yet | **Has real account state (accrued balance).** Catalog alone cannot answer "how much bonus do I have". Also **Liran's**, not Ishay's |
+| **הר"י** | Not yet characterised | n/a yet | **Liran's.** Login needs her credentials and consent — not merely a technical step |
+
+### ClubHub as the fallback aggregator
+
+Public catalog, no login for browsing, and `robots.txt` is fully
+permissive (`Allow: /`, a published sitemap, no `Disallow`, no
+crawl-delay). Covers CAL and MAX explicitly. Two caveats:
+
+- **It is shallower than what we have.** No spending ceilings, no branch
+  addresses, no validity dates — exactly the fields that make the
+  behatsdaa catalog actionable. *Provisional:* this came from a
+  summarised page read, not from inspecting their API; the site is a JS
+  app, so confirm against real traffic before relying on it.
+- **It is a copy of a copy.** Third-party freshness is their scraping
+  cadence, not the issuer's truth. First-party (MAX) beats it where
+  available.
+
+### Recommendation
+
+Do not treat this as one decision. **MAX: scrape first-party, no login
+needed.** **CAL: do not fight Akamai — take its catalog from ClubHub**
+unless a gap proves otherwise. **Leumi Bonus and הר"י: both are Liran's,
+and Leumi Bonus has account state a catalog cannot supply** — so those
+two are the only ones where a login is genuinely unavoidable, and both
+need her, not Ishay. Confirm הר"י's model (wallet vs discount) before
+committing to a scraper for it.
+
 ## Open questions for Ishay (also in HANDOFF §5)
 
 - Availability window for the OTP login.
