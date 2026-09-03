@@ -16,8 +16,11 @@ Full handover from the Strategist session: `~/portfolio-strategy/BENEFITS-HANDOF
 - **Read/harvest only, never redeem.** Reading what a wallet or club
   offers is the whole point; activating a benefit, redeeming a voucher,
   or spending a balance is not this bot's action.
-- **Never hold card details.** See the finding below. Card columns are
-  not brought into this repo at all.
+- **Never hold redemption-value data.** See the finding below — the
+  `purchases_general.csv` fields that look like card data are, best
+  understanding, per-voucher redemption numbers, not a personal card. The
+  distinction changes the risk category, not the handling: not brought
+  into this repo either way.
 
 ## Data layout
 
@@ -40,9 +43,10 @@ household's private financial data. Nothing under it is ever committed.
   (SOCKS5 127.0.0.1:1055); they must be repointed at *our* session, not
   the Strategist's (see below).
 
-**Deliberately NOT copied:** `purchases_general.csv` (holds card data —
-see finding), the Strategist's `lab/.env` (his secrets), and his
-`state.json` / `profile/` (his session — we build our own login).
+**Deliberately NOT copied:** `purchases_general.csv` (holds a
+redemption-value field, see finding), the Strategist's `lab/.env` (his
+secrets), and his `state.json` / `profile/` (his session — we build our
+own login).
 
 **Read access:** `grocery_bot/benefits_catalog.py` reads
 `catalog_tagged.csv` and the `branches*.csv` files from
@@ -50,19 +54,36 @@ see finding), the Strategist's `lab/.env` (his secrets), and his
 via `benefits-catalog` / `benefits-branches` in the CLI — see
 `docs/MIRI_INTEGRATION.md`. Read-only, no fetching, no scoring.
 
-## Finding: the voucher history holds real card data
+## Finding, corrected 2026-09-03: not personal card data
 
 `~/portfolio-strategy/lab/purchases_general.csv` (76 voucher rows) has
-populated payment-card columns — verified by counting non-empty cells,
-never by reading a value: `creditCard16Digits` in 17 rows,
-`creditCardExpirey` in 73, `dtsRedimCode` in all 76. The behatsdaa
-`purchaseHistory` API returns card fields in its payload.
+`creditCard16Digits` populated in 17 rows and `creditCardExpirey` in 73.
+**The first write-up here called this "real payment-card data" and that
+overstated it** — the field name alone, without checking what it holds.
 
-Consequence for this project: the voucher history is genuinely useful
-(an expiry radar is worth building — 5 vouchers expired unredeemed, 9
-never redeemed), but it must be re-fetched from the API with the card
-columns **stripped on the way in**, and stored under the gitignored
-`data/benefits/`. The card columns never enter this repo.
+Checked properly, without ever reading a value (only the non-sensitive
+columns on the same rows): every populated row's `redimTypeName`
+describes the same mechanism, several explicitly — **"ההטבה נטענה על גבי
+כרטיס המועדון... יש להציגו בקופה / למסור את מספר הכרטיס"** (the benefit
+is loaded onto the *club's own card*; show/give that number at the
+register), others `מסופון` (a payment terminal at point of sale).
+`benefitTypeId` is 2 or 3 (voucher/gift-benefit) for all 17. And
+`paymentToken` — which would hold the actual funding instrument — is
+**empty in all 76 rows here, and there is no card-shaped column anywhere
+in `activities.csv` either.** No personal bank card appears in any data
+rescued from this harvest.
+
+So this is almost certainly a **per-voucher redemption/gift-card number
+the club itself issues**, not Ishay's card — inferred from context, not
+certain, because reading the value to confirm is exactly the thing not
+to do. The real residual risk is narrower than "card data": an
+unredeemed voucher's number still carries spendable value, so leaking it
+risks that specific balance, not the household's bank account.
+
+Still handled with the same hygiene regardless, because the risk is real
+even if bounded: the file is not copied into this repo, and if the
+voucher history is fetched from the API here, it goes into the gitignored
+`data/benefits/`, worked on in place rather than duplicated.
 
 ## Verified against the data (not taken on report)
 
