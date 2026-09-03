@@ -243,6 +243,37 @@ crawl-delay). Covers CAL and MAX explicitly. Two caveats:
   cadence, not the issuer's truth. First-party (MAX) beats it where
   available.
 
+### Harvest readiness — checked 2026-09-03, and the answer is "not yet"
+
+Asked whether the other clubs could be catalogued into the behatsdaa
+shape right away. **No — what exists so far is the access map above, not
+a single merchant record from any of them.** What the probing established,
+so it is not redone:
+
+- **MAX has a first-party JSON API**, `/api/benefitsPlus/getDiscountsPlus`
+  (frontend proxies to `onlinelcapi.max.co.il`). Found by reading the
+  page, not guessing. `/api` is **not** among the 192 `Disallow` rules.
+  But the merchant list is **lazy-loaded** — a real browser load of
+  `/benefits/bizplus` fired no such call in 12s (only analytics), and the
+  547KB of HTML contains ~4 discount mentions, so it is not
+  server-rendered either. The call needs its trigger and parameters worked
+  out before anything can be harvested. Bare `GET` returns 404, `POST {}`
+  returns 302 — the signature is still unknown.
+- **MAX needs no Israeli exit** — it answers 200 on a direct connection,
+  so harvesting it should not spend the household's home bandwidth (same
+  reasoning as the price feeds).
+- **הר"י's public page is a landing page, not a catalog.**
+  `ima.org.il/VIP/` returns 200 (Cloudflare, not blocking) and `robots.txt`
+  allows it, but the 112KB contains no merchant or discount data — only
+  login references and policy links. So the catalog sits behind the member
+  login after all; the earlier hope that it might be public is wrong.
+- **מועדון יחד is Isracard-operated** (`marketing.isracard.co.il/clubs/yahad/`)
+  and returns **403 from Cloudflare**.
+
+Doing this properly is a per-source reverse-engineering job of the same
+order as the original behatsdaa harvest — not a normalisation pass over
+data we already hold.
+
 ### Recommendation
 
 Do not treat this as one decision. **MAX: scrape first-party, no login
