@@ -44,6 +44,12 @@ household's private financial data. Nothing under it is ever committed.
 see finding), the Strategist's `lab/.env` (his secrets), and his
 `state.json` / `profile/` (his session — we build our own login).
 
+**Read access:** `grocery_bot/benefits_catalog.py` reads
+`catalog_tagged.csv` and the `branches*.csv` files from
+`data/benefits/lab_rescue/` (override with `BENEFITS_DATA_DIR`), exposed
+via `benefits-catalog` / `benefits-branches` in the CLI — see
+`docs/MIRI_INTEGRATION.md`. Read-only, no fetching, no scoring.
+
 ## Finding: the voucher history holds real card data
 
 `~/portfolio-strategy/lab/purchases_general.csv` (76 voucher rows) has
@@ -74,14 +80,25 @@ benefits pool, which is the real open reverse-engineering task.
 
 1. **Our own behatsdaa login** — SMS OTP, Ishay hands the code over live.
    Credentials in this project's `.env` (0600). Do **not** inherit the
-   Strategist's `state.json`. ← blocked on Ishay's availability.
+   Strategist's `state.json`. ← blocked, see the login status below.
 2. Verify the API map; finish branch street addresses from checkpoint.
 3. Reverse-engineer the general-pool enumeration (§3.2), then crawl.
 4. Add the other clubs (Hi-Tech Zone, Leumi Bonus, הר"י, digital) as a
    **generic** club structure, not behatsdaa-specific — Liran uses hers,
    and the household view must be unified. Needs a `holder` field: הר"י
    and Leumi Bonus are Liran's and Ishay cannot redeem them.
-5. Miri reads the output read-only through the existing CLI seam.
+5. **Miri reads the output read-only through the existing CLI seam —
+   done for the catalog, 2026-09-03**, ahead of the rest of this order at
+   Ishay's request: `benefits-catalog` / `benefits-branches` in
+   `grocery_bot/cli.py`, backed by `grocery_bot/benefits_catalog.py`.
+   Documented for familyos in `docs/MIRI_INTEGRATION.md`. Wiring on the
+   familyos side is not this project's work (same boundary as every
+   other Miri command). What Miri gets is the catalog only — no
+   purchases, balances or vouchers, since none of that has been
+   harvested yet. **Explicitly Ishay's plan, not built here:** the
+   refinement — which addresses are actually relevant, deduping further,
+   whatever else — is Miri's own work on top of this raw data, not
+   duplicated on this side.
 6. Scheduled units live here (this project has backup/timers; the
    Strategist project does not).
 

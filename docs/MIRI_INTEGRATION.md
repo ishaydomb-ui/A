@@ -116,6 +116,38 @@ which also had to teach the classifier that "כמה עולה" (what does it
 cost now) is this, while "כמה הוצאנו על" (what did we spend) belongs to
 the budget bot.
 
+### Benefits catalog — new 2026-09-03, not yet wired on Miri's side
+
+| Command | Notes |
+|---|---|
+| `benefits-catalog [query] [--json]` | Harvested benefit-club stores: wallets, discount ceilings, cities |
+| `benefits-branches [query] [--json]` | Street addresses + phone for those stores (partial — the crawl is incremental) |
+
+This is the **rescued catalog from the behatsdaa harvest** (982 stores,
+manually tagged), not a live fetch — see `docs/BENEFITS.md` for what the
+harvest is and isn't yet. No query returns everything; a query does a
+plain substring match on store name/category (or address, for branches).
+`--json` returns the full row set as a JSON array — use it for bulk
+ingestion (the refinement work — addresses, relevance, whatever Miri
+builds on top — is explicitly *her* side, not duplicated here).
+
+Real output, run 2026-09-03:
+
+    $ benefits-catalog מקסיקנה
+    *קטלוג הטבות* — 1 תוצאות עבור "מקסיקנה"
+    • רשת מקסיקנה — מסעדות ובתי קפה
+       מסעדות(20%/₪500); פייטר(15%/₪2500) · תקרה ₪3000 · ערים: תל אביב - יפו; ...
+
+    $ benefits-branches כפר סבא
+    *סניפים* — ... תוצאות עבור "כפר סבא"
+    • רשת מקסיקנה (מקסיקנה - כפר סבא)
+       התעש 24 כפר סבא · 1700500993
+
+**What this is not, yet:** no purchase history, no wallet balances, no
+vouchers, no live deals — the harvest itself is blocked on a login (see
+`docs/BENEFITS.md`). This is catalog data only: which stores participate,
+at what rate, up to what ceiling.
+
 ### Cadence and the card
 
 | Command | Notes |

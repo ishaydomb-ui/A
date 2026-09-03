@@ -22,6 +22,11 @@ Run with: python -m grocery_bot.cli <command>
     recipe <dish>         ingredients for a dish [--by NAME] [--all] [--preview]
     recipe-text           same, from recipe text on stdin (OCR/screenshot/paste)
     meal-plan [request]   weekly menu + its ingredients [--by NAME] [--all] [--preview]
+    benefits-catalog [query] [--json]  harvested benefit-club stores
+                          (wallets, discount ceilings, cities; --json for
+                          all rows, machine-readable)
+    benefits-branches [query] [--json]  street addresses for those stores
+                          (partial — the branch crawl is incremental)
 
 `refresh-prices` is the one meant for a scheduler — the feed publishes a
 new full snapshot a few times a day, and a stale catalog quietly gives
@@ -30,10 +35,11 @@ wrong prices rather than failing loudly.
 **What the household's other bot (מירי) can call.** Everything in
 `_DB_ONLY_COMMANDS` needs nothing but `GROCERY_BOT_DB_PATH`: add-item,
 remove-item, list-items, price, deals, recipe, recipe-text, meal-plan,
-nudge, confirm-card. No Telegram token, no store session, no exit node —
-that project has no use for this one's secrets. `add-to-cart` is the
-exception and is listed separately in `_STORE_COMMANDS`: it reaches the
-real carts, so it needs the store sessions and the Israeli exit.
+nudge, confirm-card, benefits-catalog, benefits-branches. No Telegram
+token, no store session, no exit node — that project has no use for this
+one's secrets. `add-to-cart` is the exception and is listed separately in
+`_STORE_COMMANDS`: it reaches the real carts, so it needs the store
+sessions and the Israeli exit.
 """
 from __future__ import annotations
 
@@ -547,6 +553,45 @@ def _deals(storage: Storage, args: list[str]) -> int:
     return 0
 
 
+def _benefits_catalog(storage: Storage, args: list[str]) -> int:
+    """The harvested benefit-club store catalog — see benefits_catalog.py.
+
+    `storage` is unused: this reads flat files under data/benefits/, not
+    the sqlite database. Kept on the same (storage, args) shape as every
+    other DB-only command so it dispatches identically.
+    """
+    import json
+
+    from .benefits_catalog import format_catalog_rows, load_catalog, search_catalog
+
+    as_json = "--json" in args
+    query = " ".join(a for a in args if not a.startswith("--")).strip()
+    rows = search_catalog(query) if query else load_catalog()
+
+    if as_json:
+        print(json.dumps(rows, ensure_ascii=False))
+    else:
+        print(format_catalog_rows(rows, query))
+    return 0 if rows else 1
+
+
+def _benefits_branches(storage: Storage, args: list[str]) -> int:
+    """Street addresses for the benefit-club stores. See benefits_catalog.py."""
+    import json
+
+    from .benefits_catalog import format_branch_rows, load_branches, search_branches
+
+    as_json = "--json" in args
+    query = " ".join(a for a in args if not a.startswith("--")).strip()
+    rows = search_branches(query) if query else load_branches()
+
+    if as_json:
+        print(json.dumps(rows, ensure_ascii=False))
+    else:
+        print(format_branch_rows(rows, query))
+    return 0 if rows else 1
+
+
 def _confirm_card(storage: Storage, args: list[str]) -> int:
     """Record that the benefit card was loaded this month.
 
@@ -590,6 +635,13 @@ _DB_ONLY_COMMANDS = {
     # secret — a credential it has no use for.
     "price": _price,
     "deals": _deals,
+    # Reads flat CSVs under data/benefits/ (gitignored — household
+    # financial data), not the sqlite database at all; `storage` is
+    # accepted and ignored to keep one dispatch shape. No token, no store
+    # session, no exit node — this is the harvested catalog already on
+    # disk, not a live fetch.
+    "benefits-catalog": _benefits_catalog,
+    "benefits-branches": _benefits_branches,
 }
 
 # Needs the store session and the Israeli exit, so it cannot live on the
