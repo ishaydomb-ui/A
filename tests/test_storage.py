@@ -100,3 +100,58 @@ class AmbiguityHygieneTests(unittest.TestCase):
         self.storage.save_pending_ambiguity("s", "חדש", 1, ["a"])
         self.storage.expire_stale_ambiguities(6)
         self.assertEqual(len(self.storage.list_pending_ambiguities()), 1)
+
+
+class StaleAmbiguityIsNotReAskedTests(unittest.TestCase):
+    """An unresolved question can outlive its own answer.
+
+    A pending_ambiguities row is only closed when the household taps a
+    choice. But the same term can be settled later by a clean resolution,
+    a bulk match, or the history import — none of which close the row. On
+    2026-09-03 there were 7 open rows from 08-29/30 and six already had a
+    remembered product, so the household was queued to be asked again for
+    answers the bot was holding. Being asked twice about one thing is the
+    small indignity that makes people stop reading a bot.
+    """
+
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        from grocery_bot.storage import Storage
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.storage = Storage(str(Path(self._tmp.name) / "t.sqlite3"))
+
+    def test_a_remembered_term_is_filtered_out_of_the_questions_to_ask(self):
+        self.storage.save_pending_ambiguity(
+            store="shufersal", original_term="קוטג", quantity=1,
+            candidates=["קוטג' 5%", "קוטג' 9%"],
+        )
+        pending = self.storage.list_pending_ambiguities()
+        self.assertEqual(len(pending), 1, "row should start unresolved")
+
+        # The answer arrives by another route, which does not close the row.
+        self.storage.remember_choice("shufersal", "קוטג", "P_1", "קוטג' 9% שומן")
+        still_open = self.storage.list_pending_ambiguities()
+        self.assertEqual(len(still_open), 1, "the row itself stays open — that is the trap")
+
+        # The ask path must skip it. This mirrors the filter in
+        # telegram_bot._ask_ambiguities.
+        askable = [
+            p for p in still_open
+            if self.storage.preferred_for(p["store"], p["original_term"]) is None
+        ]
+        self.assertEqual(askable, [], "a question with a known answer must not be asked")
+
+    def test_an_unanswered_term_is_still_asked(self):
+        self.storage.save_pending_ambiguity(
+            store="shufersal", original_term="מקלות גבינה", quantity=1,
+            candidates=["מקלות בורקס", "אצבעות גבינה"],
+        )
+        pending = self.storage.list_pending_ambiguities()
+        askable = [
+            p for p in pending
+            if self.storage.preferred_for(p["store"], p["original_term"]) is None
+        ]
+        self.assertEqual(len(askable), 1, "a genuinely open question must survive the filter")

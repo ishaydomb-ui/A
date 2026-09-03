@@ -1449,6 +1449,19 @@ class GroceryBot:
 
     async def _ask_ambiguities(self, chat_id: int, context: ContextTypes.DEFAULT_TYPE) -> None:
         for pending in self.storage.list_pending_ambiguities():
+            # Do not ask what we have since learned. An unresolved row can
+            # outlive its own question: the choice may have been settled
+            # later by a clean resolution, a bulk match, or the history
+            # import, none of which close the row. Found 2026-09-03 with 7
+            # open rows from 08-29/30, six of which already had a
+            # remembered product — the household would have been asked
+            # again for answers the bot was holding.
+            if self.storage.preferred_for(pending["store"], pending["original_term"]) is not None:
+                logger.info(
+                    "Skipping stale ambiguity for %r — already remembered",
+                    pending["original_term"],
+                )
+                continue
             text, buttons = _format_choice(pending)
             await context.bot.send_message(
                 chat_id=chat_id,
