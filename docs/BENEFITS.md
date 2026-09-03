@@ -85,6 +85,39 @@ benefits pool, which is the real open reverse-engineering task.
 6. Scheduled units live here (this project has backup/timers; the
    Strategist project does not).
 
+## Catalog is backed up to Drive (2026-09-03)
+
+`catalog_tagged.csv` and `catalog_full.csv` are copied to
+`gdrive:גורדון — קטלוג הטבות/` — verified, sizes match the originals.
+Non-sensitive (store names, rates, ceilings; no personal or card data),
+so Drive is fine. This is now the catalog's **only durable copy** — the
+Strategist's `lab/` has no backup. Miri reading it from there is a later
+step the user wants; the folder is ready for it.
+
+## Login status: blocked by the anti-bot, 2026-09-03
+
+The first live attempt did **not** get in, and the reason was worth
+pinning down rather than retrying blindly:
+
+- The original script reported "OTP_SENT" on the button click alone —
+  false. A diagnostic showed the page returns **"שגיאה כללית"** (general
+  error) after the send click, with no code field, so **no OTP was
+  actually sent**. The script now verifies the code field appears and
+  fails loudly otherwise (the "never trust a click" rule).
+- An active **Incapsula** challenge is present on the page. A warm-up
+  reload made it *worse* — a single clean load renders the login form,
+  but a reload trips a full challenge page with no form. Reload removed.
+- Likely compounded by the **shared exit-node IP**: the `portfolio-strategy`
+  session hit behatsdaa ~10× ~30 min earlier and is itself in cooldown.
+  We share `localhost:1055`, so the IP is degraded for behatsdaa
+  specifically (per the per-site WAF finding in HANDOFF §3).
+
+**Not resolved.** Needs a cooldown before retry, and possibly
+coordination so two projects are not hitting behatsdaa through the same
+IP at once. Do not keep firing — behatsdaa may rate-limit OTP sends per
+account. Switching the Tailscale exit node would give a clean IP but is
+shared infrastructure (three projects), so not done unilaterally.
+
 ## Open questions for Ishay (also in HANDOFF §5)
 
 - Availability window for the OTP login.

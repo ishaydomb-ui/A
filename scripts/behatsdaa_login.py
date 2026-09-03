@@ -97,8 +97,13 @@ def main() -> int:
         )
         pg = ctx.pages[0] if ctx.pages else ctx.new_page()
         try:
+            # Load once and let the Incapsula JS challenge settle. Do NOT
+            # reload: observed 2026-09-03 that a single clean load renders
+            # the login form, while a reload trips a full challenge page
+            # with no form at all. So the reload is removed on purpose —
+            # patience on the first load is what works.
             pg.goto(SITE, wait_until="domcontentloaded", timeout=60_000)
-            pg.wait_for_timeout(5_000)
+            pg.wait_for_timeout(8_000)
 
             # Dismiss any cookie/intro overlay that would eat the first click.
             for text in ("אישור", "קבל", "סגור", "הבנתי"):
@@ -137,10 +142,34 @@ def main() -> int:
                 _log("ERROR: could not find the send-OTP button.")
                 pg.screenshot(path=str(BENEFITS_DIR / "login_error.png"))
                 return 1
-            pg.wait_for_timeout(3_000)
+            pg.wait_for_timeout(4_000)
+
+            # Verify the send actually happened — never trust the click.
+            # Success shows the code field (#shortCode); failure shows a
+            # "שגיאה" message and no code field. Reporting OTP_SENT on the
+            # click alone is how the first attempt lied.
+            body_after = pg.locator("body").inner_text()
+            code_field_present = pg.locator(CODE_SELECTOR).count() > 0
+            if not code_field_present and "שגיא" in body_after:
+                _log(
+                    "SEND_FAILED — the site returned an error (שגיאה) and no "
+                    "code field appeared, so no OTP was sent. Most likely the "
+                    "anti-bot (Incapsula) blocked the request, or the exit IP "
+                    "is rate-limited. Not retrying automatically."
+                )
+                pg.screenshot(path=str(BENEFITS_DIR / "login_error.png"))
+                return 1
+            if not code_field_present:
+                _log(
+                    "SEND_UNCONFIRMED — no code field and no error text. Not "
+                    "claiming the OTP was sent. Screenshot saved."
+                )
+                pg.screenshot(path=str(BENEFITS_DIR / "login_error.png"))
+                return 1
 
             _log(
-                f"OTP_SENT — a code was sent to Ishay's SMS and email.\n"
+                f"OTP_SENT — code field appeared, so the send went through. "
+                f"A code was sent to Ishay's SMS and email.\n"
                 f"Waiting up to {OTP_WAIT_SECONDS}s for the code in {OTP_PATH}."
             )
 
