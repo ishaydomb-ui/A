@@ -195,6 +195,35 @@ session is achievable; the likely route was a headed/real browser, not a
 headless one. The open sub-problem is the noVNC phone-access issue, which
 is worth solving once since Victory needs it too.
 
+### Adopting the Strategist's session did NOT help — tested 2026-09-03
+
+The Strategist's working session was handed over as urgent (it would
+"expire"), reversing the earlier "build your own login" instruction, and
+`~/portfolio-strategy/lab/state.json` + `profile/` (217MB) were copied to
+`data/sessions/behatsdaa_state.json` and `behatsdaa_profile/`.
+
+**It changes nothing, and the reason matters more than the result.**
+With the copied profile loaded:
+
+- 12 behatsdaa cookies carried over — the session really is present, and
+  the login form no longer appears.
+- `configuration.json` still returns **403**. So do the web fonts.
+- `navigator.webdriver` is still `true`.
+- The SPA never boots: **zero behatsdaa API calls**, no ₪ amounts, and
+  clicking "ארנק דיגיטלי" does not navigate.
+
+**The blocker was never authentication.** Incapsula rejects the
+*browser*, not the *identity* — so a valid session cannot fix a
+fingerprint check, however fresh it is. The urgency framing was
+misplaced: this session is not a perishable asset being wasted, it is an
+asset that cannot be used from a headless browser at all.
+
+The copied files are kept (gitignored, 0600) because they are plausibly
+**necessary but not sufficient**: with a browser Incapsula accepts, the
+auth cookies would save a re-login. The missing piece is the browser, not
+the session — which is the same conclusion as before, now tested rather
+than reasoned.
+
 ## The other clubs — access assessment, 2026-09-03
 
 Asked: can public aggregators cover מקס/כאל/לאומי בונוס at the depth we
