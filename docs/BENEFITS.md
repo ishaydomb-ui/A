@@ -224,7 +224,7 @@ catalog is most of the value.
 | Club | Model | Catalog access | Verdict |
 |---|---|---|---|
 | **מקס / MAX** | Card-linked discounts (הטבות פלוס, thousands of businesses) | `/benefits/bizplus` returns 200 and is **explicitly `Allow`ed in their robots.txt** | **Scrape first-party, no login.** Best case: authoritative and permitted |
-| **כאל / CAL** | Card-linked discounts | `cal-online.co.il` returns **HTTP 400 from AkamaiGHost** — with browser UA and headers too, root and `/benefits` alike | Edge-blocked to plain HTTP. Same class of wall as behatsdaa; needs a real browser at minimum. **Use ClubHub for CAL's catalog instead** |
+| **כאל / CAL** | Card-linked discounts | **HTTP 400, and a real headless browser is rejected too** — "The requested URL was rejected. Please consult with your administrator" with an F5/Akamai support ID, on root and `/benefits` alike (re-tested 2026-09-03 with Playwright, not just curl) | Not a curl artefact: CAL blocks automation outright. Getting in would need fingerprint-spoofing, which is the evasion line. **Take CAL's catalog from ClubHub instead** |
 | **לאומי בונוס** | **Accrual** — bonus earned on card spend, redeemed for vouchers at 10–20% uplift | n/a yet | **Has real account state (accrued balance).** Catalog alone cannot answer "how much bonus do I have". Also **Liran's**, not Ishay's |
 | **הר"י** | Not yet characterised | n/a yet | **Liran's.** Login needs her credentials and consent — not merely a technical step |
 
