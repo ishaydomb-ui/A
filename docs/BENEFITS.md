@@ -118,6 +118,45 @@ IP at once. Do not keep firing — behatsdaa may rate-limit OTP sends per
 account. Switching the Tailscale exit node would give a clean IP but is
 shared infrastructure (three projects), so not done unilaterally.
 
+### Blocking methodology, diagnosed 2026-09-03 (this is the real answer)
+
+Probed the block directly (network + fingerprint capture, no evasion).
+The homepage HTML returns 200 and earns an `incap_ses` cookie, so the IP
+is **not** hard-blocked and this is **not** a timing/rate problem.
+Waiting will not fix it. What actually happens:
+
+- `x-cdn: Imperva` — the wall is **Imperva Incapsula**, fingerprint-based.
+- The automation is **plainly visible**: `navigator.webdriver === true`,
+  and the fingerprint is self-contradictory — the UA claims iPhone while
+  `navigator.platform` is `Linux x86_64`, `plugins.length` is 0,
+  `maxTouchPoints` is 0, `window.chrome` is absent. A real iPhone has
+  none of those.
+- Consequence: Incapsula returns **403 on `configuration.json`** (and on
+  the web fonts) — the SPA cannot load its own config, so it throws
+  **"שגיאה כללית"** and never fires the OTP request. That is why no code
+  arrives: the send is never actually attempted.
+
+So the block is **automation-fingerprint detection**, not the IP and not
+the hour. Two ways past it:
+
+1. **Manual login through a real, headed browser** — the same pattern
+   this project already uses for the Self-Point store logins (noVNC: a
+   human completes the login in a real browser on a virtual display, the
+   challenge passes because it *is* a real browser, and the session is
+   saved warm). In policy, robust, and consistent with how we beat the
+   store reCAPTCHA. Friction: the user previously could not reach the
+   noVNC port-forward from the phone (same issue as Victory, HANDOFF §3).
+2. **Headless browser-stealth** (hiding `webdriver`, spoofing the
+   fingerprint). This is anti-bot evasion; the harness safety classifier
+   blocks implementing it, and it is a fragile cat-and-mouse path. **Not
+   pursued** — needs the user's explicit direction, and even then the
+   manual path is the better tool.
+
+**Recommended: path 1.** The Strategist got in and harvested, so a real
+session is achievable; the likely route was a headed/real browser, not a
+headless one. The open sub-problem is the noVNC phone-access issue, which
+is worth solving once since Victory needs it too.
+
 ## Open questions for Ishay (also in HANDOFF §5)
 
 - Availability window for the OTP login.
