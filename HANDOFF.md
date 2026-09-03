@@ -6,7 +6,7 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-02 17:02 (host time, CEST)
+**Last anchored:** 2026-09-03 17:13 (host time, CEST)
 **Conversation id:** `eb6175a8-1890-4712-98a2-cd9a24f82ed2`
 **Session:** https://claude.ai/code/session_01BR6ULKQXHnkwAme1Hk4z9G
 **Branch:** `claude/online-grocery-automation-b7pq4g`
@@ -41,6 +41,19 @@ need to know?*
 SOCKS5 on `localhost:1055`). Without it the chains return block pages
 with HTTP 200, which reads like broken selectors.
 
+**Benefits harvest (behatsdaa) — a separate subsystem, owned by this
+project.** Ownership and build authorization are both settled with
+verbatim quotes and dates (`GOALS.md`) — do not re-ask. Status, in full,
+lives in `docs/BENEFITS.md`; the short version: the store catalog (982
+stores, manually tagged) was rescued and is backed up to
+`gdrive:גורדון — קטלוג הטבות/`, and Miri can already read it read-only
+via `benefits-catalog`/`benefits-branches` in the CLI (built
+2026-09-03, documented in `docs/MIRI_INTEGRATION.md` — familyos-side
+wiring is not done, that's the user's next step). **No live harvesting
+has happened yet** — our own behatsdaa login is blocked by an Incapsula
+fingerprint check, not a timing problem (see §3). Three product inputs
+are still open before any harvest step; see §5.
+
 ## 2. In flight
 
 **One thing is deliberately half-done, and the user asked for it to be
@@ -72,6 +85,20 @@ return byte-identical results with `total=10000`. Written up in
 
 The last completed pieces, newest first:
 
+- **Benefits catalog exposed to Miri, read-only** — `benefits-catalog`
+  and `benefits-branches` in the CLI, backed by
+  `grocery_bot/benefits_catalog.py`. Reads flat CSVs under
+  `data/benefits/` (gitignored, not the sqlite DB). 16 tests against a
+  temp data dir. Same token-free contract as every other Miri command.
+- **Catalog backed up to Drive**, verified against the originals —
+  `catalog_tagged.csv` + `catalog_full.csv` in
+  `gdrive:גורדון — קטלוג הטבות/`. Now the catalog's only durable copy;
+  the Strategist's `portfolio-strategy/lab/` has no backup of its own.
+- **`docs/SITE_ACCESS_PLAYBOOK.md`** — a cross-project reference on every
+  login/anti-bot barrier hit so far (geo-block, rate-based WAF,
+  reCAPTCHA, Incapsula fingerprinting), what solved each, and the policy
+  line between a legitimate login and anti-bot evasion. Shared with
+  Arthur to route to the other bots, recommendation-only.
 - Eight chains priced by barcode; five new ones from the transparency
   portal. `whereto` answers "where should the whole shop go this week".
 - `nudge` — the six-day message: reminder, free-text reply, card
@@ -98,6 +125,22 @@ The last completed pieces, newest first:
 
 ## 3. Blocked, and on what
 
+- **behatsdaa login is blocked by an Incapsula fingerprint check, not
+  timing.** Diagnosed 2026-09-03 by probing the block directly (network +
+  fingerprint capture, no evasion): the homepage returns 200 and earns an
+  `incap_ses` cookie, so the IP is not rate-blocked — waiting does
+  nothing. `navigator.webdriver === true` and a self-contradictory
+  fingerprint (iPhone UA on `platform: Linux x86_64`, 0 plugins, 0 touch
+  points) get the automation caught; Incapsula returns 403 on
+  `configuration.json`, the SPA throws "שגיאה כללית", and the OTP request
+  is never actually fired — the first script's "OTP_SENT" was false,
+  read off a click rather than a verified result (now fixed to check the
+  code field actually appears). **In-policy fix: a human/real-browser
+  login**, same noVNC pattern as the Self-Point chains — blocked on the
+  same phone-access problem as Victory below. Automated evasion (hiding
+  `webdriver`, spoofing the fingerprint) is out of policy; the safety
+  classifier blocked even a plain headed-browser test framed as "just a
+  real browser." Full writeup: `docs/BENEFITS.md`.
 - **Tiv Taam's search is unreliable, and that is now the weakest part of
   the chain.** Not blocked on anything external — it is step 2 above.
   Symptoms seen live on 2026-09-02, same account, same afternoon: the
@@ -120,12 +163,15 @@ The last completed pieces, newest first:
   stores — but hammering one store *does* block that store (this is the
   Victory case above, same-site). The exit is shared by three projects;
   pace store loads accordingly.
-- **Victory account login.** Needs the same manual noVNC flow as Tiv Taam
-  (checkbox reCAPTCHA). The user could not reach
-  `http://localhost:6080/vnc.html` from the phone — the stack is running
-  and serving locally, so it is the SSH port-forward of 6080. **Victory
-  price comparison does not depend on this** and already works; an
-  account would add only order history and cart filling.
+- **Victory account login, and now behatsdaa's too, both need the same
+  fix: noVNC reachable from the phone.** Victory needs the manual noVNC
+  flow (checkbox reCAPTCHA) like Tiv Taam; behatsdaa needs a real/headed
+  browser for the same reason (see above). The user could not reach
+  `http://localhost:6080/vnc.html` from the phone — the stack runs and
+  serves locally, so it is the SSH port-forward of 6080. Solving this
+  once unblocks two sites. **Victory price comparison does not depend on
+  this** and already works; an account would add only order history and
+  cart filling.
 
 ## 4. Handover procedure
 
@@ -225,11 +271,10 @@ user's call, and they are someone else's work. The full set:
       grocery-doctor.timer grocery-doctor.service \
       grocery-backup-daily.timer grocery-backup-daily.service
 
-## 4c. Two traps this session kept falling into
+## 4c. Traps worth not repeating
 
-Both cost the user real time, and both are the same shape: **a check that
-returns the same result whether or not the thing is true is not
-evidence.**
+Started as two, grown since — all the same shape: **a check that returns
+the same result whether or not the thing is true is not evidence.**
 
 - `systemctl is-active` proved the bot was running, not that it ran the
   new code — a 30-minute-old process satisfied it, and a change was
@@ -244,56 +289,49 @@ evidence.**
 - An unbounded `until [ -f X ]` loop cannot tell "not ready" from "never
   coming": one waited 23 hours for a file whose producer had already
   died. Bound every such loop.
+- A login script reported "OTP_SENT" on a button click, not on a code
+  field actually appearing — the site had returned a general error and
+  no code was ever sent. Same shape as the rest of this list. Now
+  verified against real page state (`scripts/behatsdaa_login.py`).
+- **A warm-up reload made an anti-bot challenge worse, not better** —
+  intuition said "give the JS challenge time to settle," but a single
+  clean load rendered the login form while a reload tripped a full
+  challenge page. Worth remembering before adding a "just in case" reload
+  anywhere near Incapsula.
 
 ## 5. Open questions for the user
 
-- **Benefits harvesting — ownership is settled, permission to build is
-  not.** Ownership was confirmed on 2026-09-02 with a verbatim quote and
-  date (recorded in `GOALS.md` under החלטות שהתקבלו, so it is not
-  re-litigated): this project owns it, Miri only *reads* the output, and
-  it is not a new bot. Valid under SESSION-COMMON rule 3 — **do not ask
-  again.**
-
-  **Nothing has been built, and there is no green light.** Per Arthur,
-  the quote's context was agreement to **one manual run, then decide**;
-  the design brief from `portfolio-strategy` is a specification, not an
-  approval. Three things are open on your side before any harvest step:
-  1. **The eligibility file** — which clubs you are actually in.
-     ClubHub covers 100+; you are in roughly 6, so declaring them by hand
-     removes ~95% of the data. It cannot be derived from the budget
-     xlsx — הייטקזון and הר"י appear in no budget file.
-  2. **`holder`** — הר"י and לאומי בונוס are Liran's, and you cannot
-     redeem them. A benefit with no holder field is a benefit reported to
-     the wrong person.
+- **Benefits harvest — three inputs needed before any harvest step.**
+  Ownership and build authorization are both settled with verbatim quotes
+  and dates (`GOALS.md` under החלטות שהתקבלו) — **do not ask again.**
+  What's actually open:
+  1. **The eligibility file** — which clubs you're actually in. ClubHub
+     covers 100+; you're in roughly 6, so declaring them by hand removes
+     ~95% of the data. Not derivable from the budget xlsx — הייטקזון and
+     הר"י appear in no budget file.
+  2. **`holder`** — הר"י and לאומי בונוס are Liran's; you cannot redeem
+     them. A benefit with no holder field is reported to the wrong
+     person.
   3. **A success criterion** — what makes this worth having at all.
 
-  Worth knowing before answering: the design deliberately has **no
-  browse/discover command**, on your own reasoning ("עדיף שנצא פחות מאשר
-  שנאכל עם 20% הנחה"). And it needs credentials for clubs this project
-  does not currently hold.
+  Full status (login, catalog, Drive backup, what Miri can already read)
+  is in `docs/BENEFITS.md`, not duplicated here.
+- **Which Victory branch do they actually shop at?** Prices are per
   branch; Ramat Gan (קניון איילון, id 2447) is pinned as a guess and
   there are four Tel Aviv stores.
 - **What TivCoins balance does the app show?** To reconcile against the
   computed 3% accrual.
 - **Waste reporting** — design agreed (free text anytime; one targeted
   question at the end of a hand-off; never a checklist), not yet built.
-- ~~Miri does not call most of this CLI~~ **Closed 2026-09-02, and the
-  claim was wrong to begin with.** `docs/MIRI_INTEGRATION.md` is the
-  contract; all eleven commands are wired and reachable from Miri,
-  verified by reading `familyos/actions/groceries.py`, `bot/intent.py`
-  and `bot/telegram_bot.py`. The real gap was only `price`/`deals` being
-  stuck behind this bot's Telegram token, fixed here and wired there
-  (`familyos@9ac9538`).
-  **Worth keeping, because it will happen again:** the wrong claim came
-  from reading §4a of *this* file — a note here about the other project —
-  instead of that project's code. Per SESSION-COMMON, facts about another
-  project are not ours to assert; a note about someone else's system is
-  evidence of what was true when it was written, and nothing more.
 
 ## 6. Things that will bite a new session
 
-Full list in [`docs/ADDING_A_STORE.md`](./docs/ADDING_A_STORE.md). The
-three that cost the most time:
+Store-adapter traps: [`docs/ADDING_A_STORE.md`](./docs/ADDING_A_STORE.md).
+Login/anti-bot traps across every site touched so far (geo-block,
+rate-based WAF, reCAPTCHA, Incapsula fingerprinting), what solved each,
+and the legitimate-access-vs-evasion line:
+[`docs/SITE_ACCESS_PLAYBOOK.md`](./docs/SITE_ACCESS_PLAYBOOK.md). The
+three from `ADDING_A_STORE.md` that cost the most time:
 
 - **A geo-block returns HTTP 200**, so it looks like broken selectors.
 - **"Forbidden" can mean "you forgot a parameter"** — Self-Point's
