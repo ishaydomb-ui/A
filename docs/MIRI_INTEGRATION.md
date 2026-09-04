@@ -155,6 +155,16 @@ Real output, run 2026-09-03:
     • רשת מקסיקנה (מקסיקנה - כפר סבא)
        התעש 24 כפר סבא · 1700500993
 
+**⚠️ Canonical routing — an address miss is not a benefit miss.**
+`benefits-catalog` is the **authority on whether a benefit exists**;
+`benefits-branches` only *adds a street address*. The branch crawl is
+partial — **760 of 982 merchants (77%) have a benefit but no crawled
+address** — so a merchant returning nothing from `benefits-branches` means
+**"address unknown," never "no benefit / no such store."** Never let a
+branches miss override a catalogue hit. If the catalogue says a merchant
+has a 15% benefit and branches has no row, the truthful answer is "yes,
+15% — I don't have its address," not "I couldn't find it."
+
 **What this is not, yet:** no purchase history, no wallet balances, no
 vouchers, no live deals — the harvest itself is blocked on a login (see
 `docs/BENEFITS.md`). This is catalog data only: which stores participate,

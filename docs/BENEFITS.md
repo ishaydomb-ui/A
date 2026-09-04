@@ -7,6 +7,55 @@ through the existing CLI seam — this is not a new bot.
 
 Full handover from the Strategist session: `~/portfolio-strategy/BENEFITS-HANDOFF.md`.
 
+## Success criterion (Ishay, 2026-09-04) — what "worth having" means
+
+Ishay gave the raw need and asked me to find the common thread. His
+examples: in Haifa with the kids, wanting to know about a restaurant; in a
+particular Tel Aviv mall, wanting to know which clothing shops give a
+discount; walking into an electronics shop and *missing* a discount at the
+one next door he didn't know about; finding *relevant* deals, not spam;
+knowing how much he has captured and how to optimise the loadable cards.
+
+**The common thread — the criterion:** the benefit system succeeds when,
+**at a moment of stated intent — a place, a category, or a specific
+store — it tells the household where a discount applies right here or next
+door, shows only what's relevant to that moment, and periodically reflects
+how much was captured versus left on the table** so the loadable cards get
+optimised. **Failure is symmetric: a discount he would have used and
+missed, or a deal surfaced without him asking (spam).** This is
+pull-only by construction — it answers a declared intent, never browses.
+
+Two things it makes measurable, and both expose the critical path:
+- **Coverage at the moment of intent.** "Which clothing shops here have a
+  benefit" needs merchant + category + *location*. Location is the gap:
+  no coordinates, no home/work, and **77% of catalogue merchants have no
+  address** — so "near me / next door" is unbuildable today beyond a city
+  filter. Closing the branch-address coverage and getting a location
+  source is therefore the highest-leverage work toward this criterion.
+- **Capture vs leftover.** "How much did I use, how to optimise loading"
+  is the account layer — the ₪700/month card, the wallet decode Nigel
+  built. It needs live balances (behatsdaa login) to be exact.
+
+So the criterion doubles as a roadmap: merchant identity + category +
+location + account-layer usage. Cross-chain price comparison (approved
+2026-09-04) is the grocery-side analogue of the same "am I leaving money
+on the table" question.
+
+## Household benefit inputs (Ishay, 2026-09-04)
+
+- **Eligibility:** the household is in **6 clubs** — בהצדעה, מקס, כאל,
+  הר"י, לאומי בונוס, הייטקזון. Declared in `data/benefits/eligibility.yaml`.
+  Two are harvested (behatsdaa, MAX); the rest are blocked or behind
+  Liran's logins.
+- **No `holder` field.** Benefits are household-level, Ishay's and Liran's
+  pooled ("מה ששלי שלה ומה ששלה שלי... הכל הולך למשק הבית המשותף"). So a
+  benefit is never attributed to one person; הר"י and Leumi Bonus, though
+  they run through Liran's memberships, count for the household.
+- **TivCoins balance:** app shows **3.2** (below the 9-coin redemption
+  threshold, consistent with the "usually not a missed saving" note in
+  `memory/household_store_benefits`). Reconciliation against the computed
+  3% accrual is therefore low-priority — nothing to redeem yet.
+
 ## Data freshness — read this before trusting any behatsdaa figure
 
 **All behatsdaa data is a one-time snapshot. It is NOT live and is not
