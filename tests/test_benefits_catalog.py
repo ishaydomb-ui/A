@@ -324,3 +324,43 @@ class FreshnessTests(unittest.TestCase):
         text = format_catalog_rows(rows, "מקסיקנה")
         self.assertIn("2026-09-03", text)
         self.assertIn("לא מתרענן", text)
+
+
+class RelevanceRankingTests(unittest.TestCase):
+    """Closest name matches rank first; incidental ones sink.
+
+    Substring search cannot separate a merchant from a same-prefixed but
+    unrelated one (Fox fashion vs "פוקס דרי ישראל") without an identity
+    key the data lacks — but the real matches should still come first.
+    """
+
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        self.data_dir = Path(self._dir.name)
+        _write_csv(self.data_dir / "catalog_tagged.csv", [
+            {"חנות": "פוקס", "תת-קטגוריה": "אופנה", "ארנקים": "רשתות בהצדעה(15%/₪1500)",
+             "אונליין": "לא", "קטגוריה": "אופנה ולייף סטייל", "ערים": "תל אביב - יפו"},
+            {"חנות": "פוקס אונליין", "תת-קטגוריה": "רכישה אונליין", "ארנקים": "פייטר(15%/₪2500)",
+             "אונליין": "כן", "קטגוריה": "רכישה אונליין", "ערים": ""},
+        ])
+        _write_csv(self.data_dir / "max_catalog.csv", [
+            {"club": "מקס", "חנות": "פוקס דרי ישראל - חולון", "הנחה%": "3.5",
+             "קטגוריה": "לבית ולגן", "כתובת": "מוהליבר 43, חולון", "עיר": "חולון",
+             "אזור": "מרכז", "טלפון": "", "אתר": "", "תיאור": "", "עודכן": "", "business_id": "9"},
+        ])
+        self._old = os.environ.get("BENEFITS_DATA_DIR")
+        os.environ["BENEFITS_DATA_DIR"] = str(self.data_dir)
+
+    def tearDown(self):
+        self._dir.cleanup()
+        if self._old is None:
+            os.environ.pop("BENEFITS_DATA_DIR", None)
+        else:
+            os.environ["BENEFITS_DATA_DIR"] = self._old
+
+    def test_exact_name_ranks_first_and_unrelated_prefix_ranks_last(self):
+        from grocery_bot.benefits_catalog import search_catalog
+        names = [r["חנות"] for r in search_catalog("פוקס")]
+        self.assertEqual(names[0], "פוקס", "exact match first")
+        self.assertEqual(names[-1], "פוקס דרי ישראל - חולון",
+                         "the unrelated same-prefix merchant sinks to the bottom")

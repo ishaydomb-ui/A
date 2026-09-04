@@ -323,6 +323,21 @@ def is_public_promotion(description: str) -> bool:
 # genuine change of habit can still recover the item.
 _STOCK_SUPPRESS_WEIGHT = 50
 
+
+def _like_contains(term: str) -> str:
+    """A `%term%` LIKE pattern with the user's own wildcards neutralised.
+
+    Grocery queries are full of literal `%` — "חלב 3%", "קוטג' 5%" — and a
+    bare `f"%{term}%"` hands that `%` to SQL as a wildcard, so "חלב 3%"
+    silently matches "חלב 36 גרם" (chocolate) as well as milk. `_` is the
+    single-char wildcard with the same problem. Escape all three (`\\`
+    first, so it doesn't double-escape the escapes it adds) and pair this
+    with `ESCAPE '\\'` in the query.
+    """
+    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
 class Storage:
     def __init__(self, db_path: str):
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -397,8 +412,9 @@ class Storage:
         with closing(self._connect()) as conn:
             row = conn.execute(
                 "SELECT id, name FROM base_list_items WHERE active = 1 AND "
-                "(name = ? OR name LIKE ? OR ? LIKE '%' || name || '%') ORDER BY LENGTH(name) LIMIT 1",
-                (needle, f"%{needle}%", needle),
+                "(name = ? OR name LIKE ? ESCAPE '\\' OR ? LIKE '%' || name || '%') "
+                "ORDER BY LENGTH(name) LIMIT 1",
+                (needle, _like_contains(needle), needle),
             ).fetchone()
             if row is None:
                 return None
@@ -512,8 +528,9 @@ class Storage:
         with closing(self._connect()) as conn:
             row = conn.execute(
                 "SELECT id, text FROM adhoc_requests WHERE consumed = 0 AND "
-                "(text = ? OR text LIKE ? OR ? LIKE '%' || text || '%') ORDER BY LENGTH(text) LIMIT 1",
-                (needle, f"%{needle}%", needle),
+                "(text = ? OR text LIKE ? ESCAPE '\\' OR ? LIKE '%' || text || '%') "
+                "ORDER BY LENGTH(text) LIMIT 1",
+                (needle, _like_contains(needle), needle),
             ).fetchone()
             if row is None:
                 return None
@@ -742,9 +759,10 @@ class Storage:
         with closing(self._connect()) as conn:
             row = conn.execute(
                 "SELECT product_code, product_name FROM stock_items WHERE store = ? AND "
-                "(product_name = ? OR product_name LIKE ? OR ? LIKE '%' || product_name || '%') "
+                "(product_name = ? OR product_name LIKE ? ESCAPE '\\' "
+                "OR ? LIKE '%' || product_name || '%') "
                 "ORDER BY LENGTH(product_name) LIMIT 1",
-                (store, needle, f"%{needle}%", needle),
+                (store, needle, _like_contains(needle), needle),
             ).fetchone()
             if row is None:
                 return None
@@ -1321,8 +1339,9 @@ class Storage:
             return []
         with closing(self._connect()) as conn:
             rows = conn.execute(
-                "SELECT * FROM catalog_products WHERE name LIKE ? ORDER BY price LIMIT 400",
-                (f"%{term}%",),
+                "SELECT * FROM catalog_products WHERE name LIKE ? ESCAPE '\\' "
+                "ORDER BY price LIMIT 400",
+                (_like_contains(term),),
             ).fetchall()
 
         def score(name: str) -> tuple[int, int]:

@@ -221,3 +221,46 @@ class TivTaamMemorySeedingTests(unittest.TestCase):
             self.storage.remember_choice("tivtaam", "פיתות במרקם מיוחד", "222", "פיתות במרקם מיוחד")
         got = self.storage.preferred_for("tivtaam", "פיתות במרקם מיוחד")
         self.assertEqual(got["product_code"], "222")
+
+
+class LikeWildcardEscapeTests(unittest.TestCase):
+    """A literal % in a query must not act as a SQL LIKE wildcard.
+
+    Grocery queries are full of "3%", "5%". A bare `%term%` pattern hands
+    that % to SQL, so "חלב 3%" also matched "חלב 36 גרם" (chocolate). The
+    fix escapes the user's own wildcards and pairs it with ESCAPE.
+    """
+
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        from grocery_bot.storage import Storage
+
+        from grocery_bot.prices import PricedProduct
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.storage = Storage(str(Path(self._tmp.name) / "t.sqlite3"))
+        self.storage.replace_catalog(
+            [
+                PricedProduct("1", "חלב 3% מהדרין שקית 1 ל", "תנובה", 6.4, 6.4, "1ליטר", "1", False),
+                PricedProduct("2", "מטבעות שוקולד חלב 36 גרם", "", 4.9, 136.1, "100 גרם", "36", False),
+            ],
+            [],
+        )
+
+    def test_percent_in_query_is_literal_not_a_wildcard(self):
+        names = [p.name for p in self.storage.search_products("חלב 3%")]
+        self.assertIn("חלב 3% מהדרין שקית 1 ל", names)
+        self.assertNotIn("מטבעות שוקולד חלב 36 גרם", names,
+                         "the % must not wildcard-match 'חלב 36'")
+
+    def test_plain_query_still_matches(self):
+        names = [p.name for p in self.storage.search_products("חלב")]
+        self.assertTrue(any("חלב 3%" in n for n in names))
+
+    def test_helper_escapes_all_three_wildcards(self):
+        from grocery_bot.storage import _like_contains
+        self.assertEqual(_like_contains("3%"), "%3\\%%")
+        self.assertEqual(_like_contains("a_b"), "%a\\_b%")
+        self.assertEqual(_like_contains("x\\y"), "%x\\\\y%")

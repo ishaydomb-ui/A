@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import csv
 import os
+import re
 from pathlib import Path
 
 DEFAULT_DATA_DIR = "data/benefits"
@@ -135,10 +136,34 @@ def search_catalog(query: str) -> list[dict]:
     # club name silently returns another club's merchants. Filtering by
     # club is an exact-match job on the `club` field — do it on the rows,
     # not through this substring search.
-    return [
-        row for row in load_catalog()
-        if _matches(row, q, ("חנות", "קטגוריה", "תת-קטגוריה", "עיר", "אזור"))
-    ]
+    fields = ("חנות", "קטגוריה", "תת-קטגוריה", "עיר", "אזור")
+    hits = [row for row in load_catalog() if _matches(row, q, fields)]
+    return sorted(hits, key=lambda row: _relevance(row, q))
+
+
+def _relevance(row: dict, query: str) -> tuple[int, int]:
+    """Rank the closest name matches first; ties by shorter name.
+
+    Substring search over the whole catalogue returns anything containing
+    the query, in file order — so a query for a store surfaces a
+    same-named-prefix but unrelated merchant next to the real one (Fox
+    fashion vs "פוקס דרי ישראל"). This cannot *separate* those without a
+    merchant-identity key the data lacks, but it can at least put an exact
+    or word-start name match above one where the query only appears in a
+    category or mid-name. A dumb filter with a sensible order.
+    """
+    name = (row.get("חנות") or "").strip()
+    if name == query:
+        rank = 0
+    elif name.startswith(query):
+        rank = 1
+    elif re.search(rf"(?:^|\s){re.escape(query)}(?:\s|$)", name):
+        rank = 2
+    elif query in name:
+        rank = 3
+    else:
+        rank = 4  # matched only a category / city / region field
+    return rank, len(name)
 
 
 def search_branches(query: str) -> list[dict]:
