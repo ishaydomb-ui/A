@@ -125,6 +125,83 @@ def record(storage, items, reported_by: str = "", today: date | None = None) -> 
     return storage.record_waste(rows)
 
 
+# Layer (ב) of the agreed design: ONE targeted question at the end of a
+# hand-off, never a checklist, never at the start (the household is mid-task
+# then; at the end they are free). It asks about a single perishable the bot
+# has reason to suspect — a specific "חסה — נגמרה או נשארה?" that is answered
+# in a second, versus "what did you throw out this week?" which asks the
+# household to reconstruct a whole week.
+QUESTION_COOLDOWN_DAYS = 14
+# Only ask about things bought roughly every shop or two — a rarely-bought
+# item is not where recurring waste hides, and asking about it is noise.
+FREQUENT_INTERVAL_DAYS = 21
+
+
+def pick_targeted(
+    storage,
+    store: str = "shufersal",
+    today: date | None = None,
+    asked: dict | None = None,
+    cooldown_days: int = QUESTION_COOLDOWN_DAYS,
+    max_interval_days: float = FREQUENT_INTERVAL_DAYS,
+) -> "object | None":
+    """The one product to ask a waste question about, or None to stay quiet.
+
+    The suspect is the item bought **most often** — the shortest expected
+    interval — because a high purchase rate is where over-buying turns into
+    waste, and that is the best proxy the data supports. Perishables are
+    preferred *where the department taxonomy identifies them*, but it does
+    not always (this household's stock table sorts everything into four dry
+    departments), so a hard "perishables only" filter would make the
+    question never fire — the fallback is the most-frequently-bought item.
+    Only items bought at least every ~three weeks are considered; staying
+    quiet is the right default when nothing stands out.
+
+    `asked` maps name → last-asked ISO date; a product asked within the
+    cooldown is skipped so the question rotates instead of nagging.
+
+    Returns a `shelflife.ShelfItem` (has `.name`), or None. Never raises —
+    a failed pick must not break a cart hand-off.
+    """
+    from datetime import date as _date
+
+    from . import shelflife
+
+    today = today or _date.today()
+    asked = asked or {}
+    try:
+        items = shelflife.build_items(storage, store)
+    except Exception:
+        return None
+
+    candidates = []
+    for item in items:
+        interval = item.expected_interval_days
+        if interval is None or interval > max_interval_days:
+            continue
+        last = asked.get(item.name)
+        if last:
+            try:
+                if (today - _date.fromisoformat(last[:10])).days < cooldown_days:
+                    continue
+            except ValueError:
+                pass
+        candidates.append(item)
+    if not candidates:
+        return None
+
+    # Prefer a genuinely perishable item when the taxonomy names one;
+    # otherwise fall back to the most-frequently-bought overall.
+    perishable = [c for c in candidates if not getattr(c, "is_pantryable", False)]
+    pool = perishable or candidates
+    return min(pool, key=lambda c: c.expected_interval_days)
+
+
+def question_text(item) -> str:
+    """The single waste question for `item`. Neutral, one tap to answer."""
+    return f"רגע לפני שסוגרים — *{item.name}*: נגמר או שנשאר וחלקו נזרק?"
+
+
 def patterns(storage, store: str = "shufersal") -> list[WastePattern]:
     """Products wasted often enough to justify changing the order."""
     counts = storage.waste_summary()

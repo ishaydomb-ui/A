@@ -859,6 +859,71 @@ class GroceryBot:
                 chat_id, context, list(shufersal.results), carts.get("shufersal")
             )
         await self._send_card_prompt(chat_id, context)
+        await self._send_waste_question(chat_id, context)
+
+    async def _send_waste_question(self, chat_id, context) -> None:
+        """Layer (ב): one targeted waste question at the end of a hand-off.
+
+        Asked here and not at the start, because the household is mid-task
+        at the start and free at the end — and only about a single suspect
+        product (a perishable bought often), never a checklist. Silence is
+        the default when nothing stands out; a cooldown stops it re-asking
+        the same item, so it rotates rather than nags. A button, so an
+        incoming message is never mistaken for an answer.
+        """
+        try:
+            import json
+
+            asked = {}
+            try:
+                asked = json.loads(self.storage.get_state("waste_asked", "") or "{}")
+            except (ValueError, TypeError):
+                asked = {}
+            item = await asyncio.to_thread(waste.pick_targeted, self.storage, "shufersal", None, asked)
+            if item is None:
+                return
+
+            from datetime import date
+            asked[item.name] = date.today().isoformat()
+            self.storage.set_state("waste_asked", json.dumps(asked, ensure_ascii=False))
+            # The pending item's name lives in state, not the callback data,
+            # so a long product name cannot overflow Telegram's 64-byte
+            # callback limit; the buttons carry only the fraction.
+            self.storage.set_state("waste_pending", item.name)
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=waste.question_text(item),
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("הכל נאכל", callback_data="wst:0"),
+                    InlineKeyboardButton("חלק נזרק", callback_data="wst:0.5"),
+                    InlineKeyboardButton("הכל נזרק", callback_data="wst:1"),
+                ]]),
+            )
+        except Exception:
+            logger.exception("Waste question failed; cart hand-off unaffected")
+
+    async def on_waste_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """One tap records the waste fraction for the item we just asked about.
+
+        Neutral acknowledgement only — the design forbids commenting on the
+        waste itself, or the household stops reporting.
+        """
+        query = update.callback_query
+        if not _authorized(self.config, update):
+            await query.answer()
+            return
+        try:
+            fraction = float(query.data.split(":", 1)[1])
+        except (ValueError, IndexError):
+            await query.answer()
+            return
+        name = self.storage.get_state("waste_pending", "")
+        if name:
+            await asyncio.to_thread(waste.record, self.storage, [(name, fraction)], "")
+            self.storage.set_state("waste_pending", "")
+        await query.answer("נרשם")
+        await query.edit_message_text("✅ נרשם, תודה.")
 
     async def _send_card_prompt(self, chat_id, context) -> None:
         """Ask about the ₪700 card at the moment it can still be loaded.
@@ -1801,6 +1866,9 @@ def build_application(config: Config, storage: Storage) -> Application:
     )
     application.add_handler(
         CallbackQueryHandler(bot.on_card_button, pattern=r"^cardok$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(bot.on_waste_button, pattern=r"^wst:")
     )
     # Group 1 runs in addition to group 0, so this sees every callback
     # whether or not a real handler matched. Without it, "the button does
