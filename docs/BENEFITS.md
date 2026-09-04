@@ -195,6 +195,43 @@ session is achievable; the likely route was a headed/real browser, not a
 headless one. The open sub-problem is the noVNC phone-access issue, which
 is worth solving once since Victory needs it too.
 
+### The block is TLS-fingerprint, not IP — and `curl` passes it (2026-09-04)
+
+A later test overturned part of the picture above. The block is not the
+IP and not authentication:
+
+- Through the Israeli exit, **`curl` gets `configuration.json` = 200**;
+  a headless Chromium gets **403** on the same URL, same IP, same moment.
+- The real API is on a **different host**: `back.behatsdaa.org.il`, not
+  `www` (found in the Strategist's captured traffic, `auto_api.json`).
+  Endpoints are `/api/cards/GetCardGeneralInfo`, `GetCardActivities`,
+  `/api/category/GetCategoryHeader`, `/api/users/getCurrentUser`, etc.
+- `curl` to that API returns **401, not 403** — i.e. it *passes*
+  Incapsula and the application rejects the credentials. A browser and
+  `httpx` both get 403 (the Incapsula challenge) on the same call.
+
+So Incapsula is fingerprinting the **TLS/HTTP client**, and `curl`'s
+fingerprint is accepted where a headless browser's and httpx's are not.
+That means **the harvest can run over plain HTTP with no browser at
+all** — the thing that was assumed to need noVNC.
+
+The 401 is simply the token: decoded, the `AccessToken` in the copied
+session is a JWT with **`exp` 30 minutes after issue** (issued 06:10,
+expired 06:40 on 2026-09-03). So:
+
+- **Why it worked for the Strategist and not later:** he ran against a
+  *live* token; it died 30 minutes on. When the session was handed over
+  "urgently, it may expire", the token was already ~28h dead — the
+  handover could never have worked, and the urgency was misplaced.
+- **What is proven:** reading the API over HTTP, given a fresh token.
+- **What is NOT yet proven:** the *login* over HTTP. The login endpoints
+  (`/api/users/…`) answer 307-to-self to a bare POST, so the exact call
+  shape (path, payload, how the OTP is requested and submitted) is not
+  nailed down. The only known-working login is the Strategist's
+  browser-based `login_sms.py`. Cracking an HTTP login would remove the
+  browser from the loop entirely; it may or may not pan out, since the
+  auth step specifically could still want a browser.
+
 ### Adopting the Strategist's session did NOT help — tested 2026-09-03
 
 The Strategist's working session was handed over as urgent (it would
