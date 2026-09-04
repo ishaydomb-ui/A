@@ -330,6 +330,48 @@ Doing this properly is a per-source reverse-engineering job of the same
 order as the original behatsdaa harvest — not a normalisation pass over
 data we already hold.
 
+### CAL and ClubHub — measured 2026-09-04, and NOT harvested
+
+Investigated properly and then declined, because the numbers do not
+justify it. Recorded so it is not re-derived.
+
+**A correction first: CAL's benefits store is a different domain** from
+the one previously tested. `cal-online.co.il` (banking) is Akamai-blocked;
+the store is `cal-store.co.il`. The earlier conclusion was right for the
+wrong reason. Testing the right domain: **`cal-store.co.il` returns 503
+from `rhino-core-shield`**, `diners-store.co.il` the same, and
+`hvr.co.il` (חבר) 403s. So CAL is genuinely not first-party harvestable
+— just not for the reason first written down.
+
+**What ClubHub actually is:** not a merchant-discount catalogue. It is a
+**per-product price comparison across clubs** — one attraction or gadget,
+priced via MEGALEAN / PAIS_PLUS / MAX / CAL / BEHATSDAA and so on. A
+different data type from the MAX and behatsdaa catalogues, which map
+*merchants* to *rates*.
+
+It is technically easy: Next.js with `__NEXT_DATA__` server-rendered into
+every page, `robots.txt` fully permissive, no anti-bot. **The problem is
+yield, measured on a random sample of 12 real deal pages:**
+
+- 25,000 deal pages across five sitemaps → **~8 hours** at polite pacing,
+  versus 20 minutes for MAX's entire catalogue.
+- **13 provider-items across 11 parsed pages** — about 1.2 per page.
+- **10 of 11 pages carried a single provider**, so there is no comparison
+  on them at all.
+- **CAL appeared on 1 of 11 pages (~9%).**
+
+So eight hours of someone else's bandwidth buys perhaps ~2,000 one-off
+product offers, mostly without a comparison, for a club whose *regular
+spending* discounts we still would not have. **Declined.** If CAL is ever
+needed, a targeted lookup at decision time is the sane shape, not a bulk
+crawl.
+
+**Worth knowing anyway — ClubHub also carries the login-blocked clubs:**
+`BEHATSDAA` / `BEHATSDAA_LOADABLE`, `BEYAHAD` (the Histadrut's club, on
+the *same platform* as behatsdaa — `hist.org.il/card/chargingCard/…`),
+and `HVR` = **חבר**, not הר"י. If the account-layer clubs ever need a
+public window, this is one.
+
 ### Recommendation
 
 Do not treat this as one decision. **MAX: scrape first-party, no login
