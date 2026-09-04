@@ -167,6 +167,52 @@ as-of note for the club shown, and `benefits-catalog --freshness`
 (add `--json` for a map) returns the status per club — use it when you
 need to state how current a number is, e.g. answering another bot.
 
+### What the benefits seam can and cannot answer (verified 2026-09-04)
+
+For capability tests (Arthur's Domain 2). **Only two verbs exist today**,
+both plain substring search — `benefits-catalog [q] [--freshness]` and
+`benefits-branches [q]`. **`check` / `quote` / `plan` do NOT exist**; they
+are designed-only. Three hard limits, all verified in the data:
+
+- **No `holder` field anywhere**, and **הר"י was never harvested.** So
+  "can Liran use the הר"י benefit" (Q9) cannot be answered from data — the
+  correct behaviour is to say so, not to attribute anything. Reporting a
+  yes here would be a fabrication.
+- **No coordinates and no stored home/work location.** MAX's lat/long were
+  dropped at harvest; only street + city remain. So **"near me / near
+  home" (Q4, Q5) cannot compute distance** — at best a city filter *if the
+  user names a city*. The honest answer includes "distance unknown."
+- **No per-benefit expiry dates.** "Still valid?" (Q8) resolves only to
+  the catalogue's as-of date via `--freshness`; there is no exit-code-3
+  "found but stale" per benefit.
+
+Per-question verdicts (keep unless noted):
+
+1. **פוקס** — keep, good merchant-identity test. The catalogue holds
+   `פוקס`, `פוקס אונליין`, `פוקס הום אונליין`, `terminal x` as *separate
+   rows* with different wallet coverage; the seam cannot unify the group,
+   so pass = return candidates, not one answer.
+2. **שילב 400** — **correct the ground truth.** שילב is on ראש-השנה/
+   הוקרה/רשתות/פייטר (30/25/15/15%), **not** the 7% food wallet — so the
+   ₪700 *monthly* cap does not apply; those wallets carry `maxBalance`
+   (₪500–2,500), not a monthly deposit cap. Tests `quote` (not built).
+3. **plan 3000** — `plan` not built; and the ₪700/month schedule is
+   food-wallet-only, so a clothing/general cart doesn't fit it. Keep as a
+   designed-capability marker, flag NOT-YET-BUILT.
+4/5. **near home / near work** — keep but reframe to city-filter; both
+   need a location source we don't have. Consider merging into one.
+6. **wallet vs plain at Tiv Taam** — keep; answerable from rates. Nuance
+   to encode: the food-card discount is earned *on load, not on spend*
+   (`grocery_bot/benefits.py`), and the compare must not encourage
+   spending.
+7. **⛔ browse** — keep, essential negative test; pass = refuse/redirect.
+8. **שופרסל still valid** — keep, and note **Shufersal takes no loadable
+   card at all**, so a "benefit at Shufersal" is itself a category error a
+   good answer catches.
+9. **הר"י holder** — keep as a *negative* test (see limit above).
+10. **חלב price** — keep; routing test, belongs to `price`/`chaindeals`,
+    not the benefits seam.
+
 ### Cadence and the card
 
 | Command | Notes |
