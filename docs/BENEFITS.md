@@ -416,6 +416,35 @@ against the budget project's real statement lines:
 rows are identical — `businessName` "טעינת כסף", `chainName` "כרטיס
 נטען", no wallet identifier. The decode above is the workaround.
 
+### Three of the wallets are the same store list — measured 2026-09-04
+
+Asked whether each non-food wallet is dominated by one kind of spending,
+so a load could be filed to a category. **It cannot, and the reason is
+structural.**
+
+Store-set overlap from `catalog_tagged.csv`:
+
+    רשתות ∩ הוקרה = 675 of 676
+    רשתות ∩ ר"ה   = 673 of 676   (ר"ה adds 26)
+    פייטר ∩ רשתות = 400 of 545   (+144 of the 262 restaurants)
+
+**רשתות (15%), הוקרה (25%) and ר"ה (30%) are the same ~676 shops at three
+different rates**, so nothing about *what was bought* separates them.
+פייטר is roughly רשתות plus restaurants. Their category mixes are
+correspondingly near-identical — ~21% בילוי ופנאי, ~19% ספא, ~16% אופנה,
+~11% אירוח ונופש — and no wallet has a dominant type.
+
+**The methodological trap, flagged to the budget project:** this
+distribution counts *eligible shops*, not *where money went*. A wallet
+being 16% clothing shops says nothing about the share of spend that was
+clothing. It must not be used as a split key for real money.
+
+**A likelier discriminator is the date.** Since the three share shops,
+the only thing separating them is the rate, and the rates look seasonal
+(ר"ה = Rosh Hashana, הוקרה = a tribute promotion). Load dates exist on
+the budget side; this project cannot attribute a load to a wallet to
+verify it.
+
 ### The decode is not uniquely invertible — measured 2026-09-04
 
 `scripts/behatsdaa_charge_table.py` emits the full face→charge table
