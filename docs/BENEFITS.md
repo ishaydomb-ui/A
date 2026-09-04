@@ -374,6 +374,24 @@ against the budget project's real statement lines:
 rows are identical — `businessName` "טעינת כסף", `chainName` "כרטיס
 נטען", no wallet identifier. The decode above is the workaround.
 
+### The decode is not uniquely invertible — measured 2026-09-04
+
+`scripts/behatsdaa_charge_table.py` emits the full face→charge table
+(`data/benefits/behatsdaa_charge_decode.csv`) *and* a collision report,
+because the table on its own is a trap:
+
+- Over a ₪10 grid to ₪3,000: 1,544 distinct charges, **227 (14%)
+  reachable from two different rates.** ₪84 is either ₪105@20% or
+  ₪120@30%; ₪180 is ₪200@10% or ₪240@25%. A decoder assuming uniqueness
+  files real money under the wrong category silently.
+- **Restricting candidates to the 15 observed load sizes cuts ambiguity
+  from 14% to 2%** — 88 charges, only two of them ambiguous:
+  ₪255 (₪300@15% or ₪340@25%) and ₪560 (₪700@20% or ₪800@30%).
+- **Inherent and unfixable by amount:** פייטר and רשתות בהצדעה are both
+  15%, so no charge can separate them. They are different wallets with
+  different ceilings (₪2,500 vs ₪1,500), so treating 15% as one bucket
+  merges two things.
+
 ## Open questions for Ishay (also in HANDOFF §5)
 
 - Availability window for the OTP login.
