@@ -155,3 +155,69 @@ class StaleAmbiguityIsNotReAskedTests(unittest.TestCase):
             if self.storage.preferred_for(p["store"], p["original_term"]) is None
         ]
         self.assertEqual(len(askable), 1, "a genuinely open question must survive the filter")
+
+
+class TivTaamMemorySeedingTests(unittest.TestCase):
+    """Seeding a chain's product memory from order history already on disk.
+
+    Shufersal had 309 remembered choices and Tiv Taam zero, although 743
+    rows of real Tiv Taam order history were sitting in `store_prices`.
+    The import that built Shufersal's memory scrapes that chain's own
+    order pages, so Tiv Taam was never seeded — a gap, not a decision.
+    Without a memory, every Tiv Taam item goes through the autocomplete
+    that returned 4, then 0, then 5, then 1 candidate for one query in a
+    single afternoon.
+    """
+
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        from grocery_bot.storage import Storage
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.storage = Storage(str(Path(self._tmp.name) / "t.sqlite3"))
+
+    def _seed_rows(self):
+        self.storage.record_store_prices("tivtaam", [
+            {"barcode": "111", "name": "קוטג' 5% 250 גרם", "price": 6.7,
+             "observed_at": "2026-01-01", "source": "order"},
+            {"barcode": "111", "name": "קוטג' 5% 250 גרם", "price": 7.1,
+             "observed_at": "2026-06-01", "source": "order"},
+            {"barcode": "222", "name": "פיתות במרקם מיוחד", "price": 12.9,
+             "observed_at": "2026-05-01", "source": "order"},
+        ])
+
+    def test_latest_row_per_barcode_is_what_gets_remembered(self):
+        # A product bought repeatedly should be remembered under the name
+        # it carried most recently, not its oldest.
+        self._seed_rows()
+        latest = self.storage.latest_store_prices("tivtaam")
+        self.assertEqual(len(latest), 2, "two distinct barcodes, not three rows")
+        self.assertEqual(latest["111"]["price"], 7.1)
+
+    def test_seeding_makes_the_product_resolvable_without_the_dropdown(self):
+        self._seed_rows()
+        for barcode, row in self.storage.latest_store_prices("tivtaam").items():
+            self.storage.remember_choice(
+                store="tivtaam", term=row["name"],
+                product_code=str(barcode), product_name=row["name"],
+            )
+        got = self.storage.preferred_for("tivtaam", "קוטג' 5% 250 גרם")
+        self.assertIsNotNone(got)
+        self.assertEqual(got["product_code"], "111")
+
+    def test_seeding_does_not_leak_into_another_chain(self):
+        # preferred_products is keyed (store, term); a Tiv Taam memory
+        # must not answer for Shufersal, where the same name is a
+        # different product code.
+        self._seed_rows()
+        self.storage.remember_choice("tivtaam", "קוטג' 5% 250 גרם", "111", "קוטג' 5% 250 גרם")
+        self.assertIsNone(self.storage.preferred_for("shufersal", "קוטג' 5% 250 גרם"))
+
+    def test_reseeding_refreshes_rather_than_duplicates(self):
+        self._seed_rows()
+        for _ in range(2):
+            self.storage.remember_choice("tivtaam", "פיתות במרקם מיוחד", "222", "פיתות במרקם מיוחד")
+        got = self.storage.preferred_for("tivtaam", "פיתות במרקם מיוחד")
+        self.assertEqual(got["product_code"], "222")
