@@ -52,6 +52,28 @@ json.dump(
 PY
 }
 
+# Off-box copy of the SQLite database. The repo push above protects the
+# code, but data/*.sqlite3 is gitignored (it holds live sessions and the
+# household's lists), so price_history — ~23k daily price rows that cannot
+# be re-derived — lived only on this box until 2026-09-04. This copies it
+# to Drive on every run. It uses an ISOLATED remote if one is configured
+# (`gdrive-grocery:`, the budget/familyos pattern — a token scoped to this
+# project alone), and falls back to the shared `gdrive:` otherwise so the
+# data is never left unprotected while that token is being set up. Never
+# fatal: a backup that fails must not stop the git push above.
+backup_db() {
+    local db="data/grocery_bot.sqlite3"
+    [ -f "$db" ] || return 0
+    local remote="gdrive:"
+    rclone listremotes 2>/dev/null | grep -qx "gdrive-grocery:" && remote="gdrive-grocery:"
+    if rclone copy "$db" "${remote}גורדון — גיבוי DB/" >/dev/null 2>&1; then
+        echo "db backed up to ${remote}"
+    else
+        echo "WARN: db backup to ${remote} failed (non-fatal)" >&2
+    fi
+}
+backup_db || true
+
 branch=$(git rev-parse --abbrev-ref HEAD)
 git fetch --quiet origin "$branch"
 

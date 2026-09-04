@@ -463,11 +463,24 @@ worth keeping because it is asked repeatedly:
 | מזון+אונליין | 7% | 1500 | 22 |
 | קרפור | 10% | 750 | 12 |
 
-**That ceiling is not `maxDepositForMonth`.** The handover's §2 lists that
-as a separate `GetCardGeneralInfo` field needing a logged-in session,
-which we do not have. These figures match what §4b calls **maxBalance**
-(it cites "2500 מקס, פייטר", exactly the פייטר row). Do not read them as
-a monthly cap.
+**Two different fields — both owned here, named explicitly.** Gordon
+(this project) owns these numbers; Nigel and Rob point here rather than
+restating them.
+
+- **`maxBalance`** — the ceiling column above (₪1,500 on מזון, ₪2,500 on
+  פייטר, …). Source: the catalogue (`catalog_tagged.csv`). This is the
+  cap on how much a wallet can *hold*, not a monthly figure.
+- **`maxDepositForMonth`** — **₪700/month on the 7% food wallet (מזון+
+  אונליין)**. Source: Ishay's account screen, confirmed verbatim
+  2026-09-04: *"ה-700 זה הקאפ החודשי להטענה לכרטיס רשתות מזון (בפועל
+  התשלום הוא 700×0.93)."* So the household loads up to ₪700/month and is
+  charged ₪651 (700 × 0.93 = the 7% discount) — which is exactly the
+  ₪651 statement line the decode below resolves to this wallet.
+
+The behatsdaa API also exposes `maxDepositForMonth` per wallet in
+`GetCardGeneralInfo`, but that needs a logged-in session we do not have,
+so ₪700 is confirmed only for the food wallet, from the account screen.
+The `maxBalance` column, being from the catalogue, is complete.
 
 **A charge decodes as `face value × (1 − wallet rate)`** — verified
 against the budget project's real statement lines:
