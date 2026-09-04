@@ -300,3 +300,60 @@ class ApostropheNormalizationTests(unittest.TestCase):
         from grocery_bot.storage import _fold_apostrophes
         self.assertEqual(_fold_apostrophes("קוטג' 5%"), "קוטג 5%")
         self.assertEqual(_fold_apostrophes("קוטג׳ 5%"), "קוטג 5%")
+
+
+class CrossChainPriceTests(unittest.TestCase):
+    """Where is a product cheapest across chains — the canonical answer.
+
+    Shufersal (catalog_products, no barcode) and the other chains
+    (store_prices, by barcode) share no key, so this matches by name and
+    returns each chain's cheapest hit, honest that sizes/variants differ.
+    """
+
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        from grocery_bot.prices import PricedProduct
+        from grocery_bot.storage import Storage
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.storage = Storage(str(Path(self._tmp.name) / "t.sqlite3"))
+        self.storage.replace_catalog(
+            [PricedProduct("1", "במבה 80 גרם אסם", "אסם", 5.9, 73.8, "100 גרם", "80", False)],
+            [],
+        )
+        # Two observations for one Tiv Taam barcode — only the newest counts.
+        self.storage.record_store_prices("tivtaam", [
+            {"barcode": "111", "name": "חטיף במבה", "price": 6.0,
+             "observed_at": "2026-01-01", "source": "order"},
+            {"barcode": "111", "name": "חטיף במבה", "price": 4.3,
+             "observed_at": "2026-06-01", "source": "order"},
+        ])
+        self.storage.record_store_prices("ramilevy", [
+            {"barcode": "222", "name": "במבה קלאסי", "price": 4.8,
+             "observed_at": "2026-06-01", "source": "feed"},
+        ])
+
+    def test_one_row_per_chain_cheapest_first(self):
+        rows = self.storage.cross_chain_prices("במבה")
+        stores = [r["store"] for r in rows]
+        self.assertEqual(set(stores), {"shufersal", "tivtaam", "ramilevy"})
+        self.assertEqual(len(stores), len(set(stores)), "one row per chain")
+        prices = [r["price"] for r in rows]
+        self.assertEqual(prices, sorted(prices), "cheapest first")
+
+    def test_uses_the_newest_observation_per_barcode(self):
+        rows = self.storage.cross_chain_prices("במבה")
+        tt = next(r for r in rows if r["store"] == "tivtaam")
+        self.assertEqual(tt["price"], 4.3, "the June price, not the January one")
+
+    def test_shufersal_carries_a_unit_price_others_do_not(self):
+        rows = self.storage.cross_chain_prices("במבה")
+        sh = next(r for r in rows if r["store"] == "shufersal")
+        self.assertEqual(sh["unit_price"], 73.8)
+        tt = next(r for r in rows if r["store"] == "tivtaam")
+        self.assertIsNone(tt["unit_price"])
+
+    def test_a_missing_product_is_empty_not_an_error(self):
+        self.assertEqual(self.storage.cross_chain_prices("פטריות שיטאקי"), [])

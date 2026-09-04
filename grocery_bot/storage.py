@@ -1387,6 +1387,72 @@ class Storage:
         ranked = sorted(rows, key=lambda row: score(row["name"]))
         return [self._row_to_product(row) for row in ranked[:limit]]
 
+    def cross_chain_prices(self, query: str) -> list[dict]:
+        """Cheapest name-match for a product at every chain we hold prices for.
+
+        The canonical "where is X cheapest" answer. Honest about a hard
+        limit: Shufersal's transparency feed carries **no barcode**, and
+        the other chains are keyed by barcode, so there is no shared key to
+        prove two rows are the *same* product. This therefore matches by
+        NAME per chain and returns each chain's cheapest hit — a genuine
+        signal, but the caller must present it as "cheapest thing called X
+        at each chain," not "the identical product compared," because sizes
+        and variants differ (a 30g bag vs a multipack both contain במבה).
+        Where a unit price exists it is included, which is the fairer
+        comparison across sizes.
+
+        One row per chain: `{store, name, price, unit_price, unit}` sorted
+        cheapest first. Shufersal comes from `catalog_products`; every other
+        chain from the newest `store_prices` row per barcode.
+        """
+        from .chains import display_name
+
+        folded = _fold_apostrophes(query.strip())
+        if not folded:
+            return []
+        pattern = _like_contains(folded)
+        out: list[dict] = []
+
+        with closing(self._connect()) as conn:
+            # Shufersal — its own feed, name only, with a real unit price.
+            row = conn.execute(
+                "SELECT name, price, unit_of_measure_price, unit_of_measure "
+                "FROM catalog_products WHERE fold(name) LIKE ? ESCAPE '\\' "
+                "ORDER BY price LIMIT 1",
+                (pattern,),
+            ).fetchone()
+            if row is not None:
+                out.append({
+                    "store": "shufersal", "chain": display_name("shufersal"),
+                    "name": row["name"], "price": row["price"],
+                    "unit_price": row["unit_of_measure_price"],
+                    "unit": row["unit_of_measure"],
+                })
+
+            # Every barcode chain — newest row per barcode, cheapest match.
+            for store in conn.execute(
+                "SELECT DISTINCT store FROM store_prices"
+            ).fetchall():
+                s = store["store"]
+                r = conn.execute(
+                    "SELECT p.name, p.price FROM store_prices p "
+                    "JOIN (SELECT barcode, MAX(observed_at) mo FROM store_prices "
+                    "      WHERE store = ? GROUP BY barcode) latest "
+                    "  ON p.barcode = latest.barcode AND p.observed_at = latest.mo "
+                    "WHERE p.store = ? AND fold(p.name) LIKE ? ESCAPE '\\' "
+                    "ORDER BY p.price LIMIT 1",
+                    (s, s, pattern),
+                ).fetchone()
+                if r is not None:
+                    out.append({
+                        "store": s, "chain": display_name(s),
+                        "name": r["name"], "price": r["price"],
+                        "unit_price": None, "unit": None,
+                    })
+
+        out.sort(key=lambda d: d["price"] if d["price"] is not None else float("inf"))
+        return out
+
     def active_promotions_for(self, item_code: str, now: datetime | None = None) -> list[PromotionItem]:
         """Promotions currently running for one item.
 

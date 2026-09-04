@@ -106,10 +106,30 @@ one.
 
 | Command | Notes |
 |---|---|
-| `price <query>` | Current shelf price, promotions, and ₪/kg with 🏆 on the best value |
+| `price <query>` | **Shufersal shelf price** (single chain), promotions, ₪/kg with 🏆 |
+| `price-compare <query> [--json]` | **Where it's cheapest across every chain** — the canonical "הכי זול" answer |
 | `deals` | Live promotions on the household's standing list |
 
-Both were behind the Telegram token until 2026-09-02 and are now
+**⚠️ Canonical routing for price — one question, one path.** "How much is
+X" and "how much is X at Shufersal" → `price` (Shufersal only). **"Where
+is X cheapest / X at Tiv Taam vs Shufersal" → `price-compare`**, never
+`price`. `price` is deliberately single-chain so the two never give
+different answers to the same question; `price-compare` is the only
+cross-chain price answer. `price-compare` matches **by name, not
+barcode** (Shufersal's feed has no EAN to join on), so it returns each
+chain's cheapest thing *called* X and says so in its footer — treat it as
+"cheapest X-ish at each chain," not a proven identical-product compare.
+Real output, 2026-09-04:
+
+    $ price-compare במבה
+    *הכי זול — במבה*
+    • פוליצר: 2.40₪ — במבה יום הולדת
+    • שופרסל: 3.50₪ — במבה יום הולדת 25ג בד"צ  (14.00₪ ל100 גרם)
+    • טיב טעם: 4.30₪ — חטיף במבה
+    ...
+    _התאמה לפי שם, לא לפי ברקוד — הגדלים/הווריאנטים עשויים להיות שונים._
+
+Both `price`/`deals` were behind the Telegram token until 2026-09-02 and are now
 token-free — this is new, and the reason "כמה עולה קוטג" could not be
 asked through Miri before. Wired on that side in `familyos@9ac9538`,
 which also had to teach the classifier that "כמה עולה" (what does it

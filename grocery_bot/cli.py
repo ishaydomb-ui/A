@@ -3,7 +3,8 @@
 Run with: python -m grocery_bot.cli <command>
 
     refresh-prices        re-download the branch price/promo snapshot
-    price <query>         look up an item (same answer the bot gives)
+    price <query>         Shufersal shelf price for an item (single chain)
+    price-compare <query> where it is cheapest across every chain [--json]
     deals                 promotions on the standing list
     import-base-list <f>  load a YAML base list into the database
     import-history        build the base list from real past orders
@@ -35,8 +36,8 @@ wrong prices rather than failing loudly.
 **What the household's other bot (מירי) can call.** Everything in
 `_DB_ONLY_COMMANDS` needs nothing but `GROCERY_BOT_DB_PATH`: add-item,
 remove-item, list-items, price, deals, recipe, recipe-text, meal-plan,
-nudge, confirm-card, benefits-catalog, benefits-branches. No Telegram
-token, no store session, no exit node — that project has no use for this
+nudge, confirm-card, benefits-catalog, benefits-branches, price-compare.
+No Telegram token, no store session, no exit node — that project has no use for this
 one's secrets. `add-to-cart` is the exception and is listed separately in
 `_STORE_COMMANDS`: it reaches the real carts, so it needs the store
 sessions and the Israeli exit.
@@ -553,6 +554,40 @@ def _deals(storage: Storage, args: list[str]) -> int:
     return 0
 
 
+def _price_compare(storage: Storage, args: list[str]) -> int:
+    """Where is a product cheapest across every chain we hold prices for.
+
+    The canonical "where's it cheapest" answer (see MIRI_INTEGRATION). It is
+    a name-match per chain, not a proven same-product comparison — Shufersal
+    has no barcode to join on — so the output says so.
+    """
+    import json
+
+    as_json = "--json" in args
+    query = " ".join(a for a in args if not a.startswith("--")).strip()
+    if not query:
+        print("usage: price-compare <query> [--json]")
+        return 2
+    rows = storage.cross_chain_prices(query)
+    if as_json:
+        print(json.dumps(rows, ensure_ascii=False))
+        return 0 if rows else 1
+    if not rows:
+        print(f'לא נמצא מחיר ל-"{query}" באף רשת.')
+        return 1
+    lines = [f'*הכי זול — {query}*']
+    for r in rows:
+        line = f"• {r['chain']}: {r['price']:.2f}₪ — {r['name']}"
+        if r.get("unit_price"):
+            unit = (r.get("unit") or "").strip()
+            line += f"  ({r['unit_price']:.2f}₪ ל{unit})" if unit else ""
+        lines.append(line)
+    lines.append("")
+    lines.append("_התאמה לפי שם, לא לפי ברקוד — הגדלים/הווריאנטים עשויים להיות שונים בין הרשתות._")
+    print("\n".join(lines))
+    return 0
+
+
 def _benefits_catalog(storage: Storage, args: list[str]) -> int:
     """The harvested benefit-club store catalog — see benefits_catalog.py.
 
@@ -650,6 +685,7 @@ _DB_ONLY_COMMANDS = {
     # ask "how much is cottage cheese" without holding our Telegram
     # secret — a credential it has no use for.
     "price": _price,
+    "price-compare": _price_compare,
     "deals": _deals,
     # Reads flat CSVs under data/benefits/ (gitignored — household
     # financial data), not the sqlite database at all; `storage` is
