@@ -142,6 +142,20 @@ the budget bot.
 |---|---|
 | `benefits-catalog [query] [--json]` | Harvested benefit-club stores: wallets, discount ceilings, cities |
 | `benefits-branches [query] [--json]` | Street addresses + phone for those stores (partial — the crawl is incremental) |
+| `benefits-remember "<term>" "<merchant>"` | Record that a term resolves to one merchant. `--forget "<term>"` drops it |
+
+**Ask-when-unsure (disambiguation).** When `benefits-catalog "פוקס"`
+returns several *different* merchants (פוקס / פוקס הום / פוקס דרי — same
+prefix, different benefits), that is the signal to **ask** the household
+"which did you mean?" rather than guess — the trigger is that the
+candidates give *different answers*, not merely that there is more than
+one. When they confirm ("פוקס הום"), call
+`benefits-remember "פוקס" "פוקס הום"` and every later `benefits-catalog
+"פוקס"` resolves straight to that merchant (with a `(זכור: …)` note),
+never re-asking. **Every remember is a household decision — write it on
+their confirmation, never on a guess;** `--forget` reverses it. This
+reuses the same term→choice memory the grocery bot already uses for
+product variants, and lives in the grocery DB (`GROCERY_BOT_DB_PATH`).
 
 **Two clubs are in there now**, and each row carries a `club`:
 **בהצדעה** (982 stores, manually tagged, rescued) and **מקס** (~11,300

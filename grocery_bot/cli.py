@@ -26,6 +26,7 @@ Run with: python -m grocery_bot.cli <command>
     benefits-catalog [query] [--json]  harvested benefit-club stores
                           (wallets, discount ceilings, cities; --json for
                           all rows, machine-readable)
+    benefits-remember "<term>" "<merchant>"  resolve a term to one merchant
     benefits-branches [query] [--json]  street addresses for those stores
                           (partial — the branch crawl is incremental)
 
@@ -588,12 +589,18 @@ def _price_compare(storage: Storage, args: list[str]) -> int:
     return 0
 
 
+_BENEFITS_MEMORY_STORE = "benefits"
+
+
 def _benefits_catalog(storage: Storage, args: list[str]) -> int:
     """The harvested benefit-club store catalog — see benefits_catalog.py.
 
-    `storage` is unused: this reads flat files under data/benefits/, not
-    the sqlite database. Kept on the same (storage, args) shape as every
-    other DB-only command so it dispatches identically.
+    Reads the flat files under data/benefits/, and — this is the one use of
+    `storage` — checks the disambiguation memory first: once the household
+    has said "פוקס means פוקס הום" (recorded via `benefits-remember`), a
+    later "פוקס" resolves straight to that merchant instead of returning
+    the whole ambiguous set again. The same term→choice memory the grocery
+    bot already uses for product variants (Ishay-approved, 2026-09-04).
     """
     import json
 
@@ -619,11 +626,59 @@ def _benefits_catalog(storage: Storage, args: list[str]) -> int:
     query = " ".join(a for a in args if not a.startswith("--")).strip()
     rows = search_catalog(query) if query else load_catalog()
 
+    resolved_to = None
+    if query and len(rows) > 1:
+        remembered = storage.preferred_for(_BENEFITS_MEMORY_STORE, query)
+        if remembered is not None:
+            merchant = remembered["product_name"]
+            narrowed = [r for r in rows if (r.get("חנות") or "").strip() == merchant]
+            # Keep the memory honest: if the remembered merchant has since
+            # left the catalogue, fall back to the full set rather than
+            # returning nothing.
+            if narrowed:
+                rows, resolved_to = narrowed, merchant
+
     if as_json:
         print(json.dumps(rows, ensure_ascii=False))
     else:
+        if resolved_to:
+            print(f"_(זכור: \"{query}\" → {resolved_to})_")
         print(format_catalog_rows(rows, query))
     return 0 if rows else 1
+
+
+def _benefits_remember(storage: Storage, args: list[str]) -> int:
+    """Record that a search term should resolve to a specific merchant.
+
+    The write half of ask-when-unsure: when the household disambiguates
+    ("לא, התכוונתי לפוקס הום"), Miri calls this so the next lookup skips the
+    question. Every entry is a household decision — Miri writes it on their
+    confirmation, not on a guess.
+
+    Usage: benefits-remember "<term>" "<merchant>"   (two positional args)
+    or with --forget to drop a remembered term.
+    """
+    positional = [a for a in args if not a.startswith("--")]
+    if "--forget" in args:
+        if len(positional) != 1:
+            print('usage: benefits-remember --forget "<term>"')
+            return 2
+        forgotten = storage.forget_choice(_BENEFITS_MEMORY_STORE, positional[0].strip())
+        print(f"forgot: {positional[0]}" if forgotten else f"nothing remembered for: {positional[0]}")
+        return 0 if forgotten else 1
+    if len(positional) != 2:
+        print('usage: benefits-remember "<term>" "<merchant>"')
+        return 2
+    term, merchant = positional[0].strip(), positional[1].strip()
+    if not term or not merchant:
+        print("both a term and a merchant are required")
+        return 2
+    storage.remember_choice(
+        store=_BENEFITS_MEMORY_STORE, term=term,
+        product_code=merchant, product_name=merchant,
+    )
+    print(f'remembered: "{term}" → {merchant}')
+    return 0
 
 
 def _benefits_branches(storage: Storage, args: list[str]) -> int:
@@ -694,6 +749,7 @@ _DB_ONLY_COMMANDS = {
     # disk, not a live fetch.
     "benefits-catalog": _benefits_catalog,
     "benefits-branches": _benefits_branches,
+    "benefits-remember": _benefits_remember,
 }
 
 # Needs the store session and the Israeli exit, so it cannot live on the

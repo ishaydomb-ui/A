@@ -403,3 +403,63 @@ class CaseAndApostropheTests(unittest.TestCase):
         # Normalisation must not turn every miss into a hit.
         from grocery_bot.benefits_catalog import search_catalog
         self.assertEqual(search_catalog("חנות שלא קיימת בכלל"), [])
+
+
+class DisambiguationMemoryTests(unittest.TestCase):
+    """The write half of ask-when-unsure: term → merchant, on confirmation.
+
+    Runs through the real subprocess CLI with a shared DB across calls, the
+    way Miri uses it: remember once, and the next lookup resolves instead
+    of returning the ambiguous set again.
+    """
+
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        self.data_dir = Path(self._dir.name)
+        _write_csv(self.data_dir / "catalog_tagged.csv", [
+            {"חנות": "פוקס", "תת-קטגוריה": "אופנה", "ארנקים": "רשתות בהצדעה(15%/₪1500)",
+             "אונליין": "לא", "קטגוריה": "אופנה ולייף סטייל", "ערים": "תל אביב - יפו"},
+            {"חנות": "פוקס הום", "תת-קטגוריה": "הכל לבית", "ארנקים": "מסעדות(20%/₪500)",
+             "אונליין": "לא", "קטגוריה": "הכל לבית", "ערים": "חיפה"},
+        ])
+        self._tmpdb = tempfile.TemporaryDirectory()
+
+    def tearDown(self):
+        self._dir.cleanup()
+        self._tmpdb.cleanup()
+
+    def _run(self, args):
+        return subprocess.run(
+            [sys.executable, "-m", "grocery_bot.cli", *args],
+            cwd=PROJECT,
+            env={
+                "GROCERY_BOT_DB_PATH": str(Path(self._tmpdb.name) / "t.sqlite3"),
+                "BENEFITS_DATA_DIR": str(self.data_dir),
+                "PATH": os.environ.get("PATH", ""),
+                "HOME": os.environ.get("HOME", ""),
+            },
+            capture_output=True, text=True,
+        )
+
+    def test_remember_then_resolve(self):
+        self.assertEqual(self._run(["benefits-catalog", "פוקס"]).stdout.count("•"), 2)
+        self.assertEqual(self._run(["benefits-remember", "פוקס", "פוקס הום"]).returncode, 0)
+        after = self._run(["benefits-catalog", "פוקס"]).stdout
+        self.assertEqual(after.count("•"), 1, "resolves to the one remembered merchant")
+        self.assertIn("פוקס הום", after)
+        self.assertIn("זכור", after)
+
+    def test_forget_restores_the_candidates(self):
+        self._run(["benefits-remember", "פוקס", "פוקס הום"])
+        self._run(["benefits-remember", "--forget", "פוקס"])
+        self.assertEqual(self._run(["benefits-catalog", "פוקס"]).stdout.count("•"), 2)
+
+    def test_a_stale_memory_falls_back_rather_than_returning_nothing(self):
+        # Remember a merchant that isn't in the catalogue; the lookup must
+        # not vanish - it falls back to the full candidate set.
+        self._run(["benefits-remember", "פוקס", "פוקס שנמחקה"])
+        out = self._run(["benefits-catalog", "פוקס"])
+        self.assertEqual(out.stdout.count("•"), 2, "stale memory → full set, not empty")
+
+    def test_remember_needs_two_arguments(self):
+        self.assertEqual(self._run(["benefits-remember", "רק-מונח"]).returncode, 2)
