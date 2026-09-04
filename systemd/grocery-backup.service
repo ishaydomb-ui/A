@@ -24,9 +24,9 @@ ProtectSystem=strict
 ReadWritePaths=%h/grocery-automation
 # Read-only is enough for the deploy key under ~/.ssh.
 ProtectHome=read-only
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
+# ProtectKernelTunables=true
+# ProtectKernelModules=true
+# ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
 

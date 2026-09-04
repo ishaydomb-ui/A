@@ -22,8 +22,8 @@ ExecStart=/usr/bin/python3 %h/grocery-automation/scripts/notify.py \
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=read-only
-ProtectKernelTunables=true
-ProtectKernelModules=true
+# ProtectKernelTunables=true
+# ProtectKernelModules=true
 RestrictSUIDSGID=true
 LockPersonality=true
 

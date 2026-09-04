@@ -24,9 +24,9 @@ ProtectSystem=strict
 ProtectHome=read-only
 # The SQLite catalog and the saved store session both live under data/.
 ReadWritePaths=%h/grocery-automation/data
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
+# ProtectKernelTunables=true
+# ProtectKernelModules=true
+# ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
 
