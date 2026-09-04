@@ -340,6 +340,40 @@ two are the only ones where a login is genuinely unavoidable, and both
 need her, not Ishay. Confirm הר"י's model (wallet vs discount) before
 committing to a scraper for it.
 
+## Wallet rates and ceilings, and how a card charge decodes
+
+Extracted from `catalog_tagged.csv` on 2026-09-04 for the budget project,
+worth keeping because it is asked repeatedly:
+
+| Wallet | Rate | Ceiling ₪ | Stores |
+|---|---|---|---|
+| ראש השנה 30% | 30% | 500 | 699 |
+| מבצע הוקרה 25% | 25% | 500 | 676 |
+| רשתות בהצדעה | 15% | 1500 | 676 |
+| פייטר | 15% | 2500 | 545 |
+| מסעדות | 20% | 500 | 262 |
+| מזון+אונליין | 7% | 1500 | 22 |
+| קרפור | 10% | 750 | 12 |
+
+**That ceiling is not `maxDepositForMonth`.** The handover's §2 lists that
+as a separate `GetCardGeneralInfo` field needing a logged-in session,
+which we do not have. These figures match what §4b calls **maxBalance**
+(it cites "2500 מקס, פייטר", exactly the פייטר row). Do not read them as
+a monthly cap.
+
+**A charge decodes as `face value × (1 − wallet rate)`** — verified
+against the budget project's real statement lines:
+
+- ₪651 = a ₪700 load at 7% → the food wallet.
+- ₪850 = a ₪1,000 load at 15% → פייטר *or* רשתות; the two share a rate,
+  so the amount alone cannot separate them.
+- ₪1,729 and ₪410 match no single load, so some statement lines
+  aggregate several loads.
+
+**`activities.csv` cannot attribute a load to a wallet.** All 54 load
+rows are identical — `businessName` "טעינת כסף", `chainName` "כרטיס
+נטען", no wallet identifier. The decode above is the workaround.
+
 ## Open questions for Ishay (also in HANDOFF §5)
 
 - Availability window for the OTP login.
