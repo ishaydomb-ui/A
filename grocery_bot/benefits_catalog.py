@@ -114,8 +114,23 @@ def load_branches() -> list[dict]:
     return list(seen.values())
 
 
+# Apostrophe family folded away before matching: ASCII ', Hebrew geresh ׳,
+# right single quote ', backtick. A query for "terminal x" that returns
+# nothing because the row is "Terminal X", or "קוטג' 5%" that misses
+# "קוטג 5%", is "I didn't understand the form" masquerading as "doesn't
+# exist" — and it stops ask-when-unsure from ever firing, since the miss
+# looks like a clean zero. So normalise both sides *before* deciding
+# found/one/many. (Approved by Ishay 2026-09-04 as the normalisation step.)
+_APOSTROPHES = str.maketrans("", "", "'׳’`")
+
+
+def _norm(text: str) -> str:
+    return (text or "").lower().translate(_APOSTROPHES)
+
+
 def _matches(row: dict, query: str, fields: tuple[str, ...]) -> bool:
-    return any(query in (row.get(field) or "") for field in fields)
+    q = _norm(query)
+    return any(q in _norm(row.get(field) or "") for field in fields)
 
 
 def search_catalog(query: str) -> list[dict]:
@@ -152,7 +167,10 @@ def _relevance(row: dict, query: str) -> tuple[int, int]:
     or word-start name match above one where the query only appears in a
     category or mid-name. A dumb filter with a sensible order.
     """
-    name = (row.get("חנות") or "").strip()
+    # Rank on the normalised forms too, or "Terminal X" would rank below a
+    # lowercase match despite being the exact store.
+    name = _norm((row.get("חנות") or "").strip())
+    query = _norm(query)
     if name == query:
         rank = 0
     elif name.startswith(query):

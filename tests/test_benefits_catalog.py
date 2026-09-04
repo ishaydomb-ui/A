@@ -364,3 +364,42 @@ class RelevanceRankingTests(unittest.TestCase):
         self.assertEqual(names[0], "פוקס", "exact match first")
         self.assertEqual(names[-1], "פוקס דרי ישראל - חולון",
                          "the unrelated same-prefix merchant sinks to the bottom")
+
+
+class CaseAndApostropheTests(unittest.TestCase):
+    """A merchant query must be case- and apostrophe-insensitive.
+
+    "Terminal X" returned nothing because the row is stored "terminal x" —
+    a form-miss reading as "doesn't exist", which is exactly what stops
+    ask-when-unsure from firing (Ishay's normalization step, 2026-09-04).
+    """
+
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        self.data_dir = Path(self._dir.name)
+        _write_csv(self.data_dir / "catalog_tagged.csv", [
+            {"חנות": "terminal x", "תת-קטגוריה": "רכישה אונליין",
+             "ארנקים": "רשתות בהצדעה(15%/₪1500)", "אונליין": "כן",
+             "קטגוריה": "רכישה אונליין", "ערים": ""},
+            {"חנות": "קפה קפה", "תת-קטגוריה": "מסעדות", "ארנקים": "מסעדות(20%/₪500)",
+             "אונליין": "לא", "קטגוריה": "מסעדות ובתי קפה", "ערים": "תל אביב - יפו"},
+        ])
+        self._old = os.environ.get("BENEFITS_DATA_DIR")
+        os.environ["BENEFITS_DATA_DIR"] = str(self.data_dir)
+
+    def tearDown(self):
+        self._dir.cleanup()
+        if self._old is None:
+            os.environ.pop("BENEFITS_DATA_DIR", None)
+        else:
+            os.environ["BENEFITS_DATA_DIR"] = self._old
+
+    def test_query_matches_regardless_of_case(self):
+        from grocery_bot.benefits_catalog import search_catalog
+        for q in ("terminal x", "Terminal X", "TERMINAL X"):
+            self.assertEqual(len(search_catalog(q)), 1, q)
+
+    def test_a_genuinely_absent_merchant_still_returns_nothing(self):
+        # Normalisation must not turn every miss into a hit.
+        from grocery_bot.benefits_catalog import search_catalog
+        self.assertEqual(search_catalog("חנות שלא קיימת בכלל"), [])

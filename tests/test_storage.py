@@ -264,3 +264,39 @@ class LikeWildcardEscapeTests(unittest.TestCase):
         self.assertEqual(_like_contains("3%"), "%3\\%%")
         self.assertEqual(_like_contains("a_b"), "%a\\_b%")
         self.assertEqual(_like_contains("x\\y"), "%x\\\\y%")
+
+
+class ApostropheNormalizationTests(unittest.TestCase):
+    """Apostrophe/geresh variants must not change what a price search finds.
+
+    Product names are inconsistent about the apostrophe, so "קוטג' 5%"
+    (ASCII), "קוטג 5%" (none), and "קוטג׳ 5%" (Hebrew geresh) found 1, 3, 0
+    rows respectively — a form-miss masquerading as a real result count.
+    """
+
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        from grocery_bot.prices import PricedProduct
+        from grocery_bot.storage import Storage
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.storage = Storage(str(Path(self._tmp.name) / "t.sqlite3"))
+        self.storage.replace_catalog(
+            [
+                PricedProduct("1", "קוטג 5% שומן 250ג טרה", "טרה", 6.7, 26.8, "100 גרם", "250", False),
+                PricedProduct("2", "קוטג' 5% 250 גרם בעלז", "בעלז", 6.4, 25.6, "100 גרם", "250", False),
+            ],
+            [],
+        )
+
+    def test_all_apostrophe_forms_return_the_same_set(self):
+        counts = {q: len(self.storage.search_products(q))
+                  for q in ("קוטג' 5%", "קוטג 5%", "קוטג׳ 5%")}
+        self.assertEqual(set(counts.values()), {2}, counts)
+
+    def test_the_fold_helper_drops_the_apostrophe_family(self):
+        from grocery_bot.storage import _fold_apostrophes
+        self.assertEqual(_fold_apostrophes("קוטג' 5%"), "קוטג 5%")
+        self.assertEqual(_fold_apostrophes("קוטג׳ 5%"), "קוטג 5%")

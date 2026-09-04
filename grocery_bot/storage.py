@@ -338,6 +338,26 @@ def _like_contains(term: str) -> str:
     return f"%{escaped}%"
 
 
+# Product names are inconsistent about the apostrophe — "קוטג 5%" (none),
+# "קוטג' 5%" (ASCII), "קוטג׳ 5%" (Hebrew geresh) — so "קוטג' 5%" found one
+# row where "קוטג 5%" found three. Fold the apostrophe family away on both
+# the query and the stored name before matching. (Ishay-approved
+# normalisation, 2026-09-04.)
+_APOSTROPHES = "'׳’`"
+_FOLD_TABLE = str.maketrans("", "", _APOSTROPHES)
+
+
+def _fold_apostrophes(term: str) -> str:
+    """Drop the apostrophe family so the variants collapse to one form.
+
+    Registered on every connection as the SQL function `fold(...)` so the
+    stored column can be folded the same way — building a REPLACE() chain
+    in SQL text instead hits the ASCII apostrophe as a string-literal
+    delimiter and produces invalid SQL.
+    """
+    return (term or "").translate(_FOLD_TABLE)
+
+
 class Storage:
     def __init__(self, db_path: str):
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -366,6 +386,9 @@ class Storage:
         # minutes at a time.
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA busy_timeout=10000")
+        # Fold the apostrophe family in SQL the same way Python does, so a
+        # query and a stored name that differ only by ' / ׳ still match.
+        conn.create_function("fold", 1, _fold_apostrophes, deterministic=True)
         return conn
 
     # -- base list -----------------------------------------------------
@@ -1339,17 +1362,23 @@ class Storage:
             return []
         with closing(self._connect()) as conn:
             rows = conn.execute(
-                "SELECT * FROM catalog_products WHERE name LIKE ? ESCAPE '\\' "
+                "SELECT * FROM catalog_products WHERE fold(name) LIKE ? ESCAPE '\\' "
                 "ORDER BY price LIMIT 400",
-                (_like_contains(term),),
+                (_like_contains(_fold_apostrophes(term)),),
             ).fetchall()
 
+        # Rank on the apostrophe-folded forms too, so "קוטג' 5%" ranks
+        # against "קוטג 5%" as the same start-of-name match, not a distant
+        # substring.
+        folded_term = _fold_apostrophes(term)
+
         def score(name: str) -> tuple[int, int]:
-            if name.startswith(term):
+            folded = _fold_apostrophes(name)
+            if folded.startswith(folded_term):
                 rank = 0
-            elif re.search(rf"(?:^|\s){re.escape(term)}(?:\s|$)", name):
+            elif re.search(rf"(?:^|\s){re.escape(folded_term)}(?:\s|$)", folded):
                 rank = 1
-            elif re.search(rf"(?:^|\s){re.escape(term)}", name):
+            elif re.search(rf"(?:^|\s){re.escape(folded_term)}", folded):
                 rank = 2
             else:
                 rank = 3
