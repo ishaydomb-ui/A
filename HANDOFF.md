@@ -6,10 +6,23 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-03 17:13 (host time, CEST)
+**Last anchored:** 2026-09-04 16:02 (host time, CEST)
 **Conversation id:** `eb6175a8-1890-4712-98a2-cd9a24f82ed2`
 **Session:** https://claude.ai/code/session_01BR6ULKQXHnkwAme1Hk4z9G
 **Branch:** `claude/online-grocery-automation-b7pq4g`
+**Status is in `git log`, not hand-typed here** (per the cross-project
+D.3 rule, 2026-09-04). This file holds decisions and open items only.
+
+**Since the last anchor (see `git log` for detail):** the benefits
+harvest landed — MAX catalogue (10,981, public, no login) and the rescued
+behatsdaa catalogue are both live to Miri via `benefits-catalog` /
+`benefits-branches`, each row carrying a per-club freshness note (data is
+a static 2026-09-03 snapshot; `--freshness` states it). Tiv Taam product
+memory was seeded from its own order history (292 choices; it had none).
+The 2026-09-04 kernel reboot broke all `--user` services on a userns
+restriction; fix applied and committed by Ishay (`d8d1132`). The grocery
+SQLite is now copied off-box to Drive on every backup run. Arthur's
+full-audit action items were executed (2026-09-04) — see §5.
 
 ---
 
@@ -301,7 +314,23 @@ the same result whether or not the thing is true is not evidence.**
 
 ## 5. Open questions for the user
 
-- **Benefits harvest — three inputs needed before any harvest step.**
+- **One credential outstanding from the audit batch:** the SQLite off-box
+  backup falls back to the shared `gdrive:` remote today. An **isolated
+  `gdrive-grocery:` rclone remote** (own OAuth token, the budget/familyos
+  pattern) is the intended design and needs an `rclone authorize` token
+  from Ishay. Everything else in Arthur's 2026-09-04 action block is done
+  (grocery.sh RC fix, BENEFITS.md both fields, memory refresh, DB backup
+  wired, D.2 memory audit). ₪700 monthly cap is **confirmed** (Ishay,
+  verbatim 2026-09-04) — no longer open.
+- **behatsdaa live data still needs a login, but the route narrowed:**
+  the block is TLS-fingerprint, `curl` passes it, and reading the API
+  needs only a fresh 30-minute JWT (§3). Not worth doing until live data
+  (balances, voucher expiry) is actually needed; the catalogue is done.
+- **Liran's clubs (הר"י, Leumi Bonus)** — need her credentials/consent,
+  not Ishay's. הר"י catalogue is behind her member login; Leumi Bonus has
+  account state a public catalogue cannot give. Both are the account
+  layer, the only place real per-spend money sits.
+- **Benefits harvest — three inputs still needed if it goes further.**
   Ownership and build authorization are both settled with verbatim quotes
   and dates (`GOALS.md` under החלטות שהתקבלו) — **do not ask again.**
   What's actually open:
