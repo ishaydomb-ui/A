@@ -160,6 +160,13 @@ vouchers, no live deals — the harvest itself is blocked on a login (see
 `docs/BENEFITS.md`). This is catalog data only: which stores participate,
 at what rate, up to what ceiling.
 
+**Freshness — it is a static snapshot, not live.** behatsdaa data is
+as-of **2026-09-03** and does not refresh (its login is not automated);
+MAX is also 2026-09-03 but re-runnable. Every result line carries the
+as-of note for the club shown, and `benefits-catalog --freshness`
+(add `--json` for a map) returns the status per club — use it when you
+need to state how current a number is, e.g. answering another bot.
+
 ### Cadence and the card
 
 | Command | Notes |

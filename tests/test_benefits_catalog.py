@@ -298,3 +298,29 @@ class MultiClubTests(unittest.TestCase):
         text = format_catalog_rows(CATALOG_ROWS[:1], "מקסיקנה")
         self.assertIn("פייטר", text)
         self.assertIn("3000", text)
+
+
+class FreshnessTests(unittest.TestCase):
+    """Data freshness must be visible, not something a caller has to know.
+
+    behatsdaa data is a static September snapshot that cannot be
+    refreshed (its login is not automated), and another bot consuming
+    numbers that originate here must not mistake it for live data.
+    """
+
+    def test_freshness_names_every_club(self):
+        from grocery_bot.benefits_catalog import freshness
+        f = freshness()
+        self.assertIn("בהצדעה", f)
+        self.assertIn("מקס", f)
+
+    def test_behatsdaa_is_flagged_as_not_refreshing(self):
+        from grocery_bot.benefits_catalog import freshness
+        self.assertIn("לא מתרענן", freshness()["בהצדעה"])
+
+    def test_results_carry_the_as_of_note_for_the_club_shown(self):
+        from grocery_bot.benefits_catalog import format_catalog_rows
+        rows = [{"club": "בהצדעה", "חנות": "רשת מקסיקנה", "קטגוריה": "מסעדות"}]
+        text = format_catalog_rows(rows, "מקסיקנה")
+        self.assertIn("2026-09-03", text)
+        self.assertIn("לא מתרענן", text)

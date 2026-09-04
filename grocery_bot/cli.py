@@ -562,7 +562,23 @@ def _benefits_catalog(storage: Storage, args: list[str]) -> int:
     """
     import json
 
-    from .benefits_catalog import format_catalog_rows, load_catalog, search_catalog
+    from .benefits_catalog import (
+        format_catalog_rows,
+        freshness,
+        load_catalog,
+        search_catalog,
+    )
+
+    # --freshness: how current the data is, per club. For a caller (or
+    # another bot) that needs to state the as-of date, not the data.
+    if "--freshness" in args:
+        fresh = freshness()
+        if "--json" in args:
+            print(json.dumps(fresh, ensure_ascii=False))
+        else:
+            for club, status in fresh.items():
+                print(f"{club}: {status}")
+        return 0
 
     as_json = "--json" in args
     query = " ".join(a for a in args if not a.startswith("--")).strip()

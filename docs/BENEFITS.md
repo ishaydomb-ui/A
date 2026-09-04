@@ -7,6 +7,35 @@ through the existing CLI seam — this is not a new bot.
 
 Full handover from the Strategist session: `~/portfolio-strategy/BENEFITS-HANDOFF.md`.
 
+## Data freshness — read this before trusting any behatsdaa figure
+
+**All behatsdaa data is a one-time snapshot. It is NOT live and is not
+refreshed.** Anyone — Miri, Nigel, any bot — consuming numbers that
+originate here must treat them as of these dates and no newer:
+
+| Dataset | Source | As-of / captured | Refreshes? |
+|---|---|---|---|
+| behatsdaa store catalog (982) | `catalog_tagged.csv` | harvested **2026-09-03 06:05** | **No** — static snapshot |
+| behatsdaa full catalog (2903) | `catalog_full.csv` | harvested **2026-09-02 22:02** | No |
+| behatsdaa branch addresses | `branches*.csv` | **2026-09-02 22:53 → 09-03 07:47** (partial crawl) | No |
+| card activity history | `activities.csv` (in the Strategist's lab) | newest transaction **2026-08-03** | No |
+| voucher history | `purchases_general.csv` (Strategist's lab) | newest order **2026-08-27** | No |
+| **MAX** catalog (10,981) | `max_catalog.csv` | harvested **2026-09-03 20:03** | Re-runnable (`scripts/harvest_max.py`), but not scheduled |
+
+**Why it will not refresh on its own:** the behatsdaa login is not
+automated (TLS-fingerprint block; see below), so nothing here can re-pull
+behatsdaa. Balances, new vouchers, expired vouchers, catalogue changes
+since the dates above are **not reflected**. The wallet rates/ceilings
+are structural and change rarely, so those age well; anything
+account-level (balances, voucher status) was already stale the moment it
+was captured and gets staler daily.
+
+**For another bot asking "how current is this?":** the honest answer is
+the table above. If a decision needs behatsdaa data fresher than early
+September 2026, it cannot be met without a new login, which is a manual
+step nobody has taken since. MAX can be refreshed by re-running its
+harvester; behatsdaa cannot, today.
+
 ## Hard boundaries (inherited from CLAUDE.md, restated because money)
 
 - **Pull only.** No feed or push of "opportunities." The bot answers a

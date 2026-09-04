@@ -30,9 +30,25 @@ DEFAULT_DATA_DIR = "data/benefits"
 SEARCH_SUBDIRS = ("", "lab_rescue")
 MAX_RESULTS = 15
 
+# Data freshness, per club. This is a static snapshot, not a live feed —
+# behatsdaa cannot be re-pulled (its login is not automated), so its
+# numbers are as-of these dates and no newer. Surfaced in the CLI so a
+# caller sees it without reading docs/BENEFITS.md, which carries the full
+# table (balances/vouchers age; wallet rates are structural and age well).
+DATA_AS_OF = {
+    "בהצדעה": "קטלוג נלכד 2026-09-03 · לא מתרענן (התחברות ידנית) · יתרות/שוברים לא כלולים",
+    "מקס": "קטלוג נלכד 2026-09-03 · ניתן לרענון (scripts/harvest_max.py)",
+}
+
 
 def _data_dir() -> Path:
     return Path(os.environ.get("BENEFITS_DATA_DIR", DEFAULT_DATA_DIR))
+
+
+def freshness() -> dict:
+    """As-of / refresh status per club — see DATA_AS_OF. For callers that
+    need to state how current the data is (e.g. another bot asking)."""
+    return dict(DATA_AS_OF)
 
 
 def _find(pattern: str) -> list[Path]:
@@ -140,6 +156,11 @@ def format_catalog_rows(rows: list[dict], query: str = "") -> str:
         return f'לא נמצא בקטלוג ההטבות: "{query}"' if query else "קטלוג ההטבות ריק — עדיין לא בוצע קציר."
     header = f"*קטלוג הטבות* — {len(rows)} תוצאות" + (f' עבור "{query}"' if query else "")
     lines = [header]
+    # Name the freshness of any club present in the results, so no reader
+    # mistakes a static September snapshot for live data.
+    clubs_here = {(r.get("club") or "").strip() for r in rows[:MAX_RESULTS]}
+    for club in sorted(c for c in clubs_here if c in DATA_AS_OF):
+        lines.append(f"_({club}: {DATA_AS_OF[club]})_")
     for row in rows[:MAX_RESULTS]:
         name = (row.get("חנות") or "").strip()
         category = (row.get("קטגוריה") or row.get("תת-קטגוריה") or "").strip()
