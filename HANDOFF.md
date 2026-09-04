@@ -6,23 +6,33 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-04 16:02 (host time, CEST)
+**Last anchored:** 2026-09-04 22:15 (host time, CEST)
 **Conversation id:** `eb6175a8-1890-4712-98a2-cd9a24f82ed2`
 **Session:** https://claude.ai/code/session_01BR6ULKQXHnkwAme1Hk4z9G
 **Branch:** `claude/online-grocery-automation-b7pq4g`
 **Status is in `git log`, not hand-typed here** (per the cross-project
 D.3 rule, 2026-09-04). This file holds decisions and open items only.
 
-**Since the last anchor (see `git log` for detail):** the benefits
-harvest landed — MAX catalogue (10,981, public, no login) and the rescued
-behatsdaa catalogue are both live to Miri via `benefits-catalog` /
-`benefits-branches`, each row carrying a per-club freshness note (data is
-a static 2026-09-03 snapshot; `--freshness` states it). Tiv Taam product
-memory was seeded from its own order history (292 choices; it had none).
-The 2026-09-04 kernel reboot broke all `--user` services on a userns
-restriction; fix applied and committed by Ishay (`d8d1132`). The grocery
-SQLite is now copied off-box to Drive on every backup run. Arthur's
-full-audit action items were executed (2026-09-04) — see §5.
+**Since the last anchor (see `git log` for detail):** Ishay approved and
+this session shipped items 1–3 of the benefits/seam plan plus waste-(ב):
+- **Cross-chain price** — `price-compare` (canonical "cheapest" across all
+  chains; `price` re-scoped to Shufersal-shelf so the two never collide).
+- **Waste layer (ב)** — one targeted question at the cart hand-off end
+  (`waste.pick_targeted`), buttons record a fraction; layer (א) free-text
+  already existed.
+- **Merchant disambiguation** — `benefits-remember` term→merchant memory,
+  reusing `remember_choice`; `benefits-catalog` resolves to it.
+- **Normalization** — case + apostrophe/geresh folded before matching, so
+  a form-miss no longer reads as "doesn't exist."
+- **The `%` bug (most important)** — a literal `%` in a query ("חלב 3%")
+  was a SQL LIKE wildcard, silently matching "חלב 36" (chocolate) for
+  months. Escaped now across all four LIKE paths. See §4c.
+- Decisions recorded: eligibility (6 clubs, `data/benefits/eligibility.yaml`),
+  no `holder` (household-level), success criterion, TivCoins 3.2.
+
+Earlier this session: MAX + behatsdaa catalogues live to Miri with
+per-club freshness; Tiv Taam memory seeded (292); the userns reboot fix
+(`d8d1132`, Ishay); SQLite backed up off-box; Arthur's audit block done.
 
 ---
 
@@ -311,17 +321,29 @@ the same result whether or not the thing is true is not evidence.**
   clean load rendered the login form while a reload tripped a full
   challenge page. Worth remembering before adding a "just in case" reload
   anywhere near Incapsula.
+- **An unescaped `%` in a product name was a live SQL LIKE wildcard.**
+  Searching "חלב 3%" built `LIKE '%חלב 3%%'`, whose trailing `%` matched
+  any suffix — so "חלב 36" (a chocolate) came back for a milk query, for
+  months, silently. The bug returns *more* rows, never an error, so no
+  test caught it. Fixed across all four LIKE paths with an escaped term +
+  `ESCAPE '\'` (`_like_contains` in `storage.py`); regression test
+  `LikeWildcardEscape`. Any new LIKE must go through `_like_contains`.
 
 ## 5. Open questions for the user
 
-- **One credential outstanding from the audit batch:** the SQLite off-box
-  backup falls back to the shared `gdrive:` remote today. An **isolated
-  `gdrive-grocery:` rclone remote** (own OAuth token, the budget/familyos
-  pattern) is the intended design and needs an `rclone authorize` token
-  from Ishay. Everything else in Arthur's 2026-09-04 action block is done
-  (grocery.sh RC fix, BENEFITS.md both fields, memory refresh, DB backup
-  wired, D.2 memory audit). ₪700 monthly cap is **confirmed** (Ishay,
-  verbatim 2026-09-04) — no longer open.
+- **Items 1–3 and waste-(ב) are DONE** (approved 2026-09-04, shipped this
+  session). Not open. The success criterion Ishay gave leans on
+  **location** ("near me / next door"), which is the real gap — no
+  coordinates, no home/work, 77% of merchants with no address. If benefits
+  become a priority again, closing branch-address coverage + a location
+  source is the highest-leverage work; see `docs/BENEFITS.md`.
+- **One small open question I asked Ishay:** whether frozen (קפואים)
+  should join the *cross-chain* bulk-hoard list. It's already covered at
+  the contextual hand-off level; I lean against the cross-chain add
+  (freezer space is finite, unlike a diaper closet). Awaiting his call.
+- **Isolated `gdrive-grocery:` rclone remote** — Ishay deferred it
+  ("בהזדמנות אחרת"). The DB is backed up meanwhile via the shared
+  `gdrive:`; the isolated token is a nicety, not a risk.
 - **behatsdaa live data still needs a login, but the route narrowed:**
   the block is TLS-fingerprint, `curl` passes it, and reading the API
   needs only a fresh 30-minute JWT (§3). Not worth doing until live data
@@ -340,18 +362,29 @@ the same result whether or not the thing is true is not evidence.**
      הר"י appear in no budget file.
   2. **`holder`** — הר"י and לאומי בונוס are Liran's; you cannot redeem
      them. A benefit with no holder field is reported to the wrong
-     person.
-  3. **A success criterion** — what makes this worth having at all.
+     person. (Ishay 2026-09-04: shared household purse — "מה ששלי שלה",
+     everything goes to the joint household — so `holder` is about *who
+     can physically redeem*, not whose money it is.)
 
-  Full status (login, catalog, Drive backup, what Miri can already read)
-  is in `docs/BENEFITS.md`, not duplicated here.
+  The success criterion is now settled (Ishay 2026-09-04): know in real
+  time, at a moment of intent (a place/category/store), where a discount
+  applies here or next door — relevant-only, with periodic
+  capture-vs-leftover reflection to optimise loadable cards; failure is
+  symmetric (missed discount **or** spam). The binding gap is location,
+  not catalogue. Full status (login, catalog, Drive backup, what Miri can
+  already read) is in `docs/BENEFITS.md`, not duplicated here.
 - **Which Victory branch do they actually shop at?** Prices are per
   branch; Ramat Gan (קניון איילון, id 2447) is pinned as a guess and
   there are four Tel Aviv stores.
 - **What TivCoins balance does the app show?** To reconcile against the
   computed 3% accrual.
-- **Waste reporting** — design agreed (free text anytime; one targeted
-  question at the end of a hand-off; never a checklist), not yet built.
+- **Waste reporting — layer (א) free text + layer (ב) one targeted
+  question are BUILT** (`waste.py`, wired into the cart hand-off in
+  `telegram_bot.py`; `TargetedQuestion` test). What's still open is only
+  live tuning: the picker falls back to most-frequently-bought because
+  this household's stock table sorts everything into dry departments, so
+  no item reads as perishable — the first real reports will show whether
+  the fallback asks about the right things.
 
 ## 6. Things that will bite a new session
 
