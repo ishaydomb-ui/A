@@ -42,19 +42,26 @@ extraction, no DOM parsing. (The page also carries Yoast's own sitewide
 whose `sameAs`/`logo` describe the **site itself**, not the cart; don't
 confuse the two when reading raw JSON-LD by hand.)
 
-**Fields actually populated — measured, not assumed.** Ishay's field
-list (name, legalName, description, address, geo, openingHours,
-contactPoint, hasMap, sameAs, logo, photo) is what the schema *permits*,
-not what every listing fills in. Checked across an initial diverse
-sample before committing to the full harvest: `name`, `legalName`,
-`description`, `address.address`/`lat`/`lng`, `geo.latitude/longitude`
-and `hasMap` were consistently present; `openingHours`,
-`contactPoint.telephone`, `sameAs`, `logo` and `photo` were consistently
-**empty** on every LocalBusiness node checked. The harvester extracts
-all of them generically (so a fuller listing, now or added later, is
-captured automatically) but don't expect hours/phone/socials/photos to
-be populated for most carts today — see the freshness/coverage numbers
-below once the full harvest lands.
+**Fields actually populated — measured on the full harvest (405/405
+carts), not the small sample that first suggested otherwise.** An
+initial 4-cart sample found `openingHours`/`contactPoint.telephone`/
+`sameAs`/`logo`/`photo` all empty, which would have been a wrong claim
+to ship: the real, full-catalog numbers are
+
+| Field | Populated |
+|---|---|
+| `address_text` / `lat`,`lng` | 396/405 (97.8%) |
+| `opening_hours` | 257/405 (63.5%) |
+| `phone` | 263/405 (64.9%) |
+| `same_as` | 260/405 (64.2%) |
+| `logo` | 262/405 (64.7%) |
+| `photos` | 272/405 (67.2%) |
+
+So roughly two-thirds of carts *do* carry hours/phone/socials/photos —
+the small initial sample happened to land on the sparser third. This is
+exactly the lesson the project's own evidence rule exists for: "checked
+on 4 of 405" is not "checked," and the fix here was catching it before
+writing it into a household-facing doc, not after.
 
 **A real bug this surfaced, worth remembering for the next harvester
 touching third-party JSON-LD:** one cart's `logo` field was a **list**,
@@ -95,6 +102,18 @@ ways before settling on the one that partially works:**
    endpoint (a private per-request "fingerprint" cache keyed to filter
    state) was judged disproportionate effort for a filtering nicety, not
    the core ask.
+
+**Confirmed at full-catalog scale, not just the one Jerusalem sample:**
+several unrelated large terms — `type/coffee-cart`, `type/stationary` and
+all three `diners/*` capacity brackets — each cap at **exactly 149**
+carts, independently. That is not a coincidence of real membership; it's
+strong evidence of a shared server-side batch size for the initial
+render, the same ceiling the Jerusalem sample hit. **Rule of thumb:** a
+term landing at some number well under ~149 (e.g. `road/40` at 41,
+`road/4` at 66) is probably its true, complete count; a term landing at
+or near 149 is almost certainly truncated. `region` covers 390 of 405
+carts across its 43 terms combined — good overall reach — but any single
+popular region can still be undercounted the same way.
 
 So `terms.json`'s per-term `carts` lists are **a floor, not a claim of
 completeness** — every `coffee-by-term` result says so explicitly
@@ -150,9 +169,10 @@ read themselves.
 unparseable** — the same "absence ≠ negative answer" principle as the
 benefits seam's L3 fix (`docs/benefits_seam_ground_truth_round3.md`):
 conflating "we don't have hours for this cart" with "it's closed" is a
-silent-wrong, not a small imprecision. Given how rarely `opening_hours`
-is populated today (see above), most carts will answer "don't know," not
-"closed" — that is the honest answer given the data, not a bug.
+silent-wrong, not a small imprecision. With `opening_hours` populated on
+63.5% of carts (see above), roughly a third of `--open-now` filtering
+will legitimately answer "don't know" rather than yes/no — that is the
+honest answer given the data, not a bug.
 
 ## What this is not
 
@@ -166,8 +186,23 @@ directory changed.
 
 ## Status
 
-Harvested 2026-09-05. Run `coffee-catalog --json | python3 -c
-"import json,sys; print(len(json.load(sys.stdin)))"` for the current
-cart count, or `coffee-terms` for taxonomy coverage — this file states
-facts about *how* the data was built, not a point-in-time count that
-will drift the moment the next monthly refresh runs.
+**First full harvest completed 2026-09-05: 405/405 carts, all 5
+taxonomies (region 43 · road 25 · foodtype 8 · type 4 · diners 3 —
+matching Ishay's counts exactly).** One cart and one region archive
+timed out on the first pass; both were picked up cleanly by a second,
+resumable run costing only those two requests, not a re-harvest.
+`date_modified` ranges from 2025-02-04 to 2026-09-05 — the newest value
+(`asherke`) matches the sitemap file's own top-level `<lastmod>` exactly,
+which suggests the site's sitemap regenerates that stamp on some entries
+whenever *anything* in the sitemap changes, not only on that specific
+cart's own edit. Treat a `date_modified` this close to a harvest run's
+own date with mild suspicion; most rows carry an earlier, presumably
+genuine per-cart edit date.
+
+This section will drift the moment the next monthly refresh runs — for
+a live count, `coffee-catalog --json | python3 -c "import json,sys;
+print(len(json.load(sys.stdin)))"`, or `coffee-terms` for taxonomy
+coverage. Everything else in this file (access facts, field-population
+percentages, the taxonomy-truncation finding) is a durable finding about
+*how the site behaves*, not a point-in-time snapshot, and should still
+hold on the next refresh unless the site itself changes.

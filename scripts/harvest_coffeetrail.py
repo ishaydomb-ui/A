@@ -17,13 +17,15 @@ skipped). No blind crawling needed.
 
 **Per-cart data:** each page carries exactly one
 `<script type="application/ld+json">…</script>` block with
-`"@type": "LocalBusiness"` — parse that, not the HTML. **Measured
-2026-09-05 across a diverse initial sample: `openingHours`, `sameAs`,
-`logo`, `photo` and a real `contactPoint.telephone` were consistently
-EMPTY on every LocalBusiness node checked** — Ishay's field list names
-what the schema *can* carry, not what every cart actually populates.
-Extracted anyway, generically, in case a future or already-fuller
-listing has them; do not assume presence.
+`"@type": "LocalBusiness"` — parse that, not the HTML. **Field
+population, measured on the full 405-cart harvest (2026-09-05), not a
+small sample that first looked emptier than it is:** `address_text`/
+`lat`/`lng` on 97.8%; `opening_hours`, `phone`, `same_as`, `logo` and
+`photos` each on roughly two-thirds (63.5%–67.2%) — see
+`docs/COFFEETRAIL.md` for the exact table. A 4-cart spot check taken
+before running the full harvest suggested these were "consistently
+empty," which would have been wrong to ship — don't trust a claim like
+that from a handful of samples again.
 
 `dateModified` isn't on the LocalBusiness node itself, but the same
 page's Yoast `@graph` carries a `WebPage` node with one (confirmed
@@ -42,7 +44,12 @@ work — crawling every term archive page and reading off which
 `/coffeecart/<slug>/` links it lists — is **best-effort, not
 exhaustive**: the Jerusalem region page's own copy says "35 listings"
 while only 29 static links are in the page HTML; the rest load through
-an AJAX "load more" this script does not drive. So `terms.json`'s
+an AJAX "load more" this script does not drive. Confirmed at full scale,
+not just that one page: `type/coffee-cart`, `type/stationary` and all
+three `diners/*` brackets each independently cap at exactly **149** —
+strong evidence of a shared server-side batch size, not real membership.
+A term well under ~149 is probably complete; one at or near it is almost
+certainly truncated. So `terms.json`'s
 membership lists are a **floor**, not a claim of completeness — say so
 to Miri, don't round it up.
 

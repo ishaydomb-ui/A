@@ -234,10 +234,11 @@ household, and don't treat an empty `coffee-by-term` result as "no carts
 there" without checking `coffee-nearby` too.
 
 **`--open-now` answers "we don't know" by returning nothing, not by
-claiming closed.** `opening_hours` is empty on most carts today (measured
-across the initial harvest — see `docs/COFFEETRAIL.md`), so most
-`--open-now` filtering will currently be sparse; that reflects the
-source data, not a bug in the filter.
+claiming closed.** `opening_hours` is populated on 63.5% of the 405
+harvested carts (measured on the full harvest, 2026-09-05 — see
+`docs/COFFEETRAIL.md`), so roughly a third of `--open-now` filtering will
+legitimately answer "don't know"; that reflects the source data, not a
+bug in the filter.
 
 **Structured, not display text, is the entire point.** `lat`/`lng` and
 `opening_hours` are kept as real numbers and a real day/time grammar
