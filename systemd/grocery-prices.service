@@ -19,9 +19,16 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
 ReadWritePaths=%h/grocery-automation/data
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
+# Commented out, matching every other unit in this project: they need a
+# user namespace to sandbox, and this kernel's
+# apparmor_restrict_unprivileged_userns=1 blocks that for non-root user
+# units, so systemd exits 218/CAPABILITIES before the service even
+# starts. Missing this fix here (while the other four units got it) left
+# grocery-prices.service dead since the last reboot with no price
+# refresh running. See HANDOFF.md §"Since the last anchor", 2026-09-05.
+# ProtectKernelTunables=true
+# ProtectKernelModules=true
+# ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
 

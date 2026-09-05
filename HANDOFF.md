@@ -6,7 +6,7 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-04 22:15 (host time, CEST)
+**Last anchored:** 2026-09-05 07:30 (host time, CEST)
 **Conversation id:** `eb6175a8-1890-4712-98a2-cd9a24f82ed2`
 **Session:** https://claude.ai/code/session_01BR6ULKQXHnkwAme1Hk4z9G
 **Branch:** `claude/online-grocery-automation-b7pq4g`
@@ -14,25 +14,74 @@ need to know?*
 D.3 rule, 2026-09-04). This file holds decisions and open items only.
 
 **Since the last anchor (see `git log` for detail):** Ishay approved and
-this session shipped items 1–3 of the benefits/seam plan plus waste-(ב):
-- **Cross-chain price** — `price-compare` (canonical "cheapest" across all
-  chains; `price` re-scoped to Shufersal-shelf so the two never collide).
+this session shipped items 1–3 of the benefits/seam plan, waste-(ב), and
+round-3 capability-testing fixes:
+- **The `%` bug (the most important thing shipped this week).** A literal
+  `%` in a search term ("חלב 3%") is a SQL LIKE wildcard — it was
+  silently matching "חלב 36" (a chocolate) for a milk query, for
+  **months, with no error**, because the bug returns *more* rows, never a
+  crash. This is *why* multi-round adversarial testing was worth doing at
+  all: a normal test asks "does the right answer come back", not "does a
+  wrong one come back dressed as right." Escaped now across all four LIKE
+  paths (`_like_contains` + `ESCAPE '\'`, `storage.py`). See §4c.
+- **Case + apostrophe/geresh normalization** — folded before matching, so
+  "Terminal X" vs "terminal x" or `קוטג'`/`קוטג׳`/`קוטג` no longer read
+  as "doesn't exist" (a form-miss silently blocking ask-when-unsure).
+- **Cross-chain price** — `price-compare` is now the canonical "cheapest
+  across every chain" path; `price` re-scoped to Shufersal-shelf only, so
+  the two commands can never give different answers to the same
+  question. (`price-compare` is CLI-only, for Miri's subprocess calls —
+  never printed in a Telegram message for a human to type.)
+- **Merchant disambiguation** — `benefits-remember` term→merchant memory,
+  reusing the existing `remember_choice`; `benefits-catalog` resolves to
+  it and narrows to the remembered merchant next time.
 - **Waste layer (ב)** — one targeted question at the cart hand-off end
   (`waste.pick_targeted`), buttons record a fraction; layer (א) free-text
   already existed.
-- **Merchant disambiguation** — `benefits-remember` term→merchant memory,
-  reusing `remember_choice`; `benefits-catalog` resolves to it.
-- **Normalization** — case + apostrophe/geresh folded before matching, so
-  a form-miss no longer reads as "doesn't exist."
-- **The `%` bug (most important)** — a literal `%` in a query ("חלב 3%")
-  was a SQL LIKE wildcard, silently matching "חלב 36" (chocolate) for
-  months. Escaped now across all four LIKE paths. See §4c.
+- **Unharvested-club declaration** — a query for a club the household is
+  in but never harvested (e.g. "כאל") now says so explicitly, instead of
+  running the substring search and returning unrelated name-collision
+  rows (מי**כאל** matched "כאל") that looked like a real, if thin,
+  answer. "Not collected" and "no such benefit" are different facts.
+- **Command-menu regression armor** (`tests/test_command_menu.py`) —
+  every "/" menu entry and every printed command example is now checked
+  against the real `CommandHandler` registrations, derived from the code
+  rather than hand-copied. Added after a real incident on the sibling
+  project this morning: an instruction was printed, typed exactly as
+  shown, and silently misrouted. This bot's dispatch is structurally
+  safer (Telegram command matching, not free-text intent classification)
+  but that had never actually been verified in a test until now.
 - Decisions recorded: eligibility (6 clubs, `data/benefits/eligibility.yaml`),
   no `holder` (household-level), success criterion, TivCoins 3.2.
+- **Prediction card (round 2, §G — search/matching):** 2 hits, 1
+  self-corrected miss, scored *before* seeing results. Hit: predicted
+  case-sensitivity would break "Terminal X" — confirmed. Hit: predicted
+  cross-chain comparison was absent from the seam — confirmed (then
+  built, see `price-compare` above). Miss: predicted English-language
+  queries would miss generally — too broad; "H&O" is stored in English
+  and matched fine, the real axis is case, not language. Full scorecard:
+  `docs/benefits_seam_ground_truth_round2.md`; round 3 (L2/L3/G4/location):
+  `docs/benefits_seam_ground_truth_round3.md`.
+
+**Found and fixed during this anchor's own §4 checklist** (the step that
+says "a handover that leaves a dead timer behind hands over a silent
+failure" — it caught something real): `grocery-prices.service` was
+`failed (218/CAPABILITIES)` since the 2026-09-04 ~15:05 reboot, missed
+when Ishay's `d8d1132` fix (commenting out
+`ProtectKernelTunables`/`ProtectKernelModules`/`ProtectControlGroups`,
+which this kernel's `apparmor_restrict_unprivileged_userns=1` blocks for
+`--user` units) touched the other four services but not this one. The
+Shufersal price feed had been stale since 2026-09-04 12:17 (~19h) — every
+`/price`, `/deals`, `price-compare` answer in that window was correct
+data, just not as fresh as it claimed. Fixed the same way as its
+siblings, deployed to `~/.config/systemd/user/`, `daemon-reload`, and
+manually re-run to confirm: 5,827 products, fresh 2026-09-05 snapshot.
+Zero failed units now. See §4c.
 
 Earlier this session: MAX + behatsdaa catalogues live to Miri with
 per-club freshness; Tiv Taam memory seeded (292); the userns reboot fix
-(`d8d1132`, Ishay); SQLite backed up off-box; Arthur's audit block done.
+(`d8d1132`, Ishay); Arthur's audit block done. 614 tests pass (was 603
+at the start of the day).
 
 ---
 
@@ -321,6 +370,15 @@ the same result whether or not the thing is true is not evidence.**
   clean load rendered the login form while a reload tripped a full
   challenge page. Worth remembering before adding a "just in case" reload
   anywhere near Incapsula.
+- **A partial fix across sibling systemd units is a fix that reads as
+  "done" until the one skipped unit fails.** `d8d1132` fixed the
+  `apparmor_restrict_unprivileged_userns` / `218/CAPABILITIES` kernel
+  issue on four `--user` services; `grocery-prices.service` — a fifth,
+  equally affected one — wasn't in that commit, and sat `failed` silently
+  for ~19 hours after the next reboot (found 2026-09-05, doing the
+  handover's own §4 checklist). When a fix touches N files matched by a
+  shared cause, grep for every file matching that cause, not just the
+  ones already in front of you.
 - **An unescaped `%` in a product name was a live SQL LIKE wildcard.**
   Searching "חלב 3%" built `LIKE '%חלב 3%%'`, whose trailing `%` matched
   any suffix — so "חלב 36" (a chocolate) came back for a milk query, for
@@ -333,17 +391,38 @@ the same result whether or not the thing is true is not evidence.**
 
 - **Items 1–3 and waste-(ב) are DONE** (approved 2026-09-04, shipped this
   session). Not open. The success criterion Ishay gave leans on
-  **location** ("near me / next door"), which is the real gap — no
-  coordinates, no home/work, 77% of merchants with no address. If benefits
-  become a priority again, closing branch-address coverage + a location
-  source is the highest-leverage work; see `docs/BENEFITS.md`.
+  **location** ("near me / next door"), which is the real, measured gap —
+  no coordinates, no home/work. Measured 2026-09-05: **22.7%** of
+  behatsdaa merchants (222/982) have a street address; **93.3%** (916/982)
+  at least have a city list. So the honest answer to "where's the nearest
+  X" is "here are the cities I know of; I can't rank by distance because
+  I don't have your location" — never "no benefit here." If benefits
+  become a priority again, closing street-address coverage + a location
+  source is the highest-leverage work; see `docs/BENEFITS.md` and
+  `docs/benefits_seam_ground_truth_round3.md`.
 - **One small open question I asked Ishay:** whether frozen (קפואים)
   should join the *cross-chain* bulk-hoard list. It's already covered at
   the contextual hand-off level; I lean against the cross-chain add
   (freezer space is finite, unlike a diaper closet). Awaiting his call.
-- **Isolated `gdrive-grocery:` rclone remote** — Ishay deferred it
-  ("בהזדמנות אחרת"). The DB is backed up meanwhile via the shared
-  `gdrive:`; the isolated token is a nicety, not a risk.
+- **The SQLite DB is the household's only copy of `price_history`
+  (~23k+ daily rows, irreplaceable — cannot be re-derived from anywhere
+  else) and it is gitignored, so GitHub's backup does not cover it.** The
+  real protection is `scripts/auto_push.sh`'s `backup_db()`, which
+  `rclone copy`s the DB to Drive on every 30-minute run, before the git
+  push — confirmed present and wired into `grocery-backup.timer`, and the
+  heartbeat (`data/backup_heartbeat.json`) shows it ran this morning
+  (`2026-09-05T05:00:25Z`). **Not yet verified: that the Drive copy
+  actually restores** — a live `rclone lsf` check from this session
+  timed out inconclusively rather than confirming a listing. "Not
+  verified" is not "verified failing" — but per §4's own handover rule
+  ("verify it rather than assume it"), treat the backup as *running*, not
+  yet as *proven restorable*, until someone actually pulls a copy down
+  and opens it. Separately, and lower
+  stakes: an **isolated `gdrive-grocery:` rclone remote** (its own OAuth
+  token, so this project doesn't share the household's general Drive
+  token) is still deferred by Ishay ("בהזדמנות אחרת") — the shared
+  `gdrive:` remote is what's actually in use today, and that's the
+  mechanism above, not a gap by itself.
 - **behatsdaa live data still needs a login, but the route narrowed:**
   the block is TLS-fingerprint, `curl` passes it, and reading the API
   needs only a fresh 30-minute JWT (§3). Not worth doing until live data
