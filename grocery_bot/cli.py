@@ -29,6 +29,14 @@ Run with: python -m grocery_bot.cli <command>
     benefits-remember "<term>" "<merchant>"  resolve a term to one merchant
     benefits-branches [query] [--json]  street addresses for those stores
                           (partial — the branch crawl is incremental)
+    coffee-catalog [query] [--json]  harvested coffee-cart directory
+                          (coffeetrail.co.il — name/description/address)
+    coffee-nearby <lat> <lng> [--radius KM] [--open-now] [--json]
+                          nearest carts to a point, "עגלת קפה קרובה"
+    coffee-terms [taxonomy] [--json]  region/road/foodtype/type/diners
+                          slugs, so a query term can be mapped to one
+    coffee-by-term <taxonomy> <slug> [--json]  carts under one term
+                          (best-effort — see coffeetrail_catalog.py)
 
 `refresh-prices` is the one meant for a scheduler — the feed publishes a
 new full snapshot a few times a day, and a stale catalog quietly gives
@@ -37,7 +45,8 @@ wrong prices rather than failing loudly.
 **What the household's other bot (מירי) can call.** Everything in
 `_DB_ONLY_COMMANDS` needs nothing but `GROCERY_BOT_DB_PATH`: add-item,
 remove-item, list-items, price, deals, recipe, recipe-text, meal-plan,
-nudge, confirm-card, benefits-catalog, benefits-branches, price-compare.
+nudge, confirm-card, benefits-catalog, benefits-branches, price-compare,
+coffee-catalog, coffee-nearby, coffee-terms, coffee-by-term.
 No Telegram token, no store session, no exit node — that project has no use for this
 one's secrets. `add-to-cart` is the exception and is listed separately in
 `_STORE_COMMANDS`: it reaches the real carts, so it needs the store
@@ -739,6 +748,132 @@ def _confirm_card(storage: Storage, args: list[str]) -> int:
     return 0
 
 
+def _coffee_catalog(storage: Storage, args: list[str]) -> int:
+    """The harvested coffee-cart directory — see coffeetrail_catalog.py.
+
+    `storage` is accepted and ignored to keep one dispatch shape; this
+    reads flat JSON under data/coffeetrail/ (gitignored — a large
+    regenerable external corpus, not household data), never the sqlite
+    database.
+    """
+    import json
+
+    from .coffeetrail_catalog import format_catalog_rows, load_catalog, search_catalog
+
+    as_json = "--json" in args
+    query = " ".join(a for a in args if not a.startswith("--")).strip()
+    rows = search_catalog(query) if query else load_catalog()
+
+    if as_json:
+        print(json.dumps(rows, ensure_ascii=False))
+    else:
+        print(format_catalog_rows(rows, query))
+    return 0 if rows else 1
+
+
+def _coffee_nearby(storage: Storage, args: list[str]) -> int:
+    """Carts near a point, nearest first — the "עגלת קפה קרובה" answer.
+
+    Usage: coffee-nearby <lat> <lng> [--radius KM] [--open-now] [--json]
+    Default radius is 15km; pass --radius 0 for "no limit, just rank".
+    """
+    import json
+
+    from .coffeetrail_catalog import format_catalog_rows, nearby, open_now
+
+    radius = 15.0
+    filtered = list(args)
+    if "--radius" in filtered:
+        idx = filtered.index("--radius")
+        if idx + 1 >= len(filtered):
+            print("usage: coffee-nearby <lat> <lng> [--radius KM] [--open-now] [--json]")
+            return 2
+        try:
+            radius = float(filtered[idx + 1])
+        except ValueError:
+            print("--radius must be a number")
+            return 2
+        del filtered[idx:idx + 2]  # drop the flag and its value together
+
+    positional = [a for a in filtered if not a.startswith("--")]
+    if len(positional) != 2:
+        print("usage: coffee-nearby <lat> <lng> [--radius KM] [--open-now] [--json]")
+        return 2
+    try:
+        lat, lng = float(positional[0]), float(positional[1])
+    except ValueError:
+        print("lat/lng must be numbers")
+        return 2
+    rows = nearby(lat, lng, radius_km=radius if radius > 0 else None)
+    if "--open-now" in args:
+        rows = [r for r in rows if open_now(r) is True]
+
+    if "--json" in args:
+        print(json.dumps(rows, ensure_ascii=False))
+    else:
+        print(format_catalog_rows(rows))
+    return 0 if rows else 1
+
+
+def _coffee_terms(storage: Storage, args: list[str]) -> int:
+    """List taxonomy slugs (region/road/foodtype/type/diners), or one
+    taxonomy's terms with --json. Miri needs this to map free text
+    ("הרי ירושלים") to the slug this seam actually indexes by.
+
+    Usage: coffee-terms [taxonomy] [--json]
+    """
+    import json
+
+    from .coffeetrail_catalog import load_terms
+
+    terms = load_terms()
+    positional = [a for a in args if not a.startswith("--")]
+    if positional:
+        taxonomy = positional[0]
+        entries = terms.get(taxonomy)
+        if entries is None:
+            print(f"unknown taxonomy: {taxonomy} (have: {', '.join(sorted(terms)) or 'none harvested'})")
+            return 1
+        if "--json" in args:
+            print(json.dumps(entries, ensure_ascii=False))
+        else:
+            for slug, entry in sorted(entries.items()):
+                print(f"{slug}: {entry.get('name', slug)} ({len(entry.get('carts', []))} carts, best-effort)")
+        return 0 if entries else 1
+
+    if "--json" in args:
+        print(json.dumps(sorted(terms), ensure_ascii=False))
+    else:
+        print(", ".join(sorted(terms)) if terms else "no taxonomies harvested yet")
+    return 0 if terms else 1
+
+
+def _coffee_by_term(storage: Storage, args: list[str]) -> int:
+    """Carts under one taxonomy term — the "עגלות באזור X" / "עגלה על
+    מסלול Y" answer. Best-effort membership; see coffeetrail_catalog.py.
+
+    Usage: coffee-by-term <taxonomy> <slug> [--json]
+    """
+    import json
+
+    from .coffeetrail_catalog import format_catalog_rows, search_by_term
+
+    positional = [a for a in args if not a.startswith("--")]
+    if len(positional) != 2:
+        print("usage: coffee-by-term <taxonomy> <slug> [--json]")
+        return 2
+    taxonomy, slug = positional
+    rows = search_by_term(taxonomy, slug)
+
+    if "--json" in args:
+        print(json.dumps(rows, ensure_ascii=False))
+    else:
+        print(format_catalog_rows(rows))
+        if rows:
+            print("_(רשימה חלקית — הזחילה תופסת רק את העמוד הראשון של הארכיון)_")
+    return 0 if rows else 1
+
+
 _DB_ONLY_COMMANDS = {
     "add-item": lambda storage, args: _add_item(storage, args),
     "remove-item": _remove_item,
@@ -769,6 +904,12 @@ _DB_ONLY_COMMANDS = {
     "benefits-catalog": _benefits_catalog,
     "benefits-branches": _benefits_branches,
     "benefits-remember": _benefits_remember,
+    # Reads flat JSON under data/coffeetrail/ (gitignored, external
+    # public data), not the sqlite database. No token, no store session.
+    "coffee-catalog": _coffee_catalog,
+    "coffee-nearby": _coffee_nearby,
+    "coffee-terms": _coffee_terms,
+    "coffee-by-term": _coffee_by_term,
 }
 
 # Needs the store session and the Israeli exit, so it cannot live on the

@@ -211,6 +211,40 @@ as-of note for the club shown, and `benefits-catalog --freshness`
 (add `--json` for a map) returns the status per club — use it when you
 need to state how current a number is, e.g. answering another bot.
 
+### Coffee cart directory — new 2026-09-05, not yet wired on Miri's side
+
+| Command | Notes |
+|---|---|
+| `coffee-catalog [query] [--json]` | Substring search on a harvested coffee cart's name/description/address |
+| `coffee-nearby <lat> <lng> [--radius KM] [--open-now] [--json]` | Nearest carts to a point, "עגלת קפה קרובה" |
+| `coffee-terms [taxonomy] [--json]` | region/road/foodtype/type/diners slugs, to map free text to one |
+| `coffee-by-term <taxonomy> <slug> [--json]` | Carts under one term — **best-effort, not exhaustive**, see below |
+
+Same seam model as the benefits catalog: no login, no account, public
+data harvested monthly by `scripts/harvest_coffeetrail.py` into
+`data/coffeetrail/` (gitignored — a large external corpus, not
+household data). Full detail: `docs/COFFEETRAIL.md`.
+
+**⚠️ `coffee-by-term` is a floor, not a claim of completeness.** The
+site paginates a term's full listing via AJAX this project does not
+drive; the harvested membership is only the first server-rendered batch
+(measured: 29 of a claimed 35 for one region). Every result already
+says "רשימה חלקית" — don't strip that caveat when relaying to the
+household, and don't treat an empty `coffee-by-term` result as "no carts
+there" without checking `coffee-nearby` too.
+
+**`--open-now` answers "we don't know" by returning nothing, not by
+claiming closed.** `opening_hours` is empty on most carts today (measured
+across the initial harvest — see `docs/COFFEETRAIL.md`), so most
+`--open-now` filtering will currently be sparse; that reflects the
+source data, not a bug in the filter.
+
+**Structured, not display text, is the entire point.** `lat`/`lng` and
+`opening_hours` are kept as real numbers and a real day/time grammar
+specifically so `coffee-nearby` and `--open-now` are computable — a
+scraped address string could only ever be shown back to the household,
+never ranked or filtered.
+
 ### What the benefits seam can and cannot answer (verified 2026-09-04)
 
 For capability tests (Arthur's Domain 2). **Only two verbs exist today**,

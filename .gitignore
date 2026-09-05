@@ -25,3 +25,9 @@ data/backup_doctor_state.json
 # never brought here at all (a hard rule); this ignore is the second line
 # of defence, not the first.
 data/benefits/
+
+# Coffeetrail harvest (public coffee-cart directory data). Not private —
+# kept out of git purely because it's a large, regenerable external
+# corpus: a monthly re-harvest would otherwise churn hundreds of lines on
+# every push. Re-run scripts/harvest_coffeetrail.py to reproduce it.
+data/coffeetrail/
