@@ -6,82 +6,68 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-05 07:30 (host time, CEST)
+**Last anchored:** 2026-09-05 23:19 (host time, CEST)
 **Conversation id:** `eb6175a8-1890-4712-98a2-cd9a24f82ed2`
 **Session:** https://claude.ai/code/session_01BR6ULKQXHnkwAme1Hk4z9G
 **Branch:** `claude/online-grocery-automation-b7pq4g`
 **Status is in `git log`, not hand-typed here** (per the cross-project
 D.3 rule, 2026-09-04). This file holds decisions and open items only.
 
-**Since the last anchor (see `git log` for detail):** Ishay approved and
-this session shipped items 1–3 of the benefits/seam plan, waste-(ב), and
-round-3 capability-testing fixes:
-- **The `%` bug (the most important thing shipped this week).** A literal
-  `%` in a search term ("חלב 3%") is a SQL LIKE wildcard — it was
-  silently matching "חלב 36" (a chocolate) for a milk query, for
-  **months, with no error**, because the bug returns *more* rows, never a
-  crash. This is *why* multi-round adversarial testing was worth doing at
-  all: a normal test asks "does the right answer come back", not "does a
-  wrong one come back dressed as right." Escaped now across all four LIKE
-  paths (`_like_contains` + `ESCAPE '\'`, `storage.py`). See §4c.
-- **Case + apostrophe/geresh normalization** — folded before matching, so
-  "Terminal X" vs "terminal x" or `קוטג'`/`קוטג׳`/`קוטג` no longer read
-  as "doesn't exist" (a form-miss silently blocking ask-when-unsure).
-- **Cross-chain price** — `price-compare` is now the canonical "cheapest
-  across every chain" path; `price` re-scoped to Shufersal-shelf only, so
-  the two commands can never give different answers to the same
-  question. (`price-compare` is CLI-only, for Miri's subprocess calls —
-  never printed in a Telegram message for a human to type.)
-- **Merchant disambiguation** — `benefits-remember` term→merchant memory,
-  reusing the existing `remember_choice`; `benefits-catalog` resolves to
-  it and narrows to the remembered merchant next time.
-- **Waste layer (ב)** — one targeted question at the cart hand-off end
-  (`waste.pick_targeted`), buttons record a fraction; layer (א) free-text
-  already existed.
-- **Unharvested-club declaration** — a query for a club the household is
-  in but never harvested (e.g. "כאל") now says so explicitly, instead of
-  running the substring search and returning unrelated name-collision
-  rows (מי**כאל** matched "כאל") that looked like a real, if thin,
-  answer. "Not collected" and "no such benefit" are different facts.
-- **Command-menu regression armor** (`tests/test_command_menu.py`) —
-  every "/" menu entry and every printed command example is now checked
-  against the real `CommandHandler` registrations, derived from the code
-  rather than hand-copied. Added after a real incident on the sibling
-  project this morning: an instruction was printed, typed exactly as
-  shown, and silently misrouted. This bot's dispatch is structurally
-  safer (Telegram command matching, not free-text intent classification)
-  but that had never actually been verified in a test until now.
-- Decisions recorded: eligibility (6 clubs, `data/benefits/eligibility.yaml`),
-  no `holder` (household-level), success criterion, TivCoins 3.2.
-- **Prediction card (round 2, §G — search/matching):** 2 hits, 1
-  self-corrected miss, scored *before* seeing results. Hit: predicted
-  case-sensitivity would break "Terminal X" — confirmed. Hit: predicted
-  cross-chain comparison was absent from the seam — confirmed (then
-  built, see `price-compare` above). Miss: predicted English-language
-  queries would miss generally — too broad; "H&O" is stored in English
-  and matched fine, the real axis is case, not language. Full scorecard:
-  `docs/benefits_seam_ground_truth_round2.md`; round 3 (L2/L3/G4/location):
-  `docs/benefits_seam_ground_truth_round3.md`.
+**Since the last anchor (`c919da2`):** a new harvest domain, cross-project
+design feedback, and a real production bug found and fixed from journalctl
+evidence:
 
-**Found and fixed during this anchor's own §4 checklist** (the step that
-says "a handover that leaves a dead timer behind hands over a silent
-failure" — it caught something real): `grocery-prices.service` was
-`failed (218/CAPABILITIES)` since the 2026-09-04 ~15:05 reboot, missed
-when Ishay's `d8d1132` fix (commenting out
-`ProtectKernelTunables`/`ProtectKernelModules`/`ProtectControlGroups`,
-which this kernel's `apparmor_restrict_unprivileged_userns=1` blocks for
-`--user` units) touched the other four services but not this one. The
-Shufersal price feed had been stale since 2026-09-04 12:17 (~19h) — every
-`/price`, `/deals`, `price-compare` answer in that window was correct
-data, just not as fresh as it claimed. Fixed the same way as its
-siblings, deployed to `~/.config/systemd/user/`, `daemon-reload`, and
-manually re-run to confirm: 5,827 products, fresh 2026-09-05 snapshot.
-Zero failed units now. See §4c.
+- **New: coffeetrail.co.il coffee-cart directory, requested by Ishay.**
+  Same seam pattern as benefits — public data, no login. Harvested all
+  **405/405 carts** and all 5 taxonomies (region 43 · road 25 · foodtype
+  8 · type 4 · diners 3 — matching Ishay's counts exactly) via
+  `scripts/harvest_coffeetrail.py`. New CLI: `coffee-catalog`,
+  `coffee-nearby` (real haversine), `coffee-terms`, `coffee-by-term` —
+  not yet wired on Miri's side. Full detail, including two things caught
+  before they became wrong claims: a 4-cart sample first suggested hours/
+  phone/socials were "always empty" (full harvest: actually ~64-67%
+  populated), and a live run crashed 30 records in on a JSON-LD field
+  (`logo`) that was a list instead of a string on one cart — fixed
+  generically, made per-cart parsing non-fatal. `docs/COFFEETRAIL.md`.
+  Taxonomy membership is **best-effort, not exhaustive** — the site
+  paginates large terms via AJAX this harvester doesn't drive; three
+  unrelated terms independently capping at exactly 149 carts confirms a
+  shared batch-size ceiling, not real membership.
+- **Cross-project design feedback for Nigel's canonical-source-
+  architecture draft.** Answered his §5: the grocery canonical source is
+  the CLI seam itself over three data sources (sqlite/benefits/
+  coffeetrail), each already carrying a working freshness stamp. Flagged
+  "אוכל"/"סופר" as a three-way homonym (his ₪ spending category / my
+  product catalog / my own dining-benefit category) better resolved by
+  routing on question shape than by word ownership. One concrete overlap
+  (the ₪700/month benefit-card load possibly double-counting in his bank
+  feed) raised and **closed same day** — Nigel checked with evidence (280
+  load rows, all excluded from spend) and confirmed no double-count; this
+  project has no bank/charge visibility to check on its own side anyway.
+  `docs/CANONICAL_SOURCE_FEEDBACK.md`.
+- **A real, verified production bug: the SQLite→Drive backup has
+  probably never once succeeded via the timer.** Arthur (usage-audit)
+  flagged 44 straight `grocery-backup` failures today from journalctl;
+  verified independently (per the cross-session evidence rule, not taken
+  on his word) by reproducing under the exact systemd sandbox with
+  `systemd-run`: `rclone: command not found`, exit 127 — systemd
+  `--user`'s default PATH omits `~/bin`, where `rclone` actually lives.
+  Only interactive-shell checks (which have `~/bin` on PATH) ever looked
+  healthy. Fixed: `scripts/auto_push.sh` calls the full path and no
+  longer swallows rclone's real stderr; added `db_backup_failing_since`
+  to the heartbeat and a `db_backup_failing` watchdog check (2h
+  threshold) — the heartbeat previously tracked only whether the *script*
+  ran, never whether the backup *inside* it succeeded, so a future
+  regression would have gone silent the same way. Verified against the
+  live unit: `db backed up to gdrive:`. Also checked and closed two more
+  of Arthur's flags the same pass: an 18:17 price-feed DNS blip (isolated,
+  no recurrence, manually re-run) and a 13:18 Telegram `httpx.ReadError`
+  (a single self-healed network hiccup inside python-telegram-bot's own
+  retry loop — bot has run continuously since 2026-09-04 22:00, no
+  restart needed). Could not confirm the "400 Client Error" Arthur
+  mentioned alongside the third one — not found in this service's log.
 
-Earlier this session: MAX + behatsdaa catalogues live to Miri with
-per-club freshness; Tiv Taam memory seeded (292); the userns reboot fix
-(`d8d1132`, Ishay); Arthur's audit block done. 614 tests pass (was 603
-at the start of the day).
+646 tests pass (was 614 at the last anchor). Zero failed systemd units.
 
 ---
 
@@ -352,6 +338,18 @@ the same result whether or not the thing is true is not evidence.**
   new code — a 30-minute-old process satisfied it, and a change was
   reported live while never being served. Use `scripts/restart_bot.sh`,
   which compares the main PID either side and fails if it did not change.
+- **A heartbeat file proved the *script* ran, not that the step inside it
+  *succeeded*.** `auto_push.sh`'s DB-backup heartbeat only ever recorded
+  "the script executed," so `rclone` silently resolving to nothing under
+  systemd `--user`'s PATH (it lives in `~/bin`, off that PATH) looked
+  identical to a healthy backup for as long as anyone checked — the real
+  error was also swallowed by `>/dev/null 2>&1`, so even reading the
+  journal showed nothing. Caught 2026-09-05 by Arthur from raw journalctl
+  counts, not from any check this project had in place. Fixed with a
+  full path and a heartbeat field for the *inner* step's own outcome
+  (`db_backup_failing_since`), not just the outer script's. The general
+  form: a liveness check on a wrapper proves the wrapper ran, never that
+  the thing it wraps did what it was supposed to.
 - A rendered Telegram link proved it looked tappable, not that tapping it
   did anything: a `t.me` deep link opened from inside the bot's own chat
   arrives as a bare `/start` with the payload stripped. The cross-chain
@@ -405,24 +403,26 @@ the same result whether or not the thing is true is not evidence.**
   the contextual hand-off level; I lean against the cross-chain add
   (freezer space is finite, unlike a diaper closet). Awaiting his call.
 - **The SQLite DB is the household's only copy of `price_history`
-  (~23k+ daily rows, irreplaceable — cannot be re-derived from anywhere
-  else) and it is gitignored, so GitHub's backup does not cover it.** The
-  real protection is `scripts/auto_push.sh`'s `backup_db()`, which
-  `rclone copy`s the DB to Drive on every 30-minute run, before the git
-  push — confirmed present and wired into `grocery-backup.timer`, and the
-  heartbeat (`data/backup_heartbeat.json`) shows it ran this morning
-  (`2026-09-05T05:00:25Z`). **Not yet verified: that the Drive copy
-  actually restores** — a live `rclone lsf` check from this session
-  timed out inconclusively rather than confirming a listing. "Not
-  verified" is not "verified failing" — but per §4's own handover rule
-  ("verify it rather than assume it"), treat the backup as *running*, not
-  yet as *proven restorable*, until someone actually pulls a copy down
-  and opens it. Separately, and lower
-  stakes: an **isolated `gdrive-grocery:` rclone remote** (its own OAuth
-  token, so this project doesn't share the household's general Drive
-  token) is still deferred by Ishay ("בהזדמנות אחרת") — the shared
-  `gdrive:` remote is what's actually in use today, and that's the
-  mechanism above, not a gap by itself.
+  (~23k+ daily rows, irreplaceable) and it is gitignored, so GitHub's
+  backup does not cover it — the earlier note here that this was
+  "confirmed present and running" was wrong, corrected 2026-09-05.**
+  Arthur (usage-audit) caught it from journalctl: 44 straight failures
+  that day, zero successes. Root cause, reproduced under the real
+  systemd sandbox: `rclone` lives at `~/bin/rclone`, and systemd
+  `--user`'s default PATH doesn't include `~/bin` — the backup had
+  likely **never once succeeded via the timer**, only interactive-shell
+  checks (which do have `~/bin` on PATH) looked healthy. This is exactly
+  the earlier mistake: "the heartbeat shows it ran" conflated *the
+  script ran* with *the backup inside it succeeded* — two different
+  facts the heartbeat never actually distinguished. **Fixed and verified
+  against the live unit** (full path, real stderr no longer swallowed,
+  `db_backup_failing_since` + a watchdog check added so a future
+  regression can't go silent the same way). **Still not independently
+  verified: that the Drive copy actually restores** — only that the
+  upload itself now succeeds. Separately, lower stakes: an **isolated
+  `gdrive-grocery:` rclone remote** is still deferred by Ishay
+  ("בהזדמנות אחרת") — the shared `gdrive:` remote is what's in use, and
+  now genuinely working.
 - **behatsdaa live data still needs a login, but the route narrowed:**
   the block is TLS-fingerprint, `curl` passes it, and reading the API
   needs only a fresh 30-minute JWT (§3). Not worth doing until live data
@@ -464,6 +464,12 @@ the same result whether or not the thing is true is not evidence.**
   this household's stock table sorts everything into dry departments, so
   no item reads as perishable — the first real reports will show whether
   the fallback asks about the right things.
+- **Coffee-cart directory (coffeetrail.co.il) is harvested and the seam
+  is built, but not yet wired on Miri's side** — same state benefits was
+  in right after its first harvest. `coffee-catalog`/`coffee-nearby`/
+  `coffee-terms`/`coffee-by-term` all work today via the CLI; someone
+  needs to add them to Miri's routing before a household member can
+  actually ask "עגלת קפה קרובה" through her. `docs/COFFEETRAIL.md`.
 
 ## 6. Things that will bite a new session
 
