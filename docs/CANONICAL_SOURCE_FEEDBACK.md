@@ -55,3 +55,16 @@ that transfer as "סופר" spend, it double-counts or miscategorizes** — a
 card *load* is not *consumption*, and Gordon has no visibility into
 whether Nigel's side already excludes it. Worth a direct one-on-one
 check between us rather than resolving it in this doc.
+
+**RESOLVED 2026-09-05 (Nigel, with evidence — not taken on trust, but
+also not independently re-checkable from here: Gordon has no access to
+his bank-feed data, so this closes on his own domain authority).** He
+checked every load-signature row across the full history (`spendParts`
+on "מקס איט/טעינה" lines): **280 load rows, all marked `not-spending`**
+— excluded from the spend total by his own load≠consumption handling
+(BIT/PayBox-not-a-category + behatsdaa decoding). Only actual
+consumption (בהצדעה charges) counts, once, as "סופר ומוצרי בית." One
+exception his net caught (₪343, 2025-03, a real café purchase paid via
+the Max It card) is correctly classified as dining out, not a load. No
+double-count on his side. Nothing on Gordon's side to check in return —
+this project never touches bank/charge data at all.
