@@ -41,11 +41,16 @@ fi
 
 write_heartbeat() {
     mkdir -p data
-    python3 - "$HEARTBEAT" "$(now)" "$dirty_since" "$1" <<'PY'
+    python3 - "$HEARTBEAT" "$(now)" "$dirty_since" "$1" "$db_backup_failing_since" <<'PY'
 import json, sys
-path, last_run, dirty_since, result = sys.argv[1:5]
+path, last_run, dirty_since, result, db_backup_failing_since = sys.argv[1:6]
 json.dump(
-    {"last_run": last_run, "dirty_since": dirty_since or None, "result": result},
+    {
+        "last_run": last_run,
+        "dirty_since": dirty_since or None,
+        "result": result,
+        "db_backup_failing_since": db_backup_failing_since or None,
+    },
     open(path, "w"),
     indent=1,
 )
@@ -61,15 +66,45 @@ PY
 # project alone), and falls back to the shared `gdrive:` otherwise so the
 # data is never left unprotected while that token is being set up. Never
 # fatal: a backup that fails must not stop the git push above.
+#
+# `rclone` is called by full path, not bare — found 2026-09-05 (Arthur,
+# usage-audit, from journalctl): systemd --user's default PATH does not
+# include ~/bin, so the bare command silently resolved to nothing (exit
+# 127, "command not found") on every single timer run, all day, with the
+# real error swallowed by `2>&1 >/dev/null` and reported only as
+# "(non-fatal)" — a backup that never once succeeded, indistinguishable
+# in the log from an occasional hiccup. Two fixes, not one: the path
+# (below), and `db_backup_failing_since` in the heartbeat (mirroring
+# `dirty_since`) so watchdog.py can catch a *sustained* failure even if
+# some future breakage swallows stderr the same way again.
+RCLONE="$HOME/bin/rclone"
+[ -x "$RCLONE" ] || RCLONE="rclone"  # fall back to PATH if the layout changes
+
+db_backup_failing_since=""
+if [ -f "$HEARTBEAT" ]; then
+    db_backup_failing_since=$(python3 -c "
+import json
+try:
+    print(json.load(open('$HEARTBEAT')).get('db_backup_failing_since') or '')
+except Exception:
+    print('')
+" 2>/dev/null || true)
+fi
+
 backup_db() {
     local db="data/grocery_bot.sqlite3"
     [ -f "$db" ] || return 0
     local remote="gdrive:"
-    rclone listremotes 2>/dev/null | grep -qx "gdrive-grocery:" && remote="gdrive-grocery:"
-    if rclone copy "$db" "${remote}גורדון — גיבוי DB/" >/dev/null 2>&1; then
+    "$RCLONE" listremotes 2>/dev/null | grep -qx "gdrive-grocery:" && remote="gdrive-grocery:"
+    local err
+    if err=$("$RCLONE" copy "$db" "${remote}גורדון — גיבוי DB/" 2>&1); then
         echo "db backed up to ${remote}"
+        db_backup_failing_since=""
     else
-        echo "WARN: db backup to ${remote} failed (non-fatal)" >&2
+        [ -z "$db_backup_failing_since" ] && db_backup_failing_since=$(now)
+        # Real error text now reaches the journal — it used to be
+        # discarded, which is exactly why this went unnoticed all day.
+        echo "WARN: db backup to ${remote} failed (non-fatal): ${err}" >&2
     fi
 }
 backup_db || true

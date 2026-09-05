@@ -72,6 +72,41 @@ class PushAndTreeTest(unittest.TestCase):
         )
 
 
+class DbBackupTest(unittest.TestCase):
+    """The heartbeat tracks whether auto_push.sh *ran*, separately from
+    whether the DB backup step *inside* it actually succeeded — found
+    missing entirely on 2026-09-05, when the backup failed on every run
+    for a full day (a PATH bug) with nothing catching it."""
+
+    def _heartbeat_with_failure(self, hours_ago: float) -> dict:
+        hb = _heartbeat(0.1)
+        hb["db_backup_failing_since"] = (NOW - timedelta(hours=hours_ago)).isoformat()
+        return hb
+
+    def test_a_healthy_backup_has_no_failing_since(self):
+        self.assertTrue(watchdog.check(_heartbeat(0.1), None, None, NOW).ok)
+
+    def test_a_recent_single_failure_is_not_yet_reported(self):
+        # One blip, not a pattern - matches push_failing's own threshold logic.
+        health = watchdog.check(self._heartbeat_with_failure(0.5), None, None, NOW)
+        self.assertTrue(health.ok)
+
+    def test_a_sustained_failure_is_caught(self):
+        health = watchdog.check(self._heartbeat_with_failure(5), None, None, NOW)
+        self.assertEqual(health.keys, ["db_backup_failing"])
+
+    def test_recovery_clears_it(self):
+        # auto_push.sh clears db_backup_failing_since on the next success;
+        # an absent field must read as healthy, not as "unknown -> problem".
+        self.assertTrue(watchdog.check(_heartbeat(0.1), None, None, NOW).ok)
+
+    def test_combines_with_other_problems(self):
+        hb = self._heartbeat_with_failure(5)
+        hb["last_run"] = (NOW - timedelta(hours=5)).isoformat()
+        health = watchdog.check(hb, None, None, NOW)
+        self.assertEqual(health.keys, ["db_backup_failing", "heartbeat_stale"])
+
+
 class TransitionTest(unittest.TestCase):
     def _stale(self):
         return watchdog.check(_heartbeat(5), None, None, NOW)

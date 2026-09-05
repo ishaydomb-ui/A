@@ -48,6 +48,14 @@ UNPUSHED_MAX_AGE = timedelta(hours=2)
 # enough that a day's work is never silently unprotected overnight.
 DIRTY_TREE_MAX_AGE = timedelta(hours=12)
 
+# Same 30-minute-timer reasoning as UNPUSHED_MAX_AGE: four consecutive
+# real misses, not one blip. Added 2026-09-05 after the DB backup to
+# Drive failed on every single run for a full day (a PATH bug, `rclone`
+# resolving to nothing under systemd --user) with nobody told — the
+# heartbeat tracked whether the *script* ran, never whether the backup
+# *inside* it actually succeeded. That gap is exactly what this catches.
+DB_BACKUP_MAX_AGE = timedelta(hours=2)
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -129,6 +137,17 @@ def check(
             Problem(
                 "tree_dirty",
                 f"יש עבודה לא מקומיטת כבר {hours:.0f} שעות — היא לא מגובה בשום מקום",
+            )
+        )
+
+    db_backup_failing_since = _parse((heartbeat or {}).get("db_backup_failing_since"))
+    if db_backup_failing_since and now - db_backup_failing_since > DB_BACKUP_MAX_AGE:
+        hours = (now - db_backup_failing_since).total_seconds() / 3600
+        problems.append(
+            Problem(
+                "db_backup_failing",
+                f"גיבוי ה-DB לדרייב נכשל כבר {hours:.0f} שעות — "
+                "price_history הוא ה-DB היחיד בלי עותק מחוץ לשרת",
             )
         )
 
