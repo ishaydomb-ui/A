@@ -102,6 +102,17 @@ _JSONLD_RE = re.compile(r'<script type="application/ld\+json"[^>]*>(.*?)</script
 _TAG_RE = re.compile(r"<[^>]+>")
 _CART_LINK_RE = re.compile(r"/coffeecart/([a-z0-9-]+)/")
 _TITLE_RE = re.compile(r"<title>([^<]+)</title>")
+# The site's own SEO title suffix and "updated for 2026" boilerplate,
+# stripped so a term's display name doesn't carry the whole page title
+# every time (e.g. "עגלות קפה עם פיצה - מעודכן לשנת 2026 - קופי טרייל -
+# עגלות קפה ופודטראקים בארץ" -> "עגלות קפה עם פיצה").
+_TITLE_SUFFIX_RE = re.compile(r"\s*-\s*(?:מעודכן[^-]*-\s*)?קופי טרייל.*$")
+
+
+def _clean_term_title(raw_title: str) -> str:
+    import html as _html
+
+    return _TITLE_SUFFIX_RE.sub("", _html.unescape(raw_title)).strip()
 
 
 def _sleep():
@@ -331,7 +342,7 @@ def harvest_terms(client: httpx.Client) -> dict:
                 entries[slug] = {"name": slug, "carts": [], "note": "fetch failed"}
                 continue
             title_match = _TITLE_RE.search(html)
-            title = title_match.group(1).strip() if title_match else slug
+            title = _clean_term_title(title_match.group(1)) if title_match else slug
             cart_slugs = sorted(set(_CART_LINK_RE.findall(html)))
             entries[slug] = {
                 "name": title,
