@@ -52,6 +52,52 @@ def freshness() -> dict:
     return dict(DATA_AS_OF)
 
 
+def known_clubs() -> list[dict]:
+    """Clubs declared in eligibility.yaml, harvested or not.
+
+    Returns `[]` if the file is absent — declaring clubs is optional, and
+    a missing file must not look like an error. See eligibility.yaml's own
+    header for why this file exists at all (household-declared ~6 clubs,
+    not ClubHub's 100+).
+    """
+    path = _data_dir() / "eligibility.yaml"
+    if not path.exists():
+        return []
+    import yaml
+
+    with path.open(encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    return data.get("clubs") or []
+
+
+def unharvested_club(query: str) -> str | None:
+    """If `query` names a club the household is in but never harvested,
+    return its declared name; otherwise `None`.
+
+    Exists to catch a specific silent-wrong shape: a query for an
+    unharvested club's *name* (e.g. "כאל") still runs the substring
+    search below and can hit unrelated rows purely by spelling
+    (מי-**כאל** matches "כאל"), returning what looks like a real —
+    if unhelpful — result. A caller trusting that count would report a
+    handful of benefits that do not exist, or conclude "no such benefit"
+    when the truth is narrower and more useful: we never collected this
+    source. So this is checked *before* the substring search, as an
+    **exact** name match (not substring) — it identifies "you asked about
+    a club we track," not "you asked about anything resembling one."
+    Found 2026-09-05 testing round 3 (L3); see docs/BENEFITS.md.
+    """
+    q = _norm((query or "").strip()).replace('"', "").replace("״", "")
+    if not q:
+        return None
+    for club in known_clubs():
+        name = str(club.get("name") or "")
+        if not name or club.get("harvested", False):
+            continue
+        if _norm(name).replace('"', "").replace("״", "") == q:
+            return name
+    return None
+
+
 def _find(pattern: str) -> list[Path]:
     """Files matching `pattern` across the benefits dir and its lab_rescue/."""
     found: list[Path] = []

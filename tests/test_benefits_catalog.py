@@ -463,3 +463,101 @@ class DisambiguationMemoryTests(unittest.TestCase):
 
     def test_remember_needs_two_arguments(self):
         self.assertEqual(self._run(["benefits-remember", "רק-מונח"]).returncode, 2)
+
+
+def _write_yaml(path: Path, text: str) -> None:
+    path.write_text(text, encoding="utf-8")
+
+
+ELIGIBILITY_YAML = """
+clubs:
+  - name: בהצדעה
+    harvested: true
+  - name: מקס
+    harvested: true
+  - name: כאל
+    harvested: false
+  - name: "הר\\"י"
+    harvested: false
+"""
+
+
+class UnharvestedClubTests(unittest.TestCase):
+    """Round 3, L3: a query for a club we never harvested must say so —
+
+    not run the substring search, which can hit unrelated rows purely by
+    spelling (מי-כאל contains "כאל") and read as a thin-but-real answer.
+    "not collected" and "no such benefit" are different facts.
+    """
+
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        self.data_dir = Path(self._dir.name)
+        # A catalog row whose name merely *contains* the unharvested
+        # club's letters — the exact trap found live (CAL / כאל inside
+        # מיכאל).
+        _write_csv(self.data_dir / "catalog_tagged.csv", [
+            {"חנות": "תכשיטי מיכאל", "תת-קטגוריה": "תכשיטים", "ארנקים": "רשתות בהצדעה(5%/₪500)",
+             "אונליין": "לא", "קטגוריה": "תכשיטים", "ערים": "נתניה"},
+        ])
+        _write_yaml(self.data_dir / "eligibility.yaml", ELIGIBILITY_YAML)
+        self._old = os.environ.get("BENEFITS_DATA_DIR")
+        os.environ["BENEFITS_DATA_DIR"] = str(self.data_dir)
+        self._tmpdb = tempfile.TemporaryDirectory()
+
+    def tearDown(self):
+        self._dir.cleanup()
+        self._tmpdb.cleanup()
+        if self._old is None:
+            os.environ.pop("BENEFITS_DATA_DIR", None)
+        else:
+            os.environ["BENEFITS_DATA_DIR"] = self._old
+
+    def _run(self, args):
+        return subprocess.run(
+            [sys.executable, "-m", "grocery_bot.cli", *args],
+            cwd=PROJECT,
+            env={
+                "GROCERY_BOT_DB_PATH": str(Path(self._tmpdb.name) / "t.sqlite3"),
+                "BENEFITS_DATA_DIR": str(self.data_dir),
+                "PATH": os.environ.get("PATH", ""),
+                "HOME": os.environ.get("HOME", ""),
+            },
+            capture_output=True, text=True,
+        )
+
+    def test_unharvested_club_function_matches_exactly(self):
+        from grocery_bot.benefits_catalog import unharvested_club
+        self.assertEqual(unharvested_club("כאל"), "כאל")
+        self.assertIsNone(unharvested_club("בהצדעה"))  # harvested
+        self.assertIsNone(unharvested_club("תכשיטי מיכאל"))  # not a club name
+
+    def test_unharvested_club_is_exact_not_substring(self):
+        # "כא" must not match "כאל" — this is a known-name check, not a
+        # fuzzy search; substring matching here would just move the
+        # collision risk rather than remove it.
+        from grocery_bot.benefits_catalog import unharvested_club
+        self.assertIsNone(unharvested_club("כא"))
+
+    def test_cli_declares_unharvested_instead_of_searching(self):
+        out = self._run(["benefits-catalog", "כאל"])
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("לא נאסף", out.stdout)
+        self.assertNotIn("מיכאל", out.stdout, "must not surface the substring collision as a result")
+
+    def test_cli_json_declares_unharvested(self):
+        import json
+        out = self._run(["benefits-catalog", "כאל", "--json"])
+        payload = json.loads(out.stdout)
+        self.assertEqual(payload, {"club": "כאל", "harvested": False})
+
+    def test_a_harvested_club_query_is_unaffected(self):
+        # "בהצדעה" is a real club name too, but it IS harvested — must
+        # fall through to the normal search path, not the declaration.
+        out = self._run(["benefits-catalog", "מיכאל"])
+        self.assertEqual(out.returncode, 0)
+        self.assertIn("תכשיטי מיכאל", out.stdout)
+
+    def test_quoted_club_name_matches_despite_the_internal_quote(self):
+        from grocery_bot.benefits_catalog import unharvested_club
+        self.assertEqual(unharvested_club('הר"י'), 'הר"י')

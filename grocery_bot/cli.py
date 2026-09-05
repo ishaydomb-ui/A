@@ -609,6 +609,7 @@ def _benefits_catalog(storage: Storage, args: list[str]) -> int:
         freshness,
         load_catalog,
         search_catalog,
+        unharvested_club,
     )
 
     # --freshness: how current the data is, per club. For a caller (or
@@ -624,6 +625,24 @@ def _benefits_catalog(storage: Storage, args: list[str]) -> int:
 
     as_json = "--json" in args
     query = " ".join(a for a in args if not a.startswith("--")).strip()
+
+    # A query for a club the household is actually in, but never
+    # harvested (e.g. "כאל"), stops here — before the substring search
+    # below can return unrelated rows that merely share the letters
+    # (מיכאל contains "כאל") and look like a real, if thin, answer.
+    # "not collected" and "no such benefit" are different facts; only
+    # this check can tell them apart. Found 2026-09-05, round 3 (L3).
+    not_harvested = unharvested_club(query) if query else None
+    if not_harvested:
+        if as_json:
+            print(json.dumps({"club": not_harvested, "harvested": False}, ensure_ascii=False))
+        else:
+            print(
+                f'"{not_harvested}" ידוע כמועדון של המשפחה, אבל הקטלוג שלו '
+                "עוד לא נאסף — אין לי נתונים על זה, וזה שונה מ\"אין הטבה\"."
+            )
+        return 1
+
     rows = search_catalog(query) if query else load_catalog()
 
     resolved_to = None

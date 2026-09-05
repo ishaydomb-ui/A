@@ -45,6 +45,23 @@ data" — never the substring hits, never silence dressed as "no benefit."
 or claiming there is no such benefit (false "can't" — the benefit may
 exist, we just never harvested the source).
 
+**FIXED 2026-09-05 (Ishay authorized, verbatim, 05.09: "אם אין שום דבר
+ממני תתקדם לתיקונים").** `benefits_catalog.unharvested_club(query)`
+checks the query against `eligibility.yaml`'s declared-but-`harvested:
+false` clubs by **exact** normalised name match (not substring — a
+substring check would just relocate the same collision risk) *before*
+the catalogue search runs. `benefits-catalog "כאל"` now returns exit 1
+with `"כאל" ידוע כמועדון של המשפחה, אבל הקטלוג שלו עוד לא נאסף — אין לי
+נתונים על זה, וזה שונה מ"אין הטבה"` instead of the 14 מיכאל rows.
+Unaffected: `"מיכאל"` itself still searches normally and returns the real
+rows (control-tested); a harvested club's own name (`"מקס"`) still runs
+the ordinary substring search, collision and all — that collision is
+pre-existing, documented, and covered by its own test
+(`test_searching_a_club_name_is_not_a_club_filter`), and is a different,
+lower-stakes problem (noise on top of real data, not zero dressed as
+real). Re-verified against live `data/benefits/`, not just the new unit
+tests. 614/614 tests pass (was 609; +5 new: `UnharvestedClubTests`).
+
 ## Cross-chain comparison (round-2 G4 regression) — FACTUAL CORRECTION
 
 Arthur's round plan says cross-chain is "not yet exposed → correct move
@@ -103,6 +120,40 @@ catalog↔branches can only be joined by name — itself a source of slack.
    benefit" is the failure this class tests (Arthur's flag).
 
 ---
+
+## Command-typeability audit (triggered by this morning's Miri incident)
+
+Miri printed an instruction, Ishay typed it exactly, and it misrouted
+into document search (printed his blood tests). Asked to check every
+command string this bot prints for the same shape of failure: printed,
+looks authoritative, silently doesn't reach the intended handler.
+
+**Structural difference from Miri's case:** this bot dispatches slash
+commands via Telegram's `CommandHandler` (exact string match, library-
+level, case-folded by `python-telegram-bot` itself — verified in
+`commandhandler.py`), not a free-text intent classifier. That is a
+narrower failure surface by construction, not immunity.
+
+**Audited:** every `BotCommand` in the "/" menu, every literal `/word`
+example shown in a message a household member reads (`/price`,
+`/refresh_prices`, `/cheaper`, `/propose`, `/list_full <arg>` ×4,
+`/chaindeals`), and specifically the two named as new: `/chaindeals`
+(registered `CommandHandler`, in the menu, no-arg, no deep-link — the
+deep-link failure mode from an earlier trap doesn't apply here) and
+`price-compare` (a **CLI-only** contract for Miri's subprocess calls —
+never printed inside a Telegram message for a human to type; the
+`docs/MIRI_INTEGRATION.md` `$ price-compare ...` line is shorthand
+against the invocation shown at the top of that doc, for an
+implementer to read, not a string handed to Ishay).
+
+**Gap found and closed:** nothing verified that the menu list and the
+printed examples stay matched to the actual registered handlers over
+time — a rename on one side and not the other is exactly this incident's
+shape. New `tests/test_command_menu.py` derives the registered-command
+set from the real `CommandHandler(...)` calls (not hand-copied) and
+asserts every menu entry and every printed example resolves to one; also
+locks in that `price`/`deals`/`refresh_prices` are unlisted-but-
+registered (intentional) rather than unlisted-and-dead.
 
 ### The three universal gates, on my surfaces
 - **Invented number:** every price/discount above is a real row read this
