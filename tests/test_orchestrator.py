@@ -415,3 +415,61 @@ class CleanResolutionIsRememberedTests(unittest.TestCase):
         # The memory must not swallow a genuine choice.
         self._cycle(_AlwaysAmbiguousAdapter())
         self.assertIsNone(self.storage.preferred_for("shufersal", "חלב 3%"))
+
+
+class DealsInTheCartTests(unittest.TestCase):
+    """A cycle may add an exceptional promotion nobody asked for.
+
+    The rule it must never break: a saving is only claimed for a line
+    that actually reached the cart.
+    """
+
+    def setUp(self):
+        from grocery_bot.prices import PricedProduct, PromotionItem
+        from grocery_bot.stock import StockItem
+
+        self._dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._dir.cleanup)
+        self.storage = Storage(str(Path(self._dir.name) / "t.sqlite3"))
+        self.storage.add_base_list_item(name="חלב")
+        self.storage.replace_stock_items(
+            "shufersal",
+            [StockItem("P_1", "מרכך כביסה", 0.05, "טיפוח, תינוקות וניקיון")],
+        )
+        self.storage.replace_catalog(
+            [PricedProduct("1", "מרכך כביסה סנו", "", 20.0, 0, "1 ליטר", "", False)],
+            [PromotionItem("p1", "מבצע", "1", 10.0, 1, 0,
+                           "2000-01-01T00:00:00", "2099-01-01T00:00:00")],
+        )
+
+    def test_a_deep_deal_is_added_and_labelled_as_such(self):
+        fake = FakeAdapter({"חלב": "added", "מרכך כביסה": "added"})
+        report = run_order_cycle(self.storage, {"shufersal": lambda: fake})["shufersal"]
+        dealt = [r for r in report.added if r.deal]
+        self.assertEqual([r.item_name for r in dealt], ["מרכך כביסה"])
+        self.assertIn("-50%", dealt[0].deal)
+
+    def test_a_deal_that_did_not_reach_the_cart_claims_no_saving(self):
+        # Otherwise the summary reports money saved on something that is
+        # not in the cart — the "looks right, isn't" shape.
+        fake = FakeAdapter({"חלב": "added", "מרכך כביסה": "not_found"})
+        report = run_order_cycle(self.storage, {"shufersal": lambda: fake})["shufersal"]
+        self.assertEqual([r for r in report.added if r.deal], [])
+        self.assertEqual([r.item_name for r in report.not_found], ["מרכך כביסה"])
+
+    def test_it_can_be_turned_off(self):
+        fake = FakeAdapter({"חלב": "added", "מרכך כביסה": "added"})
+        report = run_order_cycle(
+            self.storage, {"shufersal": lambda: fake}, add_deals=False
+        )["shufersal"]
+        self.assertEqual([r.item_name for r in report.added], ["חלב"])
+
+    def test_the_summary_separates_them_from_what_was_asked_for(self):
+        fake = FakeAdapter({"חלב": "added", "מרכך כביסה": "added"})
+        reports = run_order_cycle(self.storage, {"shufersal": lambda: fake})
+        summary = format_report_summary(reports)
+        self.assertIn("נוספו בגלל מבצע חריג", summary)
+        # The asked-for line must not silently absorb the deal item.
+        asked_line = next(l for l in summary.splitlines() if l.startswith("✅"))
+        self.assertIn("חלב", asked_line)
+        self.assertNotIn("מרכך כביסה", asked_line)

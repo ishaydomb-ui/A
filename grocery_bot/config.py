@@ -39,6 +39,12 @@ class Config:
     bot_username: str = ""
     shufersal_username: str = ""
     shufersal_password: str = ""
+    # Whether a cycle may put exceptional promotions into the cart by
+    # itself, on top of what was actually asked for (see dealfill.py).
+    # On by default, set by Ishay 2026-09-06: deleting a line he doesn't
+    # want costs seconds, and a deal that only arrives as a message costs
+    # a second action that measurably does not happen.
+    auto_add_deals: bool = True
 
     @staticmethod
     def from_env() -> "Config":
@@ -67,4 +73,5 @@ class Config:
             bot_username=os.environ.get("TELEGRAM_BOT_USERNAME", ""),
             shufersal_username=os.environ.get("SHUFERSAL_USERNAME", ""),
             shufersal_password=os.environ.get("SHUFERSAL_PASSWORD", ""),
+            auto_add_deals=os.environ.get("AUTO_ADD_DEALS", "true").lower() != "false",
         )

@@ -1359,7 +1359,11 @@ class GroceryBot:
 
         try:
             reports = await asyncio.to_thread(
-                run_order_cycle, self.storage, factories, _on_progress
+                run_order_cycle,
+                self.storage,
+                factories,
+                _on_progress,
+                self.config.auto_add_deals,
             )
         except Exception:
             logger.exception("Order cycle failed")

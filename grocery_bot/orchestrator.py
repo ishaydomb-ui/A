@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Callable
 
+from . import dealfill
 from .adapters.base import StoreAdapter
 from .disambiguate import resolve
 from .models import CartAddResult, OrderCycleReport
@@ -24,12 +25,18 @@ def run_order_cycle(
     storage: Storage,
     adapter_factories: dict[str, AdapterFactory],
     on_progress=None,
+    add_deals: bool = True,
 ) -> dict[str, OrderCycleReport]:
     """Run the cycle against every enabled store.
 
     Returns one OrderCycleReport per store. Ambiguous results are also
     persisted via storage.save_pending_ambiguity so the bot can present
     them as follow-up questions after this function returns.
+
+    With `add_deals`, the cycle also puts exceptional promotions on
+    things the household already buys straight into the cart, rather than
+    only reporting them — see dealfill.py for why, and for the guards
+    that keep it from becoming waste.
 
     `on_progress(done, total, result)` is called after each item, so a
     caller can show progress. A full cycle is minutes of page loads, and
@@ -76,11 +83,21 @@ def run_order_cycle(
                 reports[store] = report
                 continue
 
-            prematched = _prefetch_matches(
-                adapter, storage, store,
-                [b.search_term_for(store) for b in base_items] + [a.text for a in adhoc_items],
+            asked_terms = [b.search_term_for(store) for b in base_items] + [
+                a.text for a in adhoc_items
+            ]
+            # Deals are chosen before the run so they can be prematched in
+            # the same bulk call as everything else; a second matcher pass
+            # would cost another ~40s on a cycle that already takes that.
+            deal_picks = (
+                dealfill.picks_for(storage, store, skip_terms=asked_terms)
+                if add_deals
+                else []
             )
-            total_items = len(base_items) + len(adhoc_items)
+            prematched = _prefetch_matches(
+                adapter, storage, store, asked_terms + [p.term for p in deal_picks]
+            )
+            total_items = len(base_items) + len(adhoc_items) + len(deal_picks)
             done = 0
 
             for base_item in base_items:
@@ -113,6 +130,20 @@ def run_order_cycle(
                 # the user, and answering it is what consumes the request.
                 if result.status in ("added", "ambiguous"):
                     resolved_adhoc.add(adhoc.id)
+                done += 1
+                _progress(done, total_items, result)
+
+            for pick in deal_picks:
+                result = _add_one(
+                    storage, adapter, store, pick.term, pick.quantity, prematched
+                )
+                # Only a line that actually made it into the cart is worth
+                # calling a deal. An ambiguous or missing one would put a
+                # saving in the summary that is not in the cart — exactly
+                # the "looks right, isn't" shape this project keeps hitting.
+                if result.status == "added":
+                    result.deal = pick.label
+                report.record(result)
                 done += 1
                 _progress(done, total_items, result)
 
@@ -347,7 +378,11 @@ def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
         # says where each item went.
         lines.append(f"*{display_name(store)}*")
         if report.added:
-            lines.append(f"✅ נוספו ({len(report.added)}): " + ", ".join(r.item_name for r in report.added))
+            asked = [r for r in report.added if not getattr(r, "deal", "")]
+            if asked:
+                lines.append(
+                    f"✅ נוספו ({len(asked)}): " + ", ".join(r.item_name for r in asked)
+                )
             # An automatic pick must be visible: it replaced a question the
             # user would otherwise have answered, so they need to be able to
             # spot a wrong one.
@@ -357,6 +392,14 @@ def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
                     f"   _נבחרו לפי הרגלי הקנייה שלכם ({len(auto)}): _"
                     + ", ".join(r.item_name for r in auto)
                 )
+            # Its own block, not mixed into the list above: these are the
+            # lines nobody asked for, so they are the ones most likely to
+            # be deleted and have to be findable at a glance.
+            dealt = [r for r in report.added if getattr(r, "deal", "")]
+            if dealt:
+                lines.append(f"🏷️ נוספו בגלל מבצע חריג ({len(dealt)}) — מחקו מה שלא צריך:")
+                for r in dealt:
+                    lines.append(f"   • {r.item_name} — _{r.deal}_")
         if report.ambiguous:
             lines.append(
                 f"❓ דורש בחירה ({len(report.ambiguous)}): " + ", ".join(r.item_name for r in report.ambiguous)

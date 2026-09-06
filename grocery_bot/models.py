@@ -107,6 +107,11 @@ class CartAddResult:
     # ("history" | "exact_name"); shown so an automatic choice is never
     # silent.
     auto_resolved: str = ""
+    # Set when the cycle added this on its own because of an exceptional
+    # promotion, rather than because anyone asked for it — carries the
+    # discount so the summary can say why, and so it is the easiest line
+    # in the cart to find and delete. See dealfill.py.
+    deal: str = ""
 
 
 @dataclass
