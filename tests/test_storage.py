@@ -357,3 +357,35 @@ class CrossChainPriceTests(unittest.TestCase):
 
     def test_a_missing_product_is_empty_not_an_error(self):
         self.assertEqual(self.storage.cross_chain_prices("פטריות שיטאקי"), [])
+
+    def test_a_cheap_candy_does_not_beat_a_real_word_boundary_match(self):
+        """Reproduces the live bug: 'חלבי' (a candy) is a prefix-only
+        substring hit for 'חלב', and used to win purely on being cheaper
+        than any actual milk. It must now lose to a genuine whole-word
+        match at the same chain, even though it is still cheaper.
+        """
+        from grocery_bot.prices import PricedProduct
+
+        self.storage.replace_catalog(
+            [
+                PricedProduct("2", "לימבו פטל חלבי", "שטראוס", 2.0, None, "", "1", False),
+                PricedProduct("3", "חלב 3% קרטון", "תנובה", 6.5, 6.5, "1 ליטר", "1", False),
+            ],
+            [],
+        )
+        rows = self.storage.cross_chain_prices("חלב")
+        shufersal = next(r for r in rows if r["store"] == "shufersal")
+        self.assertEqual(shufersal["name"], "חלב 3% קרטון")
+
+    def test_a_pure_substring_with_no_word_boundary_is_excluded_entirely(self):
+        """'מחלבה' (dairy plant/creamery) contains 'חלב' mid-word, with no
+        boundary on either side — noise, not a weak signal. If it's the
+        only candidate at a chain, that chain should be omitted rather
+        than shown a coincidental hit.
+        """
+        self.storage.record_store_prices("victory", [
+            {"barcode": "999", "name": "מחלבה טרייה בע\"מ", "price": 1.0,
+             "observed_at": "2026-06-01", "source": "feed"},
+        ])
+        rows = self.storage.cross_chain_prices("חלב")
+        self.assertNotIn("victory", [r["store"] for r in rows])

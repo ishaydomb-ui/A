@@ -338,6 +338,29 @@ def _like_contains(term: str) -> str:
     return f"%{escaped}%"
 
 
+def _name_match_rank(folded_term: str, name: str) -> int:
+    """How well a product name matches a search term, lowest is best.
+
+    Shared by `search_products` and `cross_chain_prices` so both answer
+    "חלב" with milk before שוקולד חלב, rather than each guessing
+    independently. 0 = the term is the name's own first whole word; 1 =
+    the term appears as a whole word elsewhere (bounded by
+    whitespace/edges on *both* sides); 2 = the term only starts a word
+    that continues past it (e.g. "חלבה"/halva or "חלבי"/dairy-flavoured
+    for "חלב" — a real bug once, when a blind `str.startswith` put these
+    in the top tier ahead of actual milk); 3 = anywhere else, a bare
+    substring with no word boundary at all.
+    """
+    folded_name = _fold_apostrophes(name)
+    if re.match(rf"{re.escape(folded_term)}(?:\s|$)", folded_name):
+        return 0
+    if re.search(rf"(?:^|\s){re.escape(folded_term)}(?:\s|$)", folded_name):
+        return 1
+    if re.search(rf"(?:^|\s){re.escape(folded_term)}", folded_name):
+        return 2
+    return 3
+
+
 # Product names are inconsistent about the apostrophe — "קוטג 5%" (none),
 # "קוטג' 5%" (ASCII), "קוטג׳ 5%" (Hebrew geresh) — so "קוטג' 5%" found one
 # row where "קוטג 5%" found three. Fold the apostrophe family away on both
@@ -1367,37 +1390,37 @@ class Storage:
                 (_like_contains(_fold_apostrophes(term)),),
             ).fetchall()
 
-        # Rank on the apostrophe-folded forms too, so "קוטג' 5%" ranks
-        # against "קוטג 5%" as the same start-of-name match, not a distant
-        # substring.
         folded_term = _fold_apostrophes(term)
-
-        def score(name: str) -> tuple[int, int]:
-            folded = _fold_apostrophes(name)
-            if folded.startswith(folded_term):
-                rank = 0
-            elif re.search(rf"(?:^|\s){re.escape(folded_term)}(?:\s|$)", folded):
-                rank = 1
-            elif re.search(rf"(?:^|\s){re.escape(folded_term)}", folded):
-                rank = 2
-            else:
-                rank = 3
-            return rank, len(name)
-
-        ranked = sorted(rows, key=lambda row: score(row["name"]))
+        ranked = sorted(rows, key=lambda row: (_name_match_rank(folded_term, row["name"]), len(row["name"])))
         return [self._row_to_product(row) for row in ranked[:limit]]
 
     def cross_chain_prices(self, query: str) -> list[dict]:
-        """Cheapest name-match for a product at every chain we hold prices for.
+        """Best name-match for a product at every chain we hold prices for.
 
         The canonical "where is X cheapest" answer. Honest about a hard
         limit: Shufersal's transparency feed carries **no barcode**, and
         the other chains are keyed by barcode, so there is no shared key to
         prove two rows are the *same* product. This therefore matches by
-        NAME per chain and returns each chain's cheapest hit — a genuine
-        signal, but the caller must present it as "cheapest thing called X
-        at each chain," not "the identical product compared," because sizes
-        and variants differ (a 30g bag vs a multipack both contain במבה).
+        NAME per chain — a genuine signal, but the caller must present it
+        as "cheapest thing called X at each chain," not "the identical
+        product compared," because sizes and variants differ (a 30g bag vs
+        a multipack both contain במבה).
+
+        Per chain this used to mean the single cheapest *substring* match,
+        which is exactly backwards for a query like "חלב": a ₪2 candy
+        whose name happens to contain the word is reliably cheaper than any
+        actual milk, so it silently won every time. Each chain's
+        candidates are now ranked with the same `_name_match_rank` used by
+        `search_products` (favouring a name that starts with, or contains
+        as a whole word, the query) and only the cheapest *among the
+        best-ranked* candidates is kept; a chain with no rank 0-2 match at
+        all is left out rather than shown a coincidental substring hit.
+        This does not fix the harder case — a product whose name genuinely
+        contains the query as its own word but means something else, like
+        "מטבעות שוקולד חלב" for "חלב" — no data available distinguishes
+        that from real milk by name alone; the caller must keep disclosing
+        that this is a name match, not a proven same product.
+
         Where a unit price exists it is included, which is the fairer
         comparison across sizes.
 
@@ -1413,40 +1436,63 @@ class Storage:
         pattern = _like_contains(folded)
         out: list[dict] = []
 
+        def best(candidates: list[tuple]) -> tuple | None:
+            """Cheapest candidate among the best-ranked ones, or None.
+
+            Each candidate is (name, price, ...extra). Only rank 0 (the
+            name starts with the query) and rank 1 (the query is its own
+            whole word) are accepted — rank 2 is a *different* word that
+            happens to share a prefix ("חלבה"/halva, "חלבי"/dairy-flavoured
+            for "חלב") and rank 3 is a bare substring; neither is a real
+            signal, so a chain with only those is left out rather than
+            given a coincidental last resort.
+            """
+            scored = [
+                (rank, c[1], c)
+                for c in candidates
+                if (rank := _name_match_rank(folded, c[0])) < 2
+            ]
+            if not scored:
+                return None
+            return min(scored, key=lambda s: (s[0], s[1]))[2]
+
         with closing(self._connect()) as conn:
             # Shufersal — its own feed, name only, with a real unit price.
-            row = conn.execute(
+            candidates = conn.execute(
                 "SELECT name, price, unit_of_measure_price, unit_of_measure "
                 "FROM catalog_products WHERE fold(name) LIKE ? ESCAPE '\\' "
-                "ORDER BY price LIMIT 1",
+                "ORDER BY price LIMIT 200",
                 (pattern,),
-            ).fetchone()
-            if row is not None:
+            ).fetchall()
+            picked = best([tuple(row) for row in candidates])
+            if picked is not None:
+                name, price, unit_price, unit = picked
                 out.append({
                     "store": "shufersal", "chain": display_name("shufersal"),
-                    "name": row["name"], "price": row["price"],
-                    "unit_price": row["unit_of_measure_price"],
-                    "unit": row["unit_of_measure"],
+                    "name": name, "price": price,
+                    "unit_price": unit_price, "unit": unit,
                 })
 
-            # Every barcode chain — newest row per barcode, cheapest match.
+            # Every barcode chain — newest row per barcode, best match.
             for store in conn.execute(
                 "SELECT DISTINCT store FROM store_prices"
             ).fetchall():
                 s = store["store"]
-                r = conn.execute(
+                candidates = conn.execute(
                     "SELECT p.name, p.price FROM store_prices p "
                     "JOIN (SELECT barcode, MAX(observed_at) mo FROM store_prices "
                     "      WHERE store = ? GROUP BY barcode) latest "
                     "  ON p.barcode = latest.barcode AND p.observed_at = latest.mo "
                     "WHERE p.store = ? AND fold(p.name) LIKE ? ESCAPE '\\' "
-                    "ORDER BY p.price LIMIT 1",
+                    "ORDER BY p.price LIMIT 200",
                     (s, s, pattern),
-                ).fetchone()
-                if r is not None:
+                ).fetchall()
+                picked = best([tuple(row) for row in candidates])
+                if picked is not None:
+                    name, price = picked
                     out.append({
                         "store": s, "chain": display_name(s),
-                        "name": r["name"], "price": r["price"],
+                        "name": name, "price": price,
                         "unit_price": None, "unit": None,
                     })
 
