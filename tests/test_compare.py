@@ -155,5 +155,31 @@ class BasketComparisonTest(unittest.TestCase):
         self.assertEqual(result.biggest_gaps(1)[0].barcode, COTTAGE)
 
 
+class QuantityUnitTest(unittest.TestCase):
+    """The most expensive arithmetic mistake available in this codebase."""
+
+    def _entry(self, method, quantity):
+        return {"product": {"sellingMethod": {"code": method}}, "quantity": quantity}
+
+    def test_counted_items_are_a_count(self):
+        self.assertEqual(compare.units_bought(self._entry("BY_UNIT", 3)), 3)
+
+    def test_weighed_items_arrive_in_grams(self):
+        self.assertEqual(compare.units_bought(self._entry("BY_WEIGHT", 500)), 0.5)
+
+    def test_by_package_is_also_grams(self):
+        # The one that gets forgotten. Reading 1000g of grapes as 1000
+        # packets turned a ₪19.90 line into ₪19,900 and a ₪575 basket
+        # into ₪28,187.
+        self.assertEqual(compare.units_bought(self._entry("BY_PACKAGE", 1000)), 1.0)
+
+    def test_missing_method_is_treated_as_a_count(self):
+        self.assertEqual(compare.units_bought({"product": {}, "quantity": 2}), 2)
+
+    def test_selling_method_as_a_bare_string(self):
+        entry = {"product": {"sellingMethod": "BY_WEIGHT"}, "quantity": 250}
+        self.assertEqual(compare.units_bought(entry), 0.25)
+
+
 if __name__ == "__main__":
     unittest.main()

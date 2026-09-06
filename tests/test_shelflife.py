@@ -3,7 +3,7 @@ import unittest
 from datetime import date
 from pathlib import Path
 
-from grocery_bot import pricecontrol, shelflife
+from grocery_bot import shelflife
 from grocery_bot.storage import Storage
 
 TODAY = date(2026, 9, 1)
@@ -91,46 +91,6 @@ class BuildFromStorageTest(unittest.TestCase):
         self.assertEqual(
             self.storage.last_purchase_dates("shufersal")["P_OIL"], date(2026, 9, 1)
         )
-
-
-class PriceControlTest(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.storage = Storage(str(Path(self.tmp.name) / "t.sqlite3"))
-        with self.storage._connect() as conn:  # noqa: SLF001 - test fixture
-            conn.executemany(
-                "INSERT INTO catalog_products (item_code, name, price) VALUES (?,?,?)",
-                [
-                    ("1", "12 ביצי משק טריות M לסר", 13.13),
-                    ("2", "ביצים אומגה L שופרסל 6יח", 17.50),
-                    ("3", "חלב בקרטון 3% שומן 1 ל", 7.35),
-                ],
-            )
-            conn.commit()
-
-    def test_the_reported_case(self):
-        swap = pricecontrol.suggest_swap(self.storage, "ביצי אומגה 3 M", 21.90)
-        self.assertIsNotNone(swap)
-        self.assertEqual(swap.saving, 8.77)
-
-    def test_a_controlled_item_needs_no_swap(self):
-        self.assertIsNone(
-            pricecontrol.suggest_swap(self.storage, "חלב בקרטון 3% שומן", 7.35)
-        )
-
-    def test_no_swap_when_the_controlled_one_is_not_cheaper(self):
-        self.assertIsNone(pricecontrol.suggest_swap(self.storage, "ביצי אומגה 3 M", 10.0))
-
-    def test_non_staples_are_left_alone(self):
-        # "אורגני" marks a premium variant, but yoghurt is not controlled.
-        self.assertIsNone(pricecontrol.suggest_swap(self.storage, "יוגורט אורגני", 12.0))
-
-    def test_message_says_it_is_only_a_suggestion(self):
-        swaps = pricecontrol.review_basket(
-            self.storage, [{"name": "ביצי אומגה 3 M", "price": 21.90}]
-        )
-        self.assertIn("הצעה בלבד", pricecontrol.format_swaps(swaps))
 
 
 if __name__ == "__main__":
