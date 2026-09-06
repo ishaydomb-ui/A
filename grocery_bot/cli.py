@@ -5,6 +5,8 @@ Run with: python -m grocery_bot.cli <command>
     refresh-prices        re-download the branch price/promo snapshot
     price <query>         Shufersal shelf price for an item (single chain)
     price-compare <query> where it is cheapest across every chain [--json]
+    basket                the standing list priced at every chain,
+                          with substitutes and gaps marked
     deals                 promotions on the standing list
     import-base-list <f>  load a YAML base list into the database
     import-history        build the base list from real past orders
@@ -45,7 +47,7 @@ wrong prices rather than failing loudly.
 **What the household's other bot (מירי) can call.** Everything in
 `_DB_ONLY_COMMANDS` needs nothing but `GROCERY_BOT_DB_PATH`: add-item,
 remove-item, list-items, price, deals, recipe, recipe-text, meal-plan,
-nudge, confirm-card, benefits-catalog, benefits-branches, price-compare,
+nudge, confirm-card, benefits-catalog, benefits-branches, price-compare, basket,
 coffee-catalog, coffee-nearby, coffee-terms, coffee-by-term.
 No Telegram token, no store session, no exit node — that project has no use for this
 one's secrets. `add-to-cart` is the exception and is listed separately in
@@ -564,6 +566,30 @@ def _deals(storage: Storage, args: list[str]) -> int:
     return 0
 
 
+def _basket(storage: Storage, args: list[str]) -> int:
+    """The standing list priced at every chain we hold prices for."""
+    from . import basketview
+
+    items = [
+        {"name": b.name, "quantity": b.default_quantity}
+        for b in storage.list_active_base_items()
+    ]
+    items += [
+        {"name": a.text, "quantity": a.quantity} for a in storage.list_pending_adhoc()
+    ]
+    if not items:
+        print("הרשימה ריקה — אין מה להשוות.")
+        return 1
+    baskets = basketview.price_basket(storage, items)
+    print(basketview.format_baskets(baskets))
+    for store in ("tivtaam",):
+        one = next((b for b in baskets if b.store == store), None)
+        if one is not None:
+            print()
+            print(basketview.format_missing(one))
+    return 0
+
+
 def _price_compare(storage: Storage, args: list[str]) -> int:
     """Where is a product cheapest across every chain we hold prices for.
 
@@ -895,6 +921,7 @@ _DB_ONLY_COMMANDS = {
     # secret — a credential it has no use for.
     "price": _price,
     "price-compare": _price_compare,
+    "basket": _basket,
     "deals": _deals,
     # Reads flat CSVs under data/benefits/ (gitignored — household
     # financial data), not the sqlite database at all; `storage` is

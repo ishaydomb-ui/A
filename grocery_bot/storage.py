@@ -210,6 +210,28 @@ CREATE TABLE IF NOT EXISTS store_prices (
 CREATE INDEX IF NOT EXISTS idx_store_prices_barcode
     ON store_prices(barcode);
 
+-- Promotions published by a chain other than Shufersal. Kept apart from
+-- catalog_promotions on purpose: that table keys on Shufersal's own
+-- internal item_code, while every portal chain publishes promotions
+-- against the manufacturer's EAN. The barcode key is the better one —
+-- it joins straight to store_prices with no name matching anywhere in
+-- the path, which is the failure mode this project keeps paying for.
+CREATE TABLE IF NOT EXISTS store_promotions (
+    store TEXT NOT NULL,
+    barcode TEXT NOT NULL,
+    promotion_id TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    discounted_price REAL NOT NULL,
+    min_qty REAL NOT NULL DEFAULT 1,
+    starts_at TEXT NOT NULL DEFAULT '',
+    ends_at TEXT NOT NULL DEFAULT '',
+    observed_at TEXT NOT NULL,     -- YYYY-MM-DD
+    PRIMARY KEY (store, barcode, promotion_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_store_promotions_store
+    ON store_promotions(store);
+
 -- Monthly confirmations of a benefit the bot cannot observe in advance.
 -- The loadable card only shows up in the data after an order is paid, by
 -- which point an unloaded month is already lost, so the household is
@@ -858,6 +880,148 @@ class Storage:
             )
             conn.commit()
             return cur.rowcount
+
+    def replace_store_promotions(self, store: str, rows: list[dict]) -> int:
+        """Replace one chain's promotions wholesale.
+
+        Wholesale rather than merged: a promotion that ended is not
+        represented by any row in the new feed, so merging would keep
+        advertising it forever. The feed is the whole truth for that
+        chain at that moment.
+        """
+        with closing(self._connect()) as conn:
+            conn.execute("DELETE FROM store_promotions WHERE store = ?", (store,))
+            cur = conn.executemany(
+                "INSERT OR REPLACE INTO store_promotions "
+                "(store, barcode, promotion_id, description, discounted_price, "
+                " min_qty, starts_at, ends_at, observed_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                    (
+                        store,
+                        str(r["barcode"]),
+                        str(r.get("promotion_id", "")),
+                        r.get("description", ""),
+                        float(r["discounted_price"]),
+                        float(r.get("min_qty") or 1),
+                        r.get("starts_at", ""),
+                        r.get("ends_at", ""),
+                        r["observed_at"],
+                    )
+                    for r in rows
+                ],
+            )
+            conn.commit()
+            return cur.rowcount
+
+    def live_store_promotions(
+        self, store: str, now: datetime | None = None
+    ) -> dict[str, dict]:
+        """Promotions running right now at one chain, keyed by barcode.
+
+        The feed carries long-dead and far-future rows the same way
+        Shufersal's does (descriptions dated 2030 are routine), so
+        anything not live at this moment is filtered out here rather than
+        by every caller.
+        """
+        moment = (now or datetime.now()).strftime("%Y-%m-%dT%H:%M:%S")
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT * FROM store_promotions WHERE store = ? "
+                "AND (starts_at = '' OR starts_at <= ?) "
+                "AND (ends_at = '' OR ends_at >= ?)",
+                (store, moment, moment),
+            ).fetchall()
+        best: dict[str, dict] = {}
+        for row in rows:
+            item = dict(row)
+            current = best.get(item["barcode"])
+            # Cheapest wins where a barcode carries several promotions.
+            if current is None or item["discounted_price"] < current["discounted_price"]:
+                best[item["barcode"]] = item
+        return best
+
+    def priced_stores(self) -> list[str]:
+        """Every chain we hold any price for, Shufersal aside."""
+        with closing(self._connect()) as conn:
+            rows = conn.execute("SELECT DISTINCT store FROM store_prices").fetchall()
+        return sorted(row["store"] for row in rows)
+
+    def best_name_match(self, store: str, query: str) -> dict | None:
+        """The best product at one chain for a search term, with its rank.
+
+        The building block for "price my basket at every chain". Returns
+        the rank alongside the product because the *quality* of the match
+        is the thing the household has to see: Shufersal's feed carries
+        no barcode, so a cross-chain basket comparison is necessarily
+        name-based, and a rank-0 hit ("חלב 3% קרטון" for "חלב") deserves
+        different trust from a rank-1 one ("שוקולד חלב"). Returns None
+        rather than a coincidence when nothing matches acceptably.
+        """
+        folded = _fold_apostrophes((query or "").strip())
+        if not folded:
+            return None
+        pattern = _like_contains(folded)
+        with closing(self._connect()) as conn:
+            if store == "shufersal":
+                rows = conn.execute(
+                    "SELECT name, price FROM catalog_products "
+                    "WHERE fold(name) LIKE ? ESCAPE '\\' ORDER BY price LIMIT 200",
+                    (pattern,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT p.name, p.price FROM store_prices p "
+                    "JOIN (SELECT barcode, MAX(observed_at) mo FROM store_prices "
+                    "      WHERE store = ? GROUP BY barcode) latest "
+                    "  ON p.barcode = latest.barcode AND p.observed_at = latest.mo "
+                    "WHERE p.store = ? AND fold(p.name) LIKE ? ESCAPE '\\' "
+                    "ORDER BY p.price LIMIT 200",
+                    (store, store, pattern),
+                ).fetchall()
+
+        scored = [
+            (rank, row["price"], row["name"])
+            for row in rows
+            if (rank := _name_match_rank(folded, row["name"])) < 2
+        ]
+        if scored:
+            rank, price, name = min(scored, key=lambda s: (s[0], s[1]))
+            return {"store": store, "name": name, "price": price, "rank": rank}
+
+        # Nothing carries the whole phrase. Base-list names are long and
+        # Shufersal-shaped ("שעועית עדינה שלמה קפואה", "חומוס עשיר ב40%
+        # טחינה") and another chain will almost never word them the same
+        # way, so insisting on the full string reports a chain as not
+        # stocking cottage cheese when it plainly does. Retry on
+        # progressively shorter leading phrases, and return anything
+        # found that way as rank 1 — a substitute, drawn to the household
+        # as 🔄, never as an exact match.
+        words = folded.split()
+        for length in range(len(words) - 1, 0, -1):
+            shorter = " ".join(words[:length])
+            if len(shorter) < 2:
+                break
+            hit = self.best_name_match(store, shorter)
+            if hit:
+                return {**hit, "rank": 1}
+        return None
+
+    def bought_barcodes(self, store: str) -> set[str]:
+        """Barcodes this household has actually bought at one chain.
+
+        Distinguished from the feed by `source`: a 'feed' row is the whole
+        chain's catalogue, an 'order' row is something that was really in
+        one of their baskets. The difference is what separates "a deal on
+        something you buy" from "a deal on something in the shop".
+        """
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT barcode FROM store_prices "
+                "WHERE store = ? AND source = 'order'",
+                (store,),
+            ).fetchall()
+        return {row["barcode"] for row in rows}
 
     def latest_store_price(self, store: str, barcode: str) -> dict | None:
         """The most recently observed price for one barcode at one chain."""
@@ -1552,6 +1716,52 @@ class Storage:
         self, query: str, limit: int = 8, now: datetime | None = None
     ) -> list[tuple[PricedProduct, PromotionItem | None]]:
         return [(p, self.best_deal_for(p, now)) for p in self.search_products(query, limit)]
+
+    def catalog_deals(
+        self, now: datetime | None = None
+    ) -> list[tuple[PricedProduct, PromotionItem]]:
+        """Every Shufersal product currently beaten by its own promotion.
+
+        The whole-catalogue counterpart to `search_with_deals`, for the
+        question "what is deeply discounted right now" rather than "is
+        this one thing on offer". Filtered in SQL first because the
+        catalogue is ~6k products and almost none of them are on a real
+        promotion at any moment; the blanket coupon rows are then
+        dropped by the same `is_public_promotion` guard `best_deal_for`
+        uses, so a club perk never reads as a discount.
+        """
+        moment = (now or datetime.now()).strftime("%Y-%m-%dT%H:%M:%S")
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT p.*, r.promotion_id, r.description, r.discounted_price, "
+                "       r.min_qty, r.discount_rate, r.starts_at, r.ends_at "
+                "FROM catalog_products p "
+                "JOIN catalog_promotions r ON r.item_code = p.item_code "
+                "WHERE (r.starts_at = '' OR r.starts_at <= ?) "
+                "  AND (r.ends_at = '' OR r.ends_at >= ?) "
+                "  AND r.discounted_price > 0 "
+                "  AND r.discounted_price < p.price",
+                (moment, moment),
+            ).fetchall()
+
+        best: dict[str, tuple[PricedProduct, PromotionItem]] = {}
+        for row in rows:
+            if not is_public_promotion(row["description"]):
+                continue
+            promo = PromotionItem(
+                promotion_id=row["promotion_id"],
+                description=row["description"],
+                item_code=row["item_code"],
+                discounted_price=row["discounted_price"],
+                min_qty=row["min_qty"],
+                discount_rate=row["discount_rate"],
+                starts_at=row["starts_at"],
+                ends_at=row["ends_at"],
+            )
+            current = best.get(row["item_code"])
+            if current is None or promo.discounted_price < current[1].discounted_price:
+                best[row["item_code"]] = (self._row_to_product(row), promo)
+        return list(best.values())
 
     @staticmethod
     def _row_to_product(row: sqlite3.Row) -> PricedProduct:

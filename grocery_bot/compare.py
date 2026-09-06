@@ -23,12 +23,21 @@ comes from — and the household picks a shop.
 
 Honesty about staleness
 -----------------------
-Tiv Taam has no public price feed (checked: `prices.tivtaam.co.il` does
-not exist, and it is absent from the usual publisher portals), so its
-prices are *observed* — mostly from what the household actually paid on a
-past order. A July price compared against a live Shufersal price is not a
-saving, it is a guess, so every comparison carries the date its Tiv Taam
-side was observed and the caller is expected to show it.
+**Corrected 2026-09-06.** This module said for a week that "Tiv Taam has
+no public price feed (checked: `prices.tivtaam.co.il` does not exist, and
+it is absent from the usual publisher portals)". That was wrong. Tiv Taam
+publishes to the shared transparency portal this project already reads
+for five other chains, under the username `TivTaam` — full prices *and*
+promotions, hourly, for 54 branches. The original check looked for a
+chain-hosted feed at a guessed subdomain, did not find one, and recorded
+an absence; publishing is required by law, so "not found" should have
+been a reason to look harder rather than a finding.
+
+Prices reaching this module can therefore be either fresh feed rows or
+old observed ones, and the two are not interchangeable: a July price
+compared against a live Shufersal price is not a saving, it is a guess.
+Every comparison still carries the date its Tiv Taam side was observed
+and the caller is still expected to show it.
 """
 from __future__ import annotations
 

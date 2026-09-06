@@ -14,9 +14,11 @@ pricing the household's actual basket at every chain at once.
 Sources, all keyed by EAN so they merge without name matching:
 
 - **Shufersal** — its own public feed, already in `catalog_products`.
-- **Tiv Taam, Victory** — live Self-Point API, no login.
-- **Rami Levy, Osher Ad, Keshet, Politzer, Fresh Market** — the shared
-  transparency portal.
+- **Victory** — live Self-Point API, no login.
+- **Tiv Taam, Rami Levy, Osher Ad, Keshet, Politzer, Fresh Market** — the
+  shared transparency portal. Tiv Taam was recorded here for a week as
+  having no public feed at all; it does, on that same portal, and its
+  promotions come with it (see publishedprices.PORTAL_CHAINS).
 
 A feed that is present but stale is rejected rather than used: Yohananof
 publishes files that parse perfectly and were last updated in December
@@ -28,8 +30,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-from .prices import parse_prices
-from .publishedprices import MAX_FEED_AGE_DAYS, PORTAL_CHAINS, PublishedPrices
+import logging
+
+from .prices import parse_prices, parse_promotions
+from .publishedprices import (
+    MAX_FEED_AGE_DAYS,
+    PORTAL_BRANCHES,
+    PORTAL_CHAINS,
+    PublishedPrices,
+)
+
+logger = logging.getLogger(__name__)
 
 # Display names, and whether the household shops there today. The second
 # flag exists because a deal at a chain they already use is a normal
@@ -94,6 +105,7 @@ class FeedResult:
     age_days: int | None
     file_name: str = ""
     skipped_reason: str = ""
+    promotions: int = 0
 
     @property
     def used(self) -> bool:
@@ -107,9 +119,16 @@ def refresh_portal_chain(
     today: date | None = None,
     max_age_days: int = MAX_FEED_AGE_DAYS,
 ) -> FeedResult:
-    """Pull one chain's newest full price snapshot into store_prices."""
+    """Pull one chain's newest full price snapshot into store_prices.
+
+    Where the chain publishes promotions too, those are pulled into
+    store_promotions in the same pass — they are keyed on the same
+    barcode as the prices, so a deal can be joined to a shelf price with
+    no name matching anywhere in the path.
+    """
     portal = PublishedPrices(chain, proxy=proxy)
-    newest = portal.latest("PriceFull")
+    branch = PORTAL_BRANCHES.get(chain, "")
+    newest = portal.latest("PriceFull", branch_id=branch)
     if newest is None:
         return FeedResult(chain, 0, None, skipped_reason="no PriceFull published")
 
@@ -138,7 +157,36 @@ def refresh_portal_chain(
     ]
     if rows:
         storage.record_store_prices(chain, rows)
-    return FeedResult(chain, len(rows), age, newest.name)
+
+    # Promotions, where this chain publishes them. A failure here must not
+    # lose the prices already read: a chain with prices and no promos is
+    # useful, a chain with neither is not.
+    promo_file = portal.latest("PromoFull", branch_id=branch)
+    promotions = 0
+    if promo_file is not None and (promo_file.age_days(today) or 0) <= max_age_days:
+        try:
+            parsed = parse_promotions(portal.download_xml(promo_file))
+            promo_rows = [
+                {
+                    "barcode": promo.item_code,
+                    "promotion_id": promo.promotion_id,
+                    "description": promo.description,
+                    "discounted_price": promo.discounted_price,
+                    "min_qty": promo.min_qty,
+                    "starts_at": promo.starts_at,
+                    "ends_at": promo.ends_at,
+                    "observed_at": observed,
+                }
+                for promo in parsed
+                if promo.item_code and promo.discounted_price > 0
+            ]
+            if promo_rows:
+                storage.replace_store_promotions(chain, promo_rows)
+                promotions = len(promo_rows)
+        except Exception as exc:  # noqa: BLE001 - a promo failure is not a price failure
+            logger.warning("%s: promotions failed (%s); prices kept", chain, exc)
+
+    return FeedResult(chain, len(rows), age, newest.name, promotions=promotions)
 
 
 def refresh_all_portal_chains(

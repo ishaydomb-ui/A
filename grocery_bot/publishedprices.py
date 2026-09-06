@@ -43,6 +43,30 @@ PORTAL_CHAINS = {
     "keshet": "Keshet",
     "politzer": "politzer",
     "freshmarket": "freshmarket",
+    # Added 2026-09-06, correcting a documented claim that was simply
+    # wrong: this project recorded for a week that "Tiv Taam has no public
+    # price feed (checked: prices.tivtaam.co.il does not exist, and it is
+    # absent from the usual publisher portals)". It is on *this* portal,
+    # under this username, and always was — the earlier check looked for a
+    # chain-hosted feed and for a different spelling, and concluded from
+    # not finding one that none existed. Publishing is required by law
+    # (the 2014 food-competition act), so "we could not find it" should
+    # have been the trigger to look harder, not to record an absence.
+    "tivtaam": "TivTaam",
+}
+
+# Which branch's prices to read, for chains where it matters. Prices are
+# per branch, so a chain with 54 of them needs one named rather than
+# whichever filename happens to sort highest.
+#
+# Tiv Taam 002 (נתניה) is the physical branch nearest the household. It
+# was chosen over 502 (ליקוט נתניה, the online picking site) by testing
+# both against what the household has actually paid on real Tiv Taam
+# orders: 002 matched on more of their barcodes (240 vs 231), matched
+# more of them exactly (46% vs 45%) and had the smaller median gap
+# (₪0.50 vs ₪0.70). Not a decisive win — worth confirming with Ishay.
+PORTAL_BRANCHES = {
+    "tivtaam": "002",
 }
 
 _CSRF = re.compile(r'name="csrftoken" content="([^"]+)"')

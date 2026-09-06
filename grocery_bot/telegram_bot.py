@@ -34,6 +34,7 @@ from .catalog import (
     format_search_answer,
     refresh_catalog,
 )
+from . import basketview
 from .cartview import (
     MIN_EDIT_INTERVAL_SECONDS,
     render_final_by_store,
@@ -368,6 +369,43 @@ class GroceryBot:
             or "אין כרגע מבצעים חריגים ברשתות האחרות.",
             parse_mode="Markdown",
         )
+
+    async def basket(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/basket — this shop, priced at every chain, before paying.
+
+        Answers "where should this week's shop go" on the household's own
+        standing list rather than on a sample. Missing items and
+        substitutes are marked per chain, because a chain that is cheaper
+        only because it does not stock half the basket is not cheaper.
+        """
+        if not _authorized(self.config, update):
+            return
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+
+        def _price():
+            items = [
+                {"name": b.name, "quantity": b.default_quantity}
+                for b in self.storage.list_active_base_items()
+            ]
+            items += [
+                {"name": a.text, "quantity": a.quantity}
+                for a in self.storage.list_pending_adhoc()
+            ]
+            return basketview.price_basket(self.storage, items)
+
+        baskets = await asyncio.to_thread(_price)
+        await _send_markdown(
+            context, update.effective_chat.id, basketview.format_baskets(baskets)
+        )
+
+        # The detail for the one chain the household can actually order
+        # from besides the baseline: which lines are substitutes and which
+        # are simply absent. That is the part a quick glance cannot carry.
+        other = next((b for b in baskets if b.store == "tivtaam"), None)
+        if other is not None:
+            await _send_markdown(
+                context, update.effective_chat.id, basketview.format_missing(other)
+            )
 
     async def chain_deals(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/chaindeals — the same products, priced at every other chain.
@@ -1780,6 +1818,7 @@ async def _register_bot_metadata(application: Application) -> None:
             BotCommand("list", "הרשימה המלאה והמעודכנת"),
             BotCommand("stockup", "שווה לאגור — מבצעים חריגים לקנייה מראש"),
             BotCommand("chaindeals", "מבצעים מכל הרשתות, לא רק שופרסל"),
+            BotCommand("basket", "הסל שלי בכל רשת — כולל חוסרים ותחליפים"),
             BotCommand("cheaper", "השוואת ₪ לק\"ג — יש חלופה זולה יותר?"),
             BotCommand("list_full", "רשימה להדבקה בהזמנה מהירה"),
             BotCommand("digest", "כל הקנייה בהודעה אחת — רשימה, מבצעים, חלופות"),
@@ -1850,6 +1889,7 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("deals", bot.deals))
     application.add_handler(CommandHandler("alldeals", bot.all_deals))
     application.add_handler(CommandHandler("chaindeals", bot.chain_deals))
+    application.add_handler(CommandHandler("basket", bot.basket))
     application.add_handler(CommandHandler("refresh_prices", bot.refresh_prices))
     # /propose retired 2026-09-06: used once ever (2026-08-29), abandoned
     # before its own redesign — /start_order supersedes it. The panel

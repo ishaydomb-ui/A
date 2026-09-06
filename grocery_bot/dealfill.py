@@ -25,30 +25,103 @@ stock table — products with real purchase history — never the catalogue
 at large. A deep discount on something never once bought is not a
 saving, it is a new habit nobody asked for.
 
-Shufersal only, and that is a data limit rather than a preference.
-Promotions live in `catalog_promotions`, which is Shufersal's own
-price-transparency feed; Tiv Taam publishes no such feed at all (its
-`store_prices` rows are prices observed on past orders, some years old).
-A Shufersal deal added to a Tiv Taam cart would simply be bought at Tiv
-Taam's own undiscounted price — the saving is not transferable, so the
-cart it goes into has to be the chain that published it.
+Two chains, two joins, and the difference matters. Shufersal's own feed
+carries no barcode, so its deals are found by name through `radar`. Tiv
+Taam publishes to the shared transparency portal, where prices *and*
+promotions are both keyed on the manufacturer's EAN — so its deals join
+on the barcode and cannot mis-identify a product at all. (This project
+recorded for a week that Tiv Taam published no feed. It does; the
+earlier check looked for a chain-hosted one under a different spelling
+and read "not found" as "does not exist".)
+
+A deal is only ever added to the cart of the chain that published it. A
+Shufersal promotion put into a Tiv Taam cart would simply be bought at
+Tiv Taam's undiscounted price — the saving is not transferable.
+
+**Novel products.** Ishay 2026-09-06: he wants deep discounts on things
+he has *never* bought too, not only on his own repertoire. That is a
+different risk — an unknown product bought on price alone is exactly how
+a cupboard fills with things nobody eats — so it carries a higher
+discount bar, a smaller cap, its own label in the summary, and a
+best-effort perishables filter. That filter is a keyword list, which is
+weaker than the department data used for known products, and is
+documented as such rather than presented as reliable.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 from .disambiguate import _normalise
-from .radar import find_stockup_deals
+from .radar import MIN_DISCOUNT, find_stockup_deals
 
 # Chains whose own promotions we actually hold. See the module docstring:
 # this is about where the discount is real, not about which carts we can
 # fill (we can fill both).
-DEAL_CAPABLE_STORES = {"shufersal"}
+DEAL_CAPABLE_STORES = {"shufersal", "tivtaam"}
+
+# Chains whose promotions arrive keyed by barcode, so a deal is joined to
+# a shelf price with no name matching in the path at all.
+BARCODE_DEAL_STORES = {"tivtaam"}
 
 # A ceiling on how much a cycle may add by itself. The workflow tolerates
 # deleting a few lines; it does not tolerate a cart that has to be read
 # in full to find the things actually wanted.
 MAX_DEAL_ITEMS = 8
+
+# Novel products get a higher bar and a tighter cap than the household's
+# own repertoire: buying something never once bought, on price alone, is
+# the move most likely to end as waste.
+NOVEL_MIN_DISCOUNT = 0.40
+MAX_NOVEL_ITEMS = 4
+
+# Three ceilings, all of them added after running this against the real
+# feeds and reading what it actually proposed:
+#
+# - A novel item is an impulse the household did not ask for, so it has
+#   to be cheap enough that a wrong guess is trivial. The first run
+#   offered a ₪169 stainless serving spoon (down from ₪669) — a genuine
+#   75% off, and obviously not something to drop in a grocery cart
+#   unasked.
+# - Above ~80% "off", the number is almost always an artefact rather
+#   than a discount: the first run also offered three near-identical
+#   goat's cheeses at "₪30 instead of ₪179", which is a per-kilo shelf
+#   price against a per-unit promotion, not a saving.
+# - Anything sold by weight has that same unit mismatch by construction,
+#   so novel picks skip it entirely rather than guess the basis.
+NOVEL_MAX_PRICE = 30.0
+NOVEL_MAX_DISCOUNT = 0.80
+_WEIGHED_WORDS = ("משקל", "במשקל", "לק\"ג", 'לק"ג')
+
+
+def _sold_by_weight(name: str) -> bool:
+    return any(word in (name or "") for word in _WEIGHED_WORDS)
+
+
+def _plausible_novel(name: str, shelf_price: float, discount: float) -> bool:
+    """Is this a real, small, safe-to-guess deal — or a feed artefact?"""
+    if shelf_price > NOVEL_MAX_PRICE:
+        return False
+    if discount > NOVEL_MAX_DISCOUNT:
+        return False
+    if _sold_by_weight(name):
+        return False
+    return True
+
+# Best-effort perishables filter for products with no department data.
+# Weaker than the department taxonomy used for known products — it reads
+# a name, and names lie — so it is a guard, not a guarantee, and the
+# summary labels these picks as unfamiliar for exactly that reason.
+_PERISHABLE_WORDS = (
+    "טרי", "טרייה", "חלב", "גבינ", "יוגורט", "קוטג", "שמנת", "חמאה", "ביצים",
+    "בשר", "עוף", "הודו", "דג ", "דגים", "סלמון", "טונה טרי", "סלט", "לחם",
+    "פיתה", "לחמני", "עוגה", "בצק", "ירק", "פיר", "עגבני", "מלפפון", "חסה",
+    "בננ", "תפוח", "אבוקדו", "לימון", "גזר", "בצל", "שום טרי",
+)
+
+
+def _looks_perishable(name: str) -> bool:
+    lowered = name or ""
+    return any(word in lowered for word in _PERISHABLE_WORDS)
 
 
 @dataclass(frozen=True)
@@ -62,6 +135,11 @@ class DealPick:
     discount: float
     description: str
     quantity: int = 1
+    # False when the household has never bought this. Kept separate in
+    # the summary: "your usual thing is cheap this week" and "here is
+    # something new that is very cheap" are different offers, and only
+    # the second one needs justifying.
+    familiar: bool = True
 
     @property
     def label(self) -> str:
@@ -73,12 +151,121 @@ class DealPick:
         )
 
 
+def _barcode_picks(
+    storage,
+    store: str,
+    skip: set[str],
+    limit: int,
+    min_discount: float,
+    familiar_only: bool,
+) -> list[DealPick]:
+    """Deals at a chain that publishes promotions keyed by barcode.
+
+    No name matching anywhere: the promotion and the shelf price are the
+    same barcode, so either they join or they don't.
+    """
+    promotions = storage.live_store_promotions(store)
+    if not promotions:
+        return []
+    prices = storage.latest_store_prices(store)
+    bought = storage.bought_barcodes(store)
+
+    picks: list[DealPick] = []
+    for barcode, promo in promotions.items():
+        shelf = prices.get(barcode)
+        if not shelf or not shelf.get("price"):
+            continue
+        familiar = barcode in bought
+        if familiar_only and not familiar:
+            continue
+        if not familiar_only and familiar:
+            continue  # handled by the familiar pass
+        deal_price = float(promo["discounted_price"])
+        shelf_price = float(shelf["price"])
+        # A "deal" dearer than the shelf is a multi-buy total or a feed
+        # artefact, not a saving. The feed carries plenty of both.
+        if deal_price <= 0 or deal_price >= shelf_price:
+            continue
+        discount = 1 - deal_price / shelf_price
+        if discount < min_discount:
+            continue
+        name = shelf.get("name") or ""
+        if not name:
+            continue
+        if not familiar and (
+            _looks_perishable(name)
+            or not _plausible_novel(name, shelf_price, discount)
+        ):
+            continue
+        folded = _normalise(name)
+        if any(folded == s or folded in s or s in folded for s in skip):
+            continue
+        picks.append(
+            DealPick(
+                term=name,
+                catalog_name=name,
+                shelf_price=shelf_price,
+                deal_price=deal_price,
+                discount=discount,
+                description=promo.get("description", ""),
+                familiar=familiar,
+            )
+        )
+    picks.sort(key=lambda p: -p.discount)
+    return picks[:limit]
+
+
+def _novel_shufersal_picks(
+    storage, skip: set[str], limit: int, min_discount: float
+) -> list[DealPick]:
+    """Deep discounts at Shufersal on things never bought before.
+
+    Shufersal's feed has no barcode and no department, so this is the
+    weakest of the three paths: catalogue name against catalogue name,
+    with only a keyword guard against buying something that will rot.
+    """
+    known = {_normalise(row["product_name"]) for row in storage.list_stock_items("shufersal")}
+    picks: list[DealPick] = []
+    for product, promo in storage.catalog_deals():
+        if not product.price or not promo or promo.discounted_price <= 0:
+            continue
+        if promo.discounted_price >= product.price:
+            continue
+        discount = 1 - promo.discounted_price / product.price
+        if discount < min_discount:
+            continue
+        folded = _normalise(product.name)
+        if folded in known or any(folded == s or folded in s or s in folded for s in skip):
+            continue
+        if _looks_perishable(product.name):
+            continue
+        if getattr(product, "is_weighted", False):
+            continue
+        if not _plausible_novel(product.name, product.price, discount):
+            continue
+        picks.append(
+            DealPick(
+                term=product.name,
+                catalog_name=product.name,
+                shelf_price=product.price,
+                deal_price=promo.discounted_price,
+                discount=discount,
+                description=promo.description,
+                familiar=False,
+            )
+        )
+    picks.sort(key=lambda p: -p.discount)
+    return picks[:limit]
+
+
 def picks_for(
     storage,
     store: str,
     skip_terms: list[str] | None = None,
     limit: int = MAX_DEAL_ITEMS,
     pantryable_only: bool = True,
+    novel_limit: int = MAX_NOVEL_ITEMS,
+    novel_min_discount: float = NOVEL_MIN_DISCOUNT,
 ) -> list[DealPick]:
     """Deals to add to `store`'s cart beyond the list the user asked for.
 
@@ -86,13 +273,33 @@ def picks_for(
     ad-hoc requests). A deal on something already going in would arrive
     as a duplicate line, which reads like a bug in a cart the household
     is about to scan quickly.
+
+    Returns familiar picks first, then novel ones, each already capped —
+    the caller adds them in that order so that if anything gets dropped
+    it is the speculative half.
     """
     if store not in DEAL_CAPABLE_STORES:
         return []
 
     skip = {_normalise(t) for t in (skip_terms or []) if t}
 
-    picks: list[DealPick] = []
+    if store in BARCODE_DEAL_STORES:
+        familiar = _barcode_picks(
+            storage, store, skip, limit,
+            min_discount=MIN_DISCOUNT,
+            familiar_only=True,
+        )
+        novel = (
+            _barcode_picks(
+                storage, store, skip | {_normalise(p.term) for p in familiar},
+                novel_limit, min_discount=novel_min_discount, familiar_only=False,
+            )
+            if novel_limit
+            else []
+        )
+        return familiar + novel
+
+    familiar: list[DealPick] = []
     for deal in find_stockup_deals(storage, store):
         if pantryable_only and not deal.pantryable:
             continue
@@ -103,7 +310,7 @@ def picks_for(
         folded = _normalise(term)
         if any(folded == s or folded in s or s in folded for s in skip):
             continue
-        picks.append(
+        familiar.append(
             DealPick(
                 term=term,
                 catalog_name=deal.catalog_name,
@@ -113,9 +320,20 @@ def picks_for(
                 description=deal.description,
             )
         )
-        if len(picks) >= limit:
+        if len(familiar) >= limit:
             break
-    return picks
+
+    novel = (
+        _novel_shufersal_picks(
+            storage,
+            skip | {_normalise(p.term) for p in familiar},
+            novel_limit,
+            novel_min_discount,
+        )
+        if novel_limit
+        else []
+    )
+    return familiar + novel
 
 
 def format_picks(picks: list[DealPick]) -> str:
@@ -128,11 +346,24 @@ def format_picks(picks: list[DealPick]) -> str:
     """
     if not picks:
         return ""
-    lines = ["🏷️ *נוספו בגלל מבצע חריג* — מחקו מה שלא צריך:"]
-    total = 0.0
-    for pick in picks:
-        total += pick.shelf_price - pick.deal_price
-        lines.append(f"• {pick.catalog_name}\n   _{pick.label}_")
+    familiar = [p for p in picks if p.familiar]
+    novel = [p for p in picks if not p.familiar]
+    lines: list[str] = []
+    if familiar:
+        lines.append("🏷️ *נוספו בגלל מבצע חריג* — מחקו מה שלא צריך:")
+        for pick in familiar:
+            lines.append(f"• {pick.catalog_name}\n   _{pick.label}_")
+    if novel:
+        if lines:
+            lines.append("")
+        # Named as unfamiliar on purpose. These are the ones bought on
+        # price alone, so they carry the higher risk of ending up as
+        # waste, and the household should be able to see which is which
+        # without reading the prices.
+        lines.append("✨ *לא קונים בדרך כלל, אבל בהנחה עמוקה:*")
+        for pick in novel:
+            lines.append(f"• {pick.catalog_name}\n   _{pick.label}_")
+    total = sum(p.shelf_price - p.deal_price for p in picks)
     lines.append("")
     lines.append(f"_סה\"כ חיסכון אם נשארים: {total:.2f}₪_")
     return "\n".join(lines)
