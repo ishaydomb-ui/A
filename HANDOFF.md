@@ -6,68 +6,69 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-05 23:19 (host time, CEST)
+**Last anchored:** 2026-09-06 12:47 (host time, CEST)
 **Conversation id:** `eb6175a8-1890-4712-98a2-cd9a24f82ed2`
 **Session:** https://claude.ai/code/session_01BR6ULKQXHnkwAme1Hk4z9G
 **Branch:** `claude/online-grocery-automation-b7pq4g`
 **Status is in `git log`, not hand-typed here** (per the cross-project
 D.3 rule, 2026-09-04). This file holds decisions and open items only.
 
-**Since the last anchor (`c919da2`):** a new harvest domain, cross-project
-design feedback, and a real production bug found and fixed from journalctl
-evidence:
+**Since the last anchor (`3905665`):** a full-refresh cycle at Ishay's
+request (via Arthur, verbatim, 06.09.2026: "בקש מכולם כולל מעצמך רענון
+מלא - שיוודאו שהכל נשמר ומגובה..."), plus the independent E2E
+measurement round from the day before:
 
-- **New: coffeetrail.co.il coffee-cart directory, requested by Ishay.**
-  Same seam pattern as benefits — public data, no login. Harvested all
-  **405/405 carts** and all 5 taxonomies (region 43 · road 25 · foodtype
-  8 · type 4 · diners 3 — matching Ishay's counts exactly) via
-  `scripts/harvest_coffeetrail.py`. New CLI: `coffee-catalog`,
-  `coffee-nearby` (real haversine), `coffee-terms`, `coffee-by-term` —
-  not yet wired on Miri's side. Full detail, including two things caught
-  before they became wrong claims: a 4-cart sample first suggested hours/
-  phone/socials were "always empty" (full harvest: actually ~64-67%
-  populated), and a live run crashed 30 records in on a JSON-LD field
-  (`logo`) that was a list instead of a string on one cart — fixed
-  generically, made per-cart parsing non-fatal. `docs/COFFEETRAIL.md`.
-  Taxonomy membership is **best-effort, not exhaustive** — the site
-  paginates large terms via AJAX this harvester doesn't drive; three
-  unrelated terms independently capping at exactly 149 carts confirms a
-  shared batch-size ceiling, not real membership.
-- **Cross-project design feedback for Nigel's canonical-source-
-  architecture draft.** Answered his §5: the grocery canonical source is
-  the CLI seam itself over three data sources (sqlite/benefits/
-  coffeetrail), each already carrying a working freshness stamp. Flagged
-  "אוכל"/"סופר" as a three-way homonym (his ₪ spending category / my
-  product catalog / my own dining-benefit category) better resolved by
-  routing on question shape than by word ownership. One concrete overlap
-  (the ₪700/month benefit-card load possibly double-counting in his bank
-  feed) raised and **closed same day** — Nigel checked with evidence (280
-  load rows, all excluded from spend) and confirmed no double-count; this
-  project has no bank/charge visibility to check on its own side anyway.
-  `docs/CANONICAL_SOURCE_FEEDBACK.md`.
-- **A real, verified production bug: the SQLite→Drive backup has
-  probably never once succeeded via the timer.** Arthur (usage-audit)
-  flagged 44 straight `grocery-backup` failures today from journalctl;
-  verified independently (per the cross-session evidence rule, not taken
-  on his word) by reproducing under the exact systemd sandbox with
-  `systemd-run`: `rclone: command not found`, exit 127 — systemd
-  `--user`'s default PATH omits `~/bin`, where `rclone` actually lives.
-  Only interactive-shell checks (which have `~/bin` on PATH) ever looked
-  healthy. Fixed: `scripts/auto_push.sh` calls the full path and no
-  longer swallows rclone's real stderr; added `db_backup_failing_since`
-  to the heartbeat and a `db_backup_failing` watchdog check (2h
-  threshold) — the heartbeat previously tracked only whether the *script*
-  ran, never whether the backup *inside* it succeeded, so a future
-  regression would have gone silent the same way. Verified against the
-  live unit: `db backed up to gdrive:`. Also checked and closed two more
-  of Arthur's flags the same pass: an 18:17 price-feed DNS blip (isolated,
-  no recurrence, manually re-run) and a 13:18 Telegram `httpx.ReadError`
-  (a single self-healed network hiccup inside python-telegram-bot's own
-  retry loop — bot has run continuously since 2026-09-04 22:00, no
-  restart needed). Could not confirm the "400 Client Error" Arthur
-  mentioned alongside the third one — not found in this service's log.
+- **Independent E2E measurement, 2026-09-06** (Ishay via Arthur, 33
+  questions to Miri end-to-end; each domain measures its own side so the
+  gap between measurements is the detector). All 4 grocery-facing
+  questions answered with command + real output + data source + as-of
+  stamp; **no wording-dependence found** — the one place history
+  predicted one (apostrophe/geresh on קוטג') is confirmed fixed across 4
+  spelling forms. "יש מבצעים השבוע?" verified **structurally** incapable
+  of crossing the browse/discover red line: the only deals verb in the
+  seam (`deals`) reads exclusively from the household's own standing
+  list by code, not policy — the broader "novel deals" surface exists
+  (`/alldeals`) but isn't part of the CLI seam Miri calls at all.
+  **Self-caught methodology mistake, disclosed rather than hidden:**
+  tested `confirm-card` (a write command) against the live production
+  DB, creating a real false "card loaded" record that would have
+  suppressed a genuine ₪700 reminder — caught via the timestamp, deleted,
+  verified reverted. Every write-command test since uses a temp DB.
+  `docs/miri_e2e_round_2026-09-06.md`.
+- **Full-refresh verification, this anchor.** Four things Ishay asked
+  every project to check:
+  1. **Backup verified byte-for-byte, not just "the timer fired."**
+     20+ consecutive automatic (not manual) `grocery-backup.timer` runs
+     since 03:00 today, zero failures since yesterday's PATH fix
+     (`8bd492f`). Went further than the heartbeat: `rclone lsl` +
+     `rclone md5sum` against the live Drive file, compared to the local
+     DB's own `md5sum` — **identical**, right now. This is the
+     strongest evidence available short of an actual restore.
+  2. **Arthur's restart claim, checked and corrected — not blindly
+     followed.** He flagged `grocery-bot.service` running since
+     2026-09-04 22:00 while 4 commits landed since, including the
+     backup fix, and asked for a restart "otherwise the fix isn't
+     really live." **Verified false for this specific service**: none
+     of those 4 commits touch `cli.py`'s callers, `benefits_catalog.py`,
+     `coffeetrail_catalog.py`, or `watchdog.py`'s importers —
+     `grocery_bot.main`/`telegram_bot.py` import none of them (checked
+     by grep across the whole file, including lazy imports; zero hits),
+     and the bot makes no subprocess calls to the CLI at all. Those
+     modules are only ever invoked as separate processes (Miri's
+     subprocess calls, or the backup/doctor timers) — exactly the
+     "CLI, deliberately, so imports never couple" principle this
+     project already documents for the cross-project seam, holding
+     internally too. **Restarted anyway** (`scripts/restart_bot.sh`,
+     PID 146218 → 823491, confirmed clean start) as ordinary hygiene for
+     "full refresh," not because the stated reason was correct — it
+     wasn't, and the record should say so rather than quietly comply.
+  3. **This HANDOFF is the onboarding doc** — rewritten fully, not
+     patched, per its own contract.
+  4. **Risk check before anchoring:** clean git tree, zero failed
+     units, no stray temp files, no background processes left running,
+     nothing mid-flight. Safe to anchor.
 
-646 tests pass (was 614 at the last anchor). Zero failed systemd units.
+646 tests pass, unchanged. Zero failed systemd units.
 
 ---
 
@@ -417,9 +418,14 @@ the same result whether or not the thing is true is not evidence.**
   facts the heartbeat never actually distinguished. **Fixed and verified
   against the live unit** (full path, real stderr no longer swallowed,
   `db_backup_failing_since` + a watchdog check added so a future
-  regression can't go silent the same way). **Still not independently
-  verified: that the Drive copy actually restores** — only that the
-  upload itself now succeeds. Separately, lower stakes: an **isolated
+  regression can't go silent the same way). **Verified twice more since:
+  20+ consecutive automatic timer runs today, zero failures, and
+  `rclone md5sum` on the live Drive file matches the local DB's own
+  `md5sum` exactly** — the strongest check short of an actual restore.
+  **Still genuinely untested: restoring the Drive copy onto a fresh
+  machine and opening it** — content-identical is not the same claim as
+  restorable, even if it's now very strong evidence toward it. Separately,
+  lower stakes: an **isolated
   `gdrive-grocery:` rclone remote** is still deferred by Ishay
   ("בהזדמנות אחרת") — the shared `gdrive:` remote is what's in use, and
   now genuinely working.
