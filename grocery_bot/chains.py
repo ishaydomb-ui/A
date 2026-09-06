@@ -213,7 +213,10 @@ def format_refresh(results: list[FeedResult]) -> str:
     lines = []
     for result in sorted(results, key=lambda r: -r.products):
         if result.used:
-            lines.append(f"✅ {display_name(result.chain)}: {result.products} מוצרים")
+            line = f"✅ {display_name(result.chain)}: {result.products} מוצרים"
+            if result.promotions:
+                line += f", {result.promotions} מבצעים"
+            lines.append(line)
         else:
             lines.append(f"⚠️ {display_name(result.chain)}: {result.skipped_reason}")
     return "\n".join(lines)

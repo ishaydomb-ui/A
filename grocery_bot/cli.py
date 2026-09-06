@@ -108,6 +108,17 @@ def main(argv: list[str] | None = None) -> int:
             f"branch {meta.get('branch')}: {meta.get('product_count')} products "
             f"from {meta.get('price_file')}"
         )
+        # Every other chain, from the shared portal. This used to be
+        # Shufersal-only, which is why the audit on 2026-09-06 found the
+        # portal chains five days stale while Shufersal's own feed was
+        # hours old: `refresh_all_portal_chains` existed, was tested, and
+        # had no caller anywhere. A cross-chain comparison is only as
+        # honest as its stalest side, so the scheduler refreshes all of
+        # them or the comparison should not be offered.
+        from .chains import format_refresh, refresh_all_portal_chains
+
+        results = refresh_all_portal_chains(storage, proxy=config.playwright_proxy or None)
+        print(format_refresh(results))
         return 0
 
     if command == "import-base-list":
