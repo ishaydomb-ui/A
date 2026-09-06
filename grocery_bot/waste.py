@@ -61,12 +61,26 @@ def fraction_for(text: str) -> float:
     Half is the default because it is the least wrong answer when someone
     says "זרקתי חסה" without a quantity: treating it as a whole item
     overstates, treating it as a token amount understates.
+
+    Picks whichever fraction word occurs *earliest* in the text, not
+    whichever group happens to be listed first above. A real report —
+    "זרקתי קצת מהחלב, חוץ מזה הכל בסדר בבית" ("threw out a little milk,
+    otherwise all's fine at home") — used to come back as 1.0 (all)
+    because "all" was checked before "some" regardless of where either
+    word actually sat in the sentence, letting an unrelated closing
+    remark override the real quantity right next to the item. The
+    fraction word almost always follows the reporting verb right at the
+    start of the sentence; a trailing aside does not.
     """
     lowered = text or ""
+    best_key: str | None = None
+    best_pos: int | None = None
     for words, key in _HEBREW_FRACTIONS:
-        if any(word in lowered for word in words):
-            return FRACTIONS[key]
-    return FRACTIONS["half"]
+        for word in words:
+            pos = lowered.find(word)
+            if pos != -1 and (best_pos is None or pos < best_pos):
+                best_pos, best_key = pos, key
+    return FRACTIONS[best_key] if best_key else FRACTIONS["half"]
 
 
 @dataclass(frozen=True)

@@ -22,6 +22,19 @@ class FractionTest(unittest.TestCase):
     def test_empty_text_is_safe(self):
         self.assertEqual(waste.fraction_for(""), 0.5)
 
+    def test_an_unrelated_closing_remark_does_not_override_the_real_quantity(self):
+        """Live bug: 'the fraction word closest to the item wins' — not
+        'whichever fraction group happens to be checked first'. A trailing
+        aside like 'הכל בסדר בבית' must not turn "a little" into "all"."""
+        self.assertEqual(
+            waste.fraction_for("זרקתי קצת מהחלב, חוץ מזה הכל בסדר בבית"), 0.25
+        )
+
+    def test_earliest_mention_wins_when_two_quantity_words_appear(self):
+        self.assertEqual(
+            waste.fraction_for("זרקתי רוב העגבניות, לא את כל הבצל"), 0.75
+        )
+
 
 class RecordTest(unittest.TestCase):
     def setUp(self):
