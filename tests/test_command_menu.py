@@ -37,11 +37,14 @@ MENU = set(re.findall(r'BotCommand\("([a-z_]+)"', SOURCE))
 # Each was confirmed present verbatim on 2026-09-05, in telegram_bot.py
 # except chaindeals (radar.py's stockup footer, covered separately by
 # test_provenance.py's StockUpChainDealsFooter-style tests).
+#
+# "propose" was in this set until 2026-09-06: retired (used once ever,
+# abandoned before its own redesign; /start_order supersedes it) —
+# removed from both the menu and the /start help text, on purpose.
 EXAMPLES_SHOWN_TO_USERS = {
     "price",          # "איזה מוצר לבדוק? למשל: /price חלב"
     "refresh_prices", # "הריצו /refresh_prices כדי למשוך..."
     "cheaper",        # "*/cheaper שניצלונים*" and "למשל: /cheaper שניצלונים"
-    "propose",        # "*/propose* — הצעה לפי מחלקות..."
     "list_full",      # "`/list_full core`" etc., four times
     "chaindeals",     # radar.py footer: "_עוד מבצעים...:_ /chaindeals"
 }
@@ -52,7 +55,7 @@ class RegisteredCommandsAreReachableTests(unittest.TestCase):
         # A floor, not a ceiling: catches the registration list itself
         # going missing (e.g. a bad refactor), not just individual drift.
         for cmd in ("start", "list", "price", "deals", "chaindeals",
-                    "refresh_prices", "propose", "stockup", "cheaper",
+                    "refresh_prices", "stockup", "cheaper",
                     "list_full", "digest", "start_order"):
             self.assertIn(cmd, REGISTERED, f"/{cmd} is not a CommandHandler")
 

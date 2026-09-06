@@ -256,8 +256,7 @@ class GroceryBot:
             "*רשימה מול סל:*\n"
             "• *תוסיף X* — נכנס לרשימה שממתינה למחזור הבא\n"
             "• *תוסיף X לעגלה* — נכנס עכשיו לסל האמיתי בשופרסל\n"
-            "• *מלא את העגלה* — מריץ מחזור מלא על כל מה שברשימה\n"
-            "• */propose* — הצעה לפי מחלקות: הכל מסומן, מורידים מה שלא צריך\n\n"
+            "• *מלא את העגלה* — מריץ מחזור מלא על כל מה שברשימה\n\n"
             "_תמיד עוצר על סל מוכן — הבדיקה והתשלום נשארים אצלכם._",
             parse_mode="Markdown",
         )
@@ -1775,7 +1774,6 @@ async def _register_bot_metadata(application: Application) -> None:
         [
             BotCommand("start", "מה אפשר לבקש ממני"),
             BotCommand("list", "הרשימה המלאה והמעודכנת"),
-            BotCommand("propose", "הצעת קנייה לפי מחלקות — מסמנים מה צריך"),
             BotCommand("stockup", "שווה לאגור — מבצעים חריגים לקנייה מראש"),
             BotCommand("chaindeals", "מבצעים מכל הרשתות, לא רק שופרסל"),
             BotCommand("cheaper", "השוואת ₪ לק\"ג — יש חלופה זולה יותר?"),
@@ -1849,7 +1847,11 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("alldeals", bot.all_deals))
     application.add_handler(CommandHandler("chaindeals", bot.chain_deals))
     application.add_handler(CommandHandler("refresh_prices", bot.refresh_prices))
-    application.add_handler(CommandHandler("propose", bot.propose_cycle))
+    # /propose retired 2026-09-06: used once ever (2026-08-29), abandoned
+    # before its own redesign — /start_order supersedes it. The panel
+    # machinery (propose_cycle, on_proposal_button, _confirm_proposal) is
+    # left in place, unreachable, rather than gutted the night before a
+    # real shop; a clean removal is lower-stakes cleanup for later.
     application.add_handler(CommandHandler("stockup", bot.stockup))
     application.add_handler(CommandHandler("cheaper", bot.cheaper))
     application.add_handler(CommandHandler("list_full", bot.make_list))
