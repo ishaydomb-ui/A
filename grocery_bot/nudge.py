@@ -131,12 +131,29 @@ def compose(
     bot_username: str = "",
 ) -> str:
     """The message itself."""
-    lines = [
-        f"🛒 *עברו {days} ימים מההזמנה האחרונה*",
-        "",
-        "מה להוסיף לקנייה הבאה? אפשר לכתוב פשוט, למשל "
-        "_\"חלב, לחם ושתי חבילות פסטה\"_ — ואני אוסיף לרשימה.",
-    ]
+    # "The cart is already ready", chosen by Ishay 2026-09-07 from three
+    # drafts. It leads with the state of the cart rather than with a
+    # question, because with the standing cart there is nothing to
+    # decide — the work left is reviewing and deleting. Note there are
+    # no buttons: this message is delivered by Miri into the family
+    # group, and a button there would need that project to change. Plain
+    # store links work in any message and needed nothing from anyone.
+    from . import standingcart
+
+    from .chains import display_name
+
+    filled = standingcart.cart_contents(storage)
+    if filled:
+        lines = [f"🛒 *עברו {days} ימים — העגלה כבר מוכנה*", ""]
+        parts = [f"{count} פריטים ב{display_name(key)}" for key, count in filled]
+        lines.append("מילאתי " + " ו-".join(parts) + " לפי מה שאתם קונים בדרך כלל.")
+    else:
+        lines = [
+            f"🛒 *עברו {days} ימים מההזמנה האחרונה*",
+            "",
+            "מה להוסיף לקנייה הבאה? אפשר לכתוב פשוט, למשל "
+            "_\"חלב, לחם ושתי חבילות פסטה\"_ — ואני אוסיף לרשימה.",
+        ]
 
     due = shelflife.due_now(storage, store, today)
     if due:
@@ -164,5 +181,14 @@ def compose(
                 "",
                 f"[עוד {extra} מבצעים](https://t.me/{bot_username}?start=alldeals)",
             ]
+
+    if filled:
+        from .chains import cart_url
+
+        lines += ["", "*מה שנשאר: לעבור, להוריד מה שלא צריך, לשלם.*", ""]
+        for store_key, _ in filled:
+            url = cart_url(store_key)
+            if url:
+                lines.append(f"[🛒 פתיחת הסל ב{display_name(store_key)}]({url})")
 
     return "\n".join(lines)

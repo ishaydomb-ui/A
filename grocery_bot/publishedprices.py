@@ -59,14 +59,16 @@ PORTAL_CHAINS = {
 # per branch, so a chain with 54 of them needs one named rather than
 # whichever filename happens to sort highest.
 #
-# Tiv Taam 002 (נתניה) is the physical branch nearest the household. It
-# was chosen over 502 (ליקוט נתניה, the online picking site) by testing
-# both against what the household has actually paid on real Tiv Taam
-# orders: 002 matched on more of their barcodes (240 vs 231), matched
-# more of them exactly (46% vs 45%) and had the smaller median gap
-# (₪0.50 vs ₪0.70). Not a decisive win — worth confirming with Ishay.
+# Tiv Taam 019 is רמת החייל, Tel Aviv — the branch the household
+# actually shops at, told to us by Ishay on 2026-09-07. It replaced a
+# guess (002, נתניה, picked for being nearest their home) and the data
+# agrees with him: against the 301 barcodes they have really paid for,
+# 019 overlaps on more of them (253 vs 240), matches more exactly (47%
+# vs 46%) and has the smaller median gap (₪0.40 vs ₪0.50). 519, the
+# ליקוט (online picking) site for the same branch, was tested too and
+# came out slightly worse than 019 on every one of those measures.
 PORTAL_BRANCHES = {
-    "tivtaam": "002",
+    "tivtaam": "019",
 }
 
 _CSRF = re.compile(r'name="csrftoken" content="([^"]+)"')

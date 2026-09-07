@@ -34,7 +34,7 @@ from .catalog import (
     format_search_answer,
     refresh_catalog,
 )
-from . import basketview
+from . import basketview, standingcart
 from .cartview import (
     MIN_EDIT_INTERVAL_SECONDS,
     render_final_by_store,
@@ -369,6 +369,60 @@ class GroceryBot:
             or "אין כרגע מבצעים חריגים ברשתות האחרות.",
             parse_mode="Markdown",
         )
+
+    async def done_shopping(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/done — "I've paid". Records the shop and refills both carts.
+
+        A told signal rather than an inferred one, chosen by Ishay
+        2026-09-07 over the two alternatives: order history is reliable
+        but slow (his 09-07 order still had not appeared in Shufersal's
+        history two hours after he paid), and an empty cart is immediate
+        but cannot tell a completed shop from a cart he cleared himself.
+        One tap removes both problems.
+        """
+        if not _authorized(self.config, update):
+            return
+        standingcart.mark_shopped(self.storage)
+        await update.message.reply_text(
+            "✅ רשמתי שסיימת. ממלא את העגלה מחדש — זה ייקח כמה דקות, "
+            "ואשלח סיכום כשאסיים."
+        )
+
+        factories = _build_adapter_factories(self.config)
+        if not factories:
+            return
+        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy)
+        if not status.available:
+            await update.message.reply_text(
+                f"🕒 אין כרגע חיבור לרשתות ({status.detail}). "
+                "אמלא את העגלה כשהחיבור יחזור."
+            )
+            return
+        await self._refill_carts(update.effective_chat.id, context, factories)
+
+    async def _refill_carts(self, chat_id: int, context, factories) -> None:
+        """Put the standing list, plus this week's deals, into every cart."""
+        from .chains import display_name
+
+        reports = {}
+        for store, factory in factories.items():
+            plan = await asyncio.to_thread(standingcart.plan_refill, self.storage, store)
+            if not plan.terms:
+                continue
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"🛒 ממלא {plan.total} פריטים ב{display_name(store)}…",
+            )
+            store_reports = await asyncio.to_thread(
+                add_terms_to_cart, self.storage, {store: factory}, plan.terms
+            )
+            reports.update(store_reports)
+
+        if reports:
+            await asyncio.to_thread(standingcart.record_manifest, self.storage, reports)
+            await _send_markdown(
+                context, chat_id, format_report_summary(reports) or "לא היה מה להוסיף."
+            )
 
     async def last_deals(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/lastdeals — what the last cycle put in the cart on its own."""
@@ -1856,6 +1910,7 @@ async def _register_bot_metadata(application: Application) -> None:
             BotCommand("chaindeals", "מבצעים מכל הרשתות, לא רק שופרסל"),
             BotCommand("basket", "הסל שלי בכל רשת — כולל חוסרים ותחליפים"),
             BotCommand("lastdeals", "אילו מבצעים נוספו לעגלה לבד"),
+            BotCommand("done", "סיימתי לקנות — מלא את העגלה מחדש"),
             BotCommand("cheaper", "השוואת ₪ לק\"ג — יש חלופה זולה יותר?"),
             BotCommand("list_full", "רשימה להדבקה בהזמנה מהירה"),
             BotCommand("digest", "כל הקנייה בהודעה אחת — רשימה, מבצעים, חלופות"),
@@ -1928,6 +1983,7 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("chaindeals", bot.chain_deals))
     application.add_handler(CommandHandler("basket", bot.basket))
     application.add_handler(CommandHandler("lastdeals", bot.last_deals))
+    application.add_handler(CommandHandler("done", bot.done_shopping))
     application.add_handler(CommandHandler("refresh_prices", bot.refresh_prices))
     # /propose retired 2026-09-06: used once ever (2026-08-29), abandoned
     # before its own redesign — /start_order supersedes it. The panel
