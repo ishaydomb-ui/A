@@ -6,231 +6,87 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-06 12:47 (host time, CEST)
-**Conversation id:** `eb6175a8-1890-4712-98a2-cd9a24f82ed2`
-**Session:** https://claude.ai/code/session_01BR6ULKQXHnkwAme1Hk4z9G
+**Last anchored:** 2026-09-07 09:10 (host time, CEST)
+**Session:** https://claude.ai/code/session_01AR7esAYdoXQ71HXtqJPpQV
 **Branch:** `claude/online-grocery-automation-b7pq4g`
-**Status is in `git log`, not hand-typed here** (per the cross-project
-D.3 rule, 2026-09-04). This file holds decisions and open items only.
+**Status is in `git log`, not hand-typed here.**
 
-**Since the last anchor (`3905665`):** a full-refresh cycle at Ishay's
-request (via Arthur, verbatim, 06.09.2026: "בקש מכולם כולל מעצמך רענון
-מלא - שיוודאו שהכל נשמר ומגובה..."), plus the independent E2E
-measurement round from the day before:
-
-- **Independent E2E measurement, 2026-09-06** (Ishay via Arthur, 33
-  questions to Miri end-to-end; each domain measures its own side so the
-  gap between measurements is the detector). All 4 grocery-facing
-  questions answered with command + real output + data source + as-of
-  stamp; **no wording-dependence found** — the one place history
-  predicted one (apostrophe/geresh on קוטג') is confirmed fixed across 4
-  spelling forms. "יש מבצעים השבוע?" verified **structurally** incapable
-  of crossing the browse/discover red line: the only deals verb in the
-  seam (`deals`) reads exclusively from the household's own standing
-  list by code, not policy — the broader "novel deals" surface exists
-  (`/alldeals`) but isn't part of the CLI seam Miri calls at all.
-  **Self-caught methodology mistake, disclosed rather than hidden:**
-  tested `confirm-card` (a write command) against the live production
-  DB, creating a real false "card loaded" record that would have
-  suppressed a genuine ₪700 reminder — caught via the timestamp, deleted,
-  verified reverted. Every write-command test since uses a temp DB.
-  `docs/miri_e2e_round_2026-09-06.md`.
-- **Full-refresh verification, this anchor.** Four things Ishay asked
-  every project to check:
-  1. **Backup verified byte-for-byte, not just "the timer fired."**
-     20+ consecutive automatic (not manual) `grocery-backup.timer` runs
-     since 03:00 today, zero failures since yesterday's PATH fix
-     (`8bd492f`). Went further than the heartbeat: `rclone lsl` +
-     `rclone md5sum` against the live Drive file, compared to the local
-     DB's own `md5sum` — **identical**, right now. This is the
-     strongest evidence available short of an actual restore.
-  2. **Arthur's restart claim, checked and corrected — not blindly
-     followed.** He flagged `grocery-bot.service` running since
-     2026-09-04 22:00 while 4 commits landed since, including the
-     backup fix, and asked for a restart "otherwise the fix isn't
-     really live." **Verified false for this specific service**: none
-     of those 4 commits touch `cli.py`'s callers, `benefits_catalog.py`,
-     `coffeetrail_catalog.py`, or `watchdog.py`'s importers —
-     `grocery_bot.main`/`telegram_bot.py` import none of them (checked
-     by grep across the whole file, including lazy imports; zero hits),
-     and the bot makes no subprocess calls to the CLI at all. Those
-     modules are only ever invoked as separate processes (Miri's
-     subprocess calls, or the backup/doctor timers) — exactly the
-     "CLI, deliberately, so imports never couple" principle this
-     project already documents for the cross-project seam, holding
-     internally too. **Restarted anyway** (`scripts/restart_bot.sh`,
-     PID 146218 → 823491, confirmed clean start) as ordinary hygiene for
-     "full refresh," not because the stated reason was correct — it
-     wasn't, and the record should say so rather than quietly comply.
-  3. **This HANDOFF is the onboarding doc** — rewritten fully, not
-     patched, per its own contract.
-  4. **Risk check before anchoring:** clean git tree, zero failed
-     units, no stray temp files, no background processes left running,
-     nothing mid-flight. Safe to anchor.
-
-646 tests pass, unchanged. Zero failed systemd units.
-
----
+**Since the last anchor (`c178749`):** a field audit of the whole
+Telegram surface, a **real order placed by Ishay on 2026-09-07** that
+went partly wrong and was dissected, and the build that came out of it.
+Eleven commits, `53ec0f7`..`e600e91`. 663 tests pass.
 
 ## 1. Where things stand
 
 **Running in production on the Contabo VPS**, as user systemd units:
+`grocery-bot.service` (the bot), `grocery-prices.timer` (now refreshes
+**every** chain, see below), `grocery-backup.timer`, `grocery-doctor.timer`,
+`grocery-alert@.service`.
 
-| Unit | What it does |
-|---|---|
-| `grocery-bot.service` | The Telegram bot (active) |
-| `grocery-prices.timer` | Refreshes the Shufersal price feed, a few times a day |
-| `grocery-backup.timer` | Pushes commits to GitHub every 30 min |
-| `grocery-doctor.timer` | Hourly backup health check (new, 2026-09-01) |
-| `grocery-alert@.service` | `OnFailure=` notifier shared by all of the above |
+**Store data — the big change this round.**
 
-**Store access:**
-- **Shufersal** — logged in, cart add/remove verified, public price feed
-  working (5,821 products). Order history readable.
-- **Tiv Taam** — logged in (session survives with no browser running).
-  Account, orders, coupons, smart list all readable. Cart **read and
-  cleared** verified against the real account 2026-09-02: `cart_summary`
-  returns the panel's own total including delivery, `clear_cart` removes
-  line by line and verifies on line elements. **Its search is the weak
-  link** — see §3.
-- **Victory** — prices readable with **no login at all**; account login
-  still outstanding (see §3).
+| Chain | Prices | Promotions | Cart |
+|---|---|---|---|
+| Shufersal | own feed, 5,820 products | yes (`catalog_promotions`) | yes |
+| **Tiv Taam** | **portal feed, 20,889 products** | **yes, 25,642** | yes |
+| Politzer / Osher Ad / Rami Levy / Fresh Market / Keshet | portal feed | Politzer + Osher Ad only | no |
+| Yohananof | refused — feed 618 days stale | — | no |
 
-**Everything needs the Israeli exit** (`PLAYWRIGHT_PROXY`, Tailscale
-SOCKS5 on `localhost:1055`). Without it the chains return block pages
-with HTTP 200, which reads like broken selectors.
+**Tiv Taam publishes a public feed and always did.** This file said for
+a week that it had none ("checked: prices.tivtaam.co.il does not exist,
+and it is absent from the usual publisher portals"). It is on
+`url.publishedprices.co.il` — the portal this project already read for
+five other chains — under username `TivTaam`, hourly, 54 branches, with
+`PromoFull` beside `PriceFull`. The earlier check guessed a subdomain,
+did not find one, and recorded an absence; publishing is required by the
+2014 food-competition act, so "not found" should have prompted a harder
+look. **Branch 019 (רמת החייל)**, confirmed by Ishay and corroborated
+against the 301 barcodes he has really paid for (253 overlap, 47% exact,
+₪0.40 median gap — beating נתניה/002 and the ליקוט site/519).
 
-**Benefits harvest (behatsdaa) — a separate subsystem, owned by this
-project.** Ownership and build authorization are both settled with
-verbatim quotes and dates (`GOALS.md`) — do not re-ask. Status, in full,
-lives in `docs/BENEFITS.md`; the short version: the store catalog (982
-stores, manually tagged) was rescued and is backed up to
-`gdrive:גורדון — קטלוג הטבות/`, and Miri can already read it read-only
-via `benefits-catalog`/`benefits-branches` in the CLI (built
-2026-09-03, documented in `docs/MIRI_INTEGRATION.md` — familyos-side
-wiring is not done, that's the user's next step). **No live harvesting
-has happened yet** — our own behatsdaa login is blocked by an Incapsula
-fingerprint check, not a timing problem (see §3). Three product inputs
-are still open before any harvest step; see §5.
+**`refresh-prices` now refreshes all chains.** `refresh_all_portal_chains`
+existed, was tested, and had **no caller anywhere**, so the timer only
+ever pulled Shufersal — which is why an audit found the portal chains
+five days stale beside a Shufersal feed hours old.
+
+**The Telegram surface**: `/start`, `/list`, `/price`, `/deals`,
+`/alldeals`, `/chaindeals`, `/refresh_prices`, `/stockup`, `/cheaper`,
+`/list_full [core|full|everything|fresh|pantry]`, `/digest`,
+`/start_order`, plus new this round: **`/basket`** (the list priced at
+every chain, ✅/🔄/❌ per line), **`/lastdeals`**, **`/done`**. `/propose`
+was retired (used once ever, abandoned before its own redesign).
+
+**The standing cart** (`standingcart.py`) is the current design, chosen
+by Ishay 2026-09-07: `/done` records the shop and refills both carts from
+the `everything` list (147 products) plus deals, so the cart is full
+before he opens it and finishing is only deleting. Refill takes ~2.5h
+across both chains; that is fine because it runs immediately after
+`/done` and the cart is not needed for ~5 days.
 
 ## 2. In flight
 
-**One thing is deliberately half-done, and the user asked for it to be
-remembered: step 2 of the Tiv Taam reliability plan — resolve product
-names against our own catalog instead of the live dropdown.**
-
-Steps 1 and 3 are built (remember a clean resolution; retry an empty
-search). Step 2 is the real fix and was not started, on purpose: it is a
-proper piece of work and the session was ending.
-
-*What it is:* the name → product step should not touch the live site at
-all. The barcode is already in `store_prices` (743 Tiv Taam rows) and the
-catalog is keyed by EAN across eight chains, so `compare.py`'s matching
-already does most of this. Resolve name → barcode locally, then use the
-Self-Point API's `filters[must][term][localBarcode]` — which *is*
-honoured — to get the Tiv Taam product id, and let the browser do only
-the add.
-
-*Why it matters:* the autocomplete returned 4, then 0, then 5, then 1
-candidate for "קוטג" in one afternoon. A 0 is reported as `not_found` for
-a weekly staple, and a 1 is added and now *remembered* — so a half-loaded
-dropdown can pin the wrong product. Step 1 accepts that risk knowingly
-(see the comment in `orchestrator._add_one`); step 2 removes it.
-
-*Do not build it on API name search.* `filters[must][match][name]`
-returns HTTP 200 with products but is ignored — three different terms
-return byte-identical results with `total=10000`. Written up in
-`docs/ADDING_A_STORE.md` §7.
-
-The last completed pieces, newest first:
-
-- **Benefits catalog exposed to Miri, read-only** — `benefits-catalog`
-  and `benefits-branches` in the CLI, backed by
-  `grocery_bot/benefits_catalog.py`. Reads flat CSVs under
-  `data/benefits/` (gitignored, not the sqlite DB). 16 tests against a
-  temp data dir. Same token-free contract as every other Miri command.
-- **Catalog backed up to Drive**, verified against the originals —
-  `catalog_tagged.csv` + `catalog_full.csv` in
-  `gdrive:גורדון — קטלוג הטבות/`. Now the catalog's only durable copy;
-  the Strategist's `portfolio-strategy/lab/` has no backup of its own.
-- **`docs/SITE_ACCESS_PLAYBOOK.md`** — a cross-project reference on every
-  login/anti-bot barrier hit so far (geo-block, rate-based WAF,
-  reCAPTCHA, Incapsula fingerprinting), what solved each, and the policy
-  line between a legitimate login and anti-bot evasion. Shared with
-  Arthur to route to the other bots, recommendation-only.
-- Eight chains priced by barcode; five new ones from the transparency
-  portal. `whereto` answers "where should the whole shop go this week".
-- `nudge` — the six-day message: reminder, free-text reply, card
-  question, ten deals and a link to twenty more.
-- `threshold` — the ₪599 gift and one-short multi-buys, checked before
-  the hand-off to pay.
-- `habits` — one consumption rate per product across chains.
-- `waste`, `shelflife`, `pricecontrol`, `smartlist`, `hotdeals`.
-- `adapters/tivtaam.py` — Tiv Taam cart filling. ENABLED_STORES has both
-  chains. No checkout method exists and a test enforces that.
-  **This line used to claim "verified against the real account (search,
-  add, verify, clear)". It was overstated** — there was no `clear` method
-  in the file at all, and the add path reported successful adds as
-  failures. Both were found and fixed on 2026-09-02 by actually running
-  it; `clear_cart` is new. Left visible as a reminder that "verified"
-  in this file has to mean a command was run, not that code was read.
-- Backup monitoring — heartbeat, freshness doctor, `OnFailure=` alerts,
-  all-clear on recovery. Verified end to end.
-- `shelflife.py` — when cupboard staples are actually due again.
-- `pricecontrol.py` — prefer the price-controlled staple where one exists.
-- `ask.py` — one-off price questions across all three chains.
-- `multibuy.py` — whether "הוסף וחסוך" is genuinely worth taking.
-- `compare.py` + `selfpoint.py` — cross-chain comparison on EAN barcode.
+Nothing half-built. The order-history comparison Ishay asked for is
+**waiting on data, not on work**: his 2026-09-07 order had still not
+appeared in Shufersal's own order history hours later, so "what was
+actually bought vs what the list proposed" cannot be computed yet. The
+nightly sync will pick it up.
 
 ## 3. Blocked, and on what
 
-- **behatsdaa login is blocked by an Incapsula fingerprint check, not
-  timing.** Diagnosed 2026-09-03 by probing the block directly (network +
-  fingerprint capture, no evasion): the homepage returns 200 and earns an
-  `incap_ses` cookie, so the IP is not rate-blocked — waiting does
-  nothing. `navigator.webdriver === true` and a self-contradictory
-  fingerprint (iPhone UA on `platform: Linux x86_64`, 0 plugins, 0 touch
-  points) get the automation caught; Incapsula returns 403 on
-  `configuration.json`, the SPA throws "שגיאה כללית", and the OTP request
-  is never actually fired — the first script's "OTP_SENT" was false,
-  read off a click rather than a verified result (now fixed to check the
-  code field actually appears). **In-policy fix: a human/real-browser
-  login**, same noVNC pattern as the Self-Point chains — blocked on the
-  same phone-access problem as Victory below. Automated evasion (hiding
-  `webdriver`, spoofing the fingerprint) is out of policy; the safety
-  classifier blocked even a plain headed-browser test framed as "just a
-  real browser." Full writeup: `docs/BENEFITS.md`.
-- **Tiv Taam's search is unreliable, and that is now the weakest part of
-  the chain.** Not blocked on anything external — it is step 2 above.
-  Symptoms seen live on 2026-09-02, same account, same afternoon: the
-  same query returned 4, then 0, then 5, then 1 candidate; some rows
-  carry no add button at all (a real "out of stock", not a bug). Cart
-  reading, adding and clearing are all solid now; the search under them
-  is not.
-
-- **Victory storefront is Cloudflare-blocked** from this exit as of
-  2026-09-01 12:42 — `victoryonline.co.il` returns 403 while Tiv Taam and
-  `api.self-point.com` stay fine. Likely provoked by my own automated
-  loads. **Victory prices still work**, because they come from the API.
-  Credentials are stored; retry the login later or from another exit.
-  **Rate-based WAF blocks are per-destination-site, not per-source-IP.**
-  Confirmed 2026-09-02: the `portfolio-strategy` session hit
-  `behatsdaa.org.il` ~10× through the *shared* exit node and earned a 403
-  there, while at that same moment Shufersal (`/online/he/login`, 200,
-  230KB) and Tiv Taam (200) stayed clean through the same IP. So another
-  project's load on a different domain does not collaterally block the
-  stores — but hammering one store *does* block that store (this is the
-  Victory case above, same-site). The exit is shared by three projects;
-  pace store loads accordingly.
-- **Victory account login, and now behatsdaa's too, both need the same
-  fix: noVNC reachable from the phone.** Victory needs the manual noVNC
-  flow (checkbox reCAPTCHA) like Tiv Taam; behatsdaa needs a real/headed
-  browser for the same reason (see above). The user could not reach
-  `http://localhost:6080/vnc.html` from the phone — the stack runs and
-  serves locally, so it is the SSH port-forward of 6080. Solving this
-  once unblocks two sites. **Victory price comparison does not depend on
-  this** and already works; an account would add only order history and
-  cart filling.
+- **The Israeli exit runs through Ishay's iPhone, not the TV box.** The
+  Xiaomi Android TV box has been unreachable since ~2026-09-01 ("offline,
+  last seen 6d ago", `tailscale ping` times out). The phone works but is
+  erratic — measured 1.7s, 1.9s, then 8.1s for one page — and that caused
+  repeated 30s Playwright timeouts during the real order. Needs someone
+  physically at the box.
+- **Tiv Taam's autocomplete is still the weak link for unresolved terms.**
+  `localmatch` now resolves 34 terms locally from the feed, but the rest
+  still go through the dropdown, which returned zero rows for `ביצים`
+  three times running while the site finds it fine by hand. The proper
+  fix is the Self-Point API's `filters[must][term][localBarcode]`, which
+  the API honours, so the browser only ever performs the add.
+- **behatsdaa and Victory** — unchanged, see `docs/BENEFITS.md`. Both
+  still need the noVNC-from-phone route.
 
 ## 4. Handover procedure
 
@@ -378,6 +234,44 @@ the same result whether or not the thing is true is not evidence.**
   handover's own §4 checklist). When a fix touches N files matched by a
   shared cause, grep for every file matching that cause, not just the
   ones already in front of you.
+- **A failed message did not just lose the message — it lost the cart.**
+  On the real order of 2026-09-07 the summary send raised
+  `BadRequest: can't find end of the entity` (a `*` in "עגבניות חתוכות
+  דק 400\*3ג", the trap `mdtext.py` already documents), and because
+  `start_order` sends the summary *before* asking about ambiguous items,
+  the exception aborted the rest of the flow. 39 Tiv Taam items were
+  sitting as unanswered questions, so that cart ended with 7 items while
+  Shufersal's was full. Two lessons, not one: escape store text
+  everywhere it enters Markdown, and never let a cosmetic send sit in
+  front of the steps that actually finish the job. Both fixed; the
+  summary now goes through `_send_markdown`, which degrades to plain
+  text.
+- **"The carts are filled, only the report was lost" was reported to
+  Ishay before checking the database.** It was wrong — see above — and
+  the DB said so plainly (`pending_ambiguities`, 39 rows, one query).
+  Check the state before characterising a failure to the user.
+- **Asking the user is not free, and 39 questions is not a workflow.**
+  Tiv Taam's adapter treats any multi-row autocomplete as ambiguity and
+  delegates it. That is correct per item and absurd in aggregate. Where
+  a local catalogue exists, resolve there and ask only about what is
+  genuinely unclear.
+- **A resolver that always answers is worse than one that refuses.**
+  The first `localmatch` picked בננה ציפס (crisps) for "בננה" — the Tiv
+  Taam feed carries no fresh bananas at all, so every candidate was
+  wrong — and מלפפון במלח (pickles) for "מלפפון", because it sorted
+  cheapest-first and pickles undercut cucumbers. Product memory buys the
+  same thing every week without asking again, so refusing is cheap and
+  being confidently wrong is not.
+- **A dead learning loop looks exactly like a well-behaved one.**
+  `stock.py` says removals matter more than the thresholds, and
+  `skipped_count` is 0 for all 294 products — its only input was the
+  `/propose` flow, used once, ever. A mechanism with no input path
+  produces no complaints.
+- **"Not found" is not "does not exist" — the Tiv Taam feed edition.**
+  Recorded here for a week as having no public feed, on the strength of
+  one guessed subdomain. It was on the portal this project already used,
+  under an obvious username. Where publication is legally required,
+  absence of evidence is a reason to look harder.
 - **An unescaped `%` in a product name was a live SQL LIKE wildcard.**
   Searching "חלב 3%" built `LIKE '%חלב 3%%'`, whose trailing `%` matched
   any suffix — so "חלב 36" (a chocolate) came back for a milk query, for

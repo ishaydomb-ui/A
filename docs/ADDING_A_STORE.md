@@ -227,3 +227,42 @@ different one:** the human-in-the-loop cost here is not the login method,
 it is the rare re-login, and the one place it is genuinely blocking is
 Victory (§3 of HANDOFF) — which needs the noVNC port-forward, not a
 different credential type.
+
+## The chain probably publishes a feed — find it before scraping (2026-09-07)
+
+Israeli law has required every large retailer to publish full price and
+promotion files since 2014, so **assume a feed exists and go looking**
+before writing a single selector. Tiv Taam was recorded in this project
+for a week as having none, on the strength of one guessed subdomain
+(`prices.tivtaam.co.il`) returning nothing. It publishes to
+`url.publishedprices.co.il` — the portal we already read for five other
+chains — under the username `TivTaam` with an empty password, hourly,
+for 54 branches, `PriceFull` and `PromoFull` both.
+
+Where to look, in order:
+
+1. `url.publishedprices.co.il` — try the chain's name as the username,
+   empty password. Half the market is here.
+2. The chain's own `prices.*` / `matrixcatalog` / `laibcatalog` host.
+3. The government's published list of transparency URLs.
+
+**Pick the branch empirically, not by geography.** Prices are per branch.
+Compare each candidate branch's feed against what the household has
+actually paid (`store_prices` where `source='order'`): overlap count,
+exact-match rate and median gap will separate them. That is how branch
+019 was confirmed over two plausible alternatives.
+
+**A feed changes what is possible, not just what is cheaper.** With the
+catalogue on disk, a product can be resolved locally instead of by
+typing into the chain's own autocomplete — which is what turned 39
+unanswerable questions into direct adds. Barcode-keyed promotions also
+join to barcode-keyed prices with no name matching anywhere in the path.
+
+## Never put a cosmetic send in front of the work (2026-09-07)
+
+`start_order` sent its summary, then asked about ambiguous items. A `*`
+in a product name made the summary send raise, and the exception took
+the questions with it — so a cart that needed 39 answers got none, and
+ended with 7 items. Order the steps so that the ones which finish the
+job run first, and route every store-supplied string through
+`mdtext.escape` on the way into Markdown.

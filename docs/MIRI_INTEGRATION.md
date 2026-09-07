@@ -108,6 +108,8 @@ one.
 |---|---|
 | `price <query>` | **Shufersal shelf price** (single chain), promotions, ₪/kg with 🏆 |
 | `price-compare <query> [--json]` | **Where it's cheapest across every chain** — the canonical "הכי זול" answer |
+| `basket` | The standing list priced at **every** chain, with ✅ exact / 🔄 substitute / ❌ missing marked per line, and delivery included. Answers "where should this week's shop go" rather than "what does one product cost". |
+| `seed-memory <store> [--dry-run]` | Resolves the household's terms against a chain's own published feed and remembers the unambiguous ones. Safe to re-run; it refuses far more than it accepts, on purpose. |
 | `deals` | Live promotions on the household's standing list |
 
 **⚠️ Canonical routing for price — one question, one path.** "How much is
@@ -350,3 +352,19 @@ where routing breaks.** "מה נאכל השבוע?" flipped between `meal_plan` 
 imperative forms. It passed on the first test and failed on the second.
 Any routing added on the Miri side should be checked more than once per
 phrasing.
+
+## Two things that changed on 2026-09-07
+
+**`price-compare` got materially more trustworthy.** It used to return
+the cheapest *substring* match per chain, which meant candy for "חלב"
+at five of seven chains and breadcrumbs for "לחם" at two. It now ranks
+by name relevance first and only reports a chain when it has a real
+word-boundary match. Same command, same output shape — but answers that
+were wrong before are right now, so any cached comparison is worth
+discarding.
+
+**Tiv Taam data is real now.** It has a public feed after all (20,889
+products, 25,642 live promotions, branch 019 רמת החייל), so a Tiv Taam
+price from this seam is today's published price rather than something
+the household paid months ago. `price-compare` and `basket` both benefit
+without any change on your side.
