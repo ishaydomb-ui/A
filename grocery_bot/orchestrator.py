@@ -152,7 +152,36 @@ def run_order_cycle(
     for adhoc_id in resolved_adhoc:
         storage.mark_adhoc_consumed(adhoc_id)
 
+    # Keep what the cycle chose on its own. The summary message is
+    # otherwise the only record of it, and on 2026-09-07 that message
+    # failed to send on a real order — leaving no way at all to answer
+    # "what did it add, and why". A record on disk survives a bad send.
+    _record_deals(storage, reports)
     return reports
+
+
+def _record_deals(storage: Storage, reports: dict[str, OrderCycleReport]) -> None:
+    import json
+    from datetime import datetime, timezone
+
+    picked = [
+        {"store": store, "name": r.item_name, "deal": r.deal}
+        for store, report in reports.items()
+        for r in report.added
+        if getattr(r, "deal", "")
+    ]
+    if not picked:
+        return
+    try:
+        storage.set_state(
+            "last_deal_picks",
+            json.dumps(
+                {"at": datetime.now(timezone.utc).isoformat(), "picks": picked},
+                ensure_ascii=False,
+            ),
+        )
+    except Exception:  # noqa: BLE001 - a bookkeeping failure must not sink a shop
+        logger.exception("Could not record this cycle's deal picks")
 
 
 def add_terms_to_cart(

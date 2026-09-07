@@ -941,6 +941,38 @@ class Storage:
                 best[item["barcode"]] = item
         return best
 
+    def feed_candidates(self, store: str, query: str, limit: int = 60) -> list[dict]:
+        """Confident matches for a term in a chain's published feed.
+
+        Only rank 0 — the product's name starts with the term as its own
+        word. This backs product memory, which spends money without
+        asking again, so the looser substitute match that
+        `best_name_match` falls back to is deliberately not offered here
+        (see localmatch's docstring).
+
+        Newest row per barcode, so a product repriced yesterday is not
+        matched at last year's price.
+        """
+        folded = _fold_apostrophes((query or "").strip())
+        if not folded:
+            return []
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT p.barcode, p.name, p.price FROM store_prices p "
+                "JOIN (SELECT barcode, MAX(observed_at) mo FROM store_prices "
+                "      WHERE store = ? GROUP BY barcode) latest "
+                "  ON p.barcode = latest.barcode AND p.observed_at = latest.mo "
+                "WHERE p.store = ? AND fold(p.name) LIKE ? ESCAPE '\\' "
+                "ORDER BY p.price LIMIT 400",
+                (store, store, _like_contains(folded)),
+            ).fetchall()
+        out = [
+            {"barcode": r["barcode"], "name": r["name"], "price": r["price"]}
+            for r in rows
+            if r["price"] and _name_match_rank(folded, r["name"]) == 0
+        ]
+        return out[:limit]
+
     def priced_stores(self) -> list[str]:
         """Every chain we hold any price for, Shufersal aside."""
         with closing(self._connect()) as conn:
@@ -1555,7 +1587,23 @@ class Storage:
             ).fetchall()
 
         folded_term = _fold_apostrophes(term)
-        ranked = sorted(rows, key=lambda row: (_name_match_rank(folded_term, row["name"]), len(row["name"])))
+
+        # Among equally good matches the price-controlled staple wins.
+        # Ishay, 2026-09-07: where a comparable alternative exists he
+        # wants the supervised one — it is capped by regulation rather
+        # than by this week's promotion. The chains write it into the
+        # product name ("חלב 1% קרטון - בפיקוח"), so it costs nothing to
+        # honour and it removes a decision.
+        from .localmatch import is_price_controlled
+
+        ranked = sorted(
+            rows,
+            key=lambda row: (
+                _name_match_rank(folded_term, row["name"]),
+                not is_price_controlled(row["name"]),
+                len(row["name"]),
+            ),
+        )
         return [self._row_to_product(row) for row in ranked[:limit]]
 
     def cross_chain_prices(self, query: str) -> list[dict]:

@@ -49,6 +49,11 @@ class ListSpec:
     description: str
     min_share: float
     departments: set[str] | None = None  # None = every department
+    # Drop anything not actually bought within this many days. Frequency
+    # alone cannot do this: a product bought twice in 2025 and never
+    # since keeps its share forever, because share is a ratio over the
+    # whole history rather than a statement about now.
+    max_age_days: int | None = None
     items: list = field(default_factory=list)
 
 
@@ -67,6 +72,19 @@ def available_lists() -> list[ListSpec]:
             description="קרוב לרשימה המלאה שאתם עוברים עליה היום",
             min_share=0.15,
         ),
+        # "באמת הכל", minus the part of it that has quietly died. Ishay,
+        # 2026-09-07: much of the long list is products that are no
+        # longer sold or that he bought exactly once, and scrolling past
+        # them is the cost of every shop. Measured the same day: of 294
+        # products, 147 were last bought over a year ago. Same breadth
+        # of frequency as before — the cut is recency, not popularity.
+        ListSpec(
+            key="everything",
+            title="באמת הכל (נקי)",
+            description="כל מה שנקנה בשנה האחרונה, כולל מוצרים נדירים",
+            min_share=0.0,
+            max_age_days=365,
+        ),
         ListSpec(
             key="fresh",
             title="טרי בלבד (15%+)",
@@ -84,12 +102,25 @@ def available_lists() -> list[ListSpec]:
     ]
 
 
-def build(spec: ListSpec, stock_rows: list[dict]) -> ListSpec:
-    """Attach the products matching a spec, most-frequent first."""
+def build(spec: ListSpec, stock_rows: list[dict], last_purchased: dict | None = None,
+          today=None) -> ListSpec:
+    """Attach the products matching a spec, most-frequent first.
+
+    `last_purchased` maps product_code -> date and is only needed by a
+    spec that sets `max_age_days`; without it such a spec keeps
+    everything rather than silently emptying the list.
+    """
+    import datetime as _dt
+
+    day = today or _dt.date.today()
     chosen = []
     for row in stock_rows:
         if row["share"] < spec.min_share:
             continue
+        if spec.max_age_days is not None and last_purchased:
+            bought = last_purchased.get(row["product_code"])
+            if bought is not None and (day - bought).days > spec.max_age_days:
+                continue
         department = row.get("department", "")
         if spec.key == "pantry" and department in FRESH_DEPARTMENTS:
             continue

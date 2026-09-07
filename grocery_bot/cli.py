@@ -7,6 +7,9 @@ Run with: python -m grocery_bot.cli <command>
     price-compare <query> where it is cheapest across every chain [--json]
     basket                the standing list priced at every chain,
                           with substitutes and gaps marked
+    seed-memory <store>   resolve the standing list against a chain's
+                          own feed and remember what is unambiguous
+                          [--dry-run]
     deals                 promotions on the standing list
     import-base-list <f>  load a YAML base list into the database
     import-history        build the base list from real past orders
@@ -577,6 +580,25 @@ def _deals(storage: Storage, args: list[str]) -> int:
     return 0
 
 
+def _seed_memory(storage: Storage, args: list[str]) -> int:
+    """Resolve the household's terms against a chain's published feed.
+
+    Only unambiguous matches are written; everything else stays a
+    one-time question the cart flow asks and then remembers. See
+    localmatch for why that asymmetry is deliberate.
+    """
+    from . import localmatch
+
+    store = next((a for a in args if not a.startswith("--")), "tivtaam")
+    dry = "--dry-run" in args
+    terms = [b.name for b in storage.list_active_base_items()]
+    terms += [a.text for a in storage.list_pending_adhoc()]
+    terms += [r["product_name"] for r in storage.list_stock_items(store)]
+    report = localmatch.seed_memory(storage, store, terms, dry_run=dry)
+    print(localmatch.format_seed_report(report))
+    return 0
+
+
 def _basket(storage: Storage, args: list[str]) -> int:
     """The standing list priced at every chain we hold prices for."""
     from . import basketview
@@ -933,6 +955,7 @@ _DB_ONLY_COMMANDS = {
     "price": _price,
     "price-compare": _price_compare,
     "basket": _basket,
+    "seed-memory": _seed_memory,
     "deals": _deals,
     # Reads flat CSVs under data/benefits/ (gitignored — household
     # financial data), not the sqlite database at all; `storage` is

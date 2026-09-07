@@ -370,6 +370,36 @@ class GroceryBot:
             parse_mode="Markdown",
         )
 
+    async def last_deals(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/lastdeals — what the last cycle put in the cart on its own."""
+        if not _authorized(self.config, update):
+            return
+        import json
+
+        raw = self.storage.get_state("last_deal_picks")
+        if not raw:
+            await update.message.reply_text(
+                "עוד לא נוספו מבצעים אוטומטית במחזור האחרון."
+            )
+            return
+        try:
+            data = json.loads(raw)
+        except ValueError:
+            await update.message.reply_text("הרשומה של המבצעים האחרונים לא קריאה.")
+            return
+
+        from .chains import display_name
+        from .mdtext import escape as _md
+
+        when = (data.get("at") or "")[:16].replace("T", " ")
+        lines = [f"🏷️ *מבצעים שנוספו אוטומטית* _({when})_", ""]
+        for pick in data.get("picks", []):
+            lines.append(
+                f"• {_md(pick.get('name', ''))} — {display_name(pick.get('store', ''))}"
+                f"\n   _{_md(pick.get('deal', ''))}_"
+            )
+        await _send_markdown(context, update.effective_chat.id, "\n".join(lines))
+
     async def basket(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/basket — this shop, priced at every chain, before paying.
 
@@ -601,13 +631,16 @@ class GroceryBot:
                 "איזו רשימה?\n"
                 "• `/list_full core` — ליבה 35%+\n"
                 "• `/list_full full` — מלאה 15%+\n"
+                "• `/list_full everything` — באמת הכל, בלי מה שלא נקנה שנה\n"
                 "• `/list_full fresh` — טרי בלבד\n"
                 "• `/list_full pantry` — מזווה ובית",
                 parse_mode="Markdown",
             )
             return
 
-        spec = build_list(specs[wanted], rows)
+        spec = build_list(
+            specs[wanted], rows, self.storage.last_purchase_dates(store)
+        )
         requests = self.storage.list_pending_adhoc()
 
         summary = summarise(spec)
@@ -1822,6 +1855,7 @@ async def _register_bot_metadata(application: Application) -> None:
             BotCommand("stockup", "שווה לאגור — מבצעים חריגים לקנייה מראש"),
             BotCommand("chaindeals", "מבצעים מכל הרשתות, לא רק שופרסל"),
             BotCommand("basket", "הסל שלי בכל רשת — כולל חוסרים ותחליפים"),
+            BotCommand("lastdeals", "אילו מבצעים נוספו לעגלה לבד"),
             BotCommand("cheaper", "השוואת ₪ לק\"ג — יש חלופה זולה יותר?"),
             BotCommand("list_full", "רשימה להדבקה בהזמנה מהירה"),
             BotCommand("digest", "כל הקנייה בהודעה אחת — רשימה, מבצעים, חלופות"),
@@ -1893,6 +1927,7 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("alldeals", bot.all_deals))
     application.add_handler(CommandHandler("chaindeals", bot.chain_deals))
     application.add_handler(CommandHandler("basket", bot.basket))
+    application.add_handler(CommandHandler("lastdeals", bot.last_deals))
     application.add_handler(CommandHandler("refresh_prices", bot.refresh_prices))
     # /propose retired 2026-09-06: used once ever (2026-08-29), abandoned
     # before its own redesign — /start_order supersedes it. The panel
