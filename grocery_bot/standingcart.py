@@ -48,6 +48,13 @@ DEFAULT_LIST = "everything"
 
 _MANIFEST_KEY = "standing_cart_manifest"
 _LAST_SHOP_KEY = "standing_cart_last_shop"
+_REMOVAL_LOG_KEY = "standing_cart_removal_log"
+_REMOVAL_REPORTED_KEY = "standing_cart_removals_reported"
+
+# Ishay asked for the removal note monthly, not per shop: he shops
+# roughly weekly, and being shown the same four products every week is
+# the nagging he declined the automatic version to avoid.
+REPORT_EVERY_DAYS = 30
 
 
 @dataclass(frozen=True)
@@ -163,6 +170,71 @@ def mark_shopped(storage, today: date | None = None) -> str:
 
 def last_shop(storage) -> str:
     return storage.get_state(_LAST_SHOP_KEY) or ""
+
+
+def log_removals(storage, store: str, rows: list[dict], today: date | None = None) -> int:
+    """Add this shop's removals to the running log. Returns the new total.
+
+    Recorded at `/done`, which is the one moment the answer is knowable:
+    the manifest says what went in, the cart at checkout says what
+    survived, and the difference is what a person took out.
+    """
+    if not rows:
+        return 0
+    day = (today or date.today()).isoformat()
+    log = _removal_log(storage)
+    log.extend(
+        {"store": store, "name": (r.get("name") or "").strip(), "on": day}
+        for r in rows if (r.get("name") or "").strip()
+    )
+    # Keep a year at most; this is a habit signal, not an archive.
+    log = log[-2000:]
+    storage.set_state(_REMOVAL_LOG_KEY, json.dumps(log, ensure_ascii=False))
+    return len(log)
+
+
+def _removal_log(storage) -> list[dict]:
+    raw = storage.get_state(_REMOVAL_LOG_KEY)
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, list) else []
+    except ValueError:
+        return []
+
+
+def removal_report_due(storage, today: date | None = None) -> bool:
+    """Has a month passed since the household last saw this?"""
+    day = today or date.today()
+    last = storage.get_state(_REMOVAL_REPORTED_KEY)
+    if not last:
+        return bool(_removal_log(storage))
+    try:
+        previous = date.fromisoformat(last[:10])
+    except ValueError:
+        return True
+    return (day - previous).days >= REPORT_EVERY_DAYS and bool(_removal_log(storage))
+
+
+def due_removal_report(storage, today: date | None = None) -> str:
+    """The monthly note, or "" — and it clears the log once shown."""
+    if not removal_report_due(storage, today):
+        return ""
+    from .chains import display_name
+
+    log = _removal_log(storage)
+    parts = []
+    for store in sorted({row.get("store", "") for row in log}):
+        rows = [r for r in log if r.get("store") == store]
+        text = format_removal_report(rows, display_name(store))
+        if text:
+            parts.append(text)
+    if not parts:
+        return ""
+    storage.set_state(_REMOVAL_REPORTED_KEY, (today or date.today()).isoformat())
+    storage.set_state(_REMOVAL_LOG_KEY, json.dumps([], ensure_ascii=False))
+    return "\n\n".join(parts)
 
 
 def format_removal_report(rows: list[dict], store_name: str) -> str:

@@ -118,5 +118,63 @@ class RemovalTests(unittest.TestCase):
         self.assertEqual(standingcart.last_shop(self.storage), "2026-09-07")
 
 
+
+class MonthlyReportTests(unittest.TestCase):
+    """The removal note exists to be *sent*, which needs a caller.
+
+    Built and left unwired on 2026-09-07 — the exact shape flagged to
+    the audit project that same morning (a tested function nothing
+    calls). It is driven from /done, the one moment the answer is
+    knowable, and surfaces monthly because Ishay shops weekly and asked
+    not to be shown the same four products every time.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.storage = Storage(str(Path(self._tmp.name) / "t.sqlite3"))
+
+    def test_removals_accumulate_across_shops(self):
+        standingcart.log_removals(
+            self.storage, "shufersal", [{"name": "קורנפלקס"}], date(2026, 9, 7)
+        )
+        total = standingcart.log_removals(
+            self.storage, "shufersal", [{"name": "קורנפלקס"}], date(2026, 9, 14)
+        )
+        self.assertEqual(total, 2)
+
+    def test_nothing_removed_logs_nothing(self):
+        self.assertEqual(standingcart.log_removals(self.storage, "shufersal", []), 0)
+
+    def test_the_first_report_is_due_as_soon_as_there_is_anything(self):
+        standingcart.log_removals(self.storage, "shufersal", [{"name": "קורנפלקס"}])
+        self.assertTrue(standingcart.removal_report_due(self.storage))
+
+    def test_it_does_not_repeat_within_the_month(self):
+        standingcart.log_removals(
+            self.storage, "shufersal", [{"name": "קורנפלקס"}], date(2026, 9, 7)
+        )
+        first = standingcart.due_removal_report(self.storage, date(2026, 9, 7))
+        self.assertIn("קורנפלקס", first)
+        standingcart.log_removals(
+            self.storage, "shufersal", [{"name": "חוט דנטלי"}], date(2026, 9, 14)
+        )
+        self.assertEqual(standingcart.due_removal_report(self.storage, date(2026, 9, 14)), "")
+
+    def test_it_comes_back_after_a_month(self):
+        standingcart.log_removals(
+            self.storage, "shufersal", [{"name": "קורנפלקס"}], date(2026, 9, 7)
+        )
+        standingcart.due_removal_report(self.storage, date(2026, 9, 7))
+        standingcart.log_removals(
+            self.storage, "shufersal", [{"name": "חוט דנטלי"}], date(2026, 10, 8)
+        )
+        later = standingcart.due_removal_report(self.storage, date(2026, 10, 8))
+        self.assertIn("חוט דנטלי", later)
+        self.assertNotIn("קורנפלקס", later, "the reported batch was cleared")
+
+    def test_an_empty_log_produces_no_message(self):
+        self.assertEqual(standingcart.due_removal_report(self.storage), "")
+
 if __name__ == "__main__":
     unittest.main()

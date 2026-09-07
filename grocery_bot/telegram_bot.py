@@ -398,7 +398,38 @@ class GroceryBot:
                 "אמלא את העגלה כשהחיבור יחזור."
             )
             return
+
+        # Read what survived the shop *before* refilling wipes the
+        # evidence. This is the only moment the question is answerable:
+        # the manifest says what went in, the cart says what was left,
+        # and the difference is what a person took out.
+        await self._log_removals(factories)
         await self._refill_carts(update.effective_chat.id, context, factories)
+
+        note = await asyncio.to_thread(standingcart.due_removal_report, self.storage)
+        if note:
+            await _send_markdown(context, update.effective_chat.id, note)
+
+    async def _log_removals(self, factories) -> None:
+        """Record what the household deleted from each cart this shop."""
+        def _read(store, factory):
+            try:
+                with factory() as adapter:
+                    if not adapter.ensure_session():
+                        return []
+                    summary = adapter.cart_summary()
+                return summary.get("items") or []
+            except Exception:
+                logger.exception("Could not read %s's cart for removals", store)
+                return []
+
+        for store, factory in factories.items():
+            items = await asyncio.to_thread(_read, store, factory)
+            gone = standingcart.removals(self.storage, store, items)
+            if gone:
+                await asyncio.to_thread(
+                    standingcart.log_removals, self.storage, store, gone
+                )
 
     async def _refill_carts(self, chat_id: int, context, factories) -> None:
         """Put the standing list, plus this week's deals, into every cart."""
