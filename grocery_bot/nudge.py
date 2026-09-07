@@ -30,10 +30,17 @@ from datetime import date, datetime, timedelta, timezone
 from . import cardreminder, hotdeals, shelflife
 
 # The household orders roughly weekly to every ten days, in their own
-# words. Six days is early enough to act on and late enough not to nag —
-# a nudge that arrives while the fridge is still full gets ignored, and
-# the next one gets ignored too.
-DUE_AFTER_DAYS = 6
+# words. Early enough to act on, late enough not to nag — a nudge that
+# arrives while the fridge is still full gets ignored, and the next one
+# gets ignored too.
+#
+# Moved 6 -> 5 by Ishay, 2026-09-07, after the first time it mattered.
+# His last order was 09-01, so at six days the nudge only became due on
+# the morning of 09-07 — and its first waking-hours slot was 10:00
+# Israel time, by which point he had already shopped unprompted at 08:00.
+# At six days the reminder can only ever fire on the one day he is most
+# likely to have acted on his own; five gives it a day of margin.
+DUE_AFTER_DAYS = 5
 
 # Once nudged, do not nudge again for this long. Being asked daily is how
 # a reminder becomes noise.

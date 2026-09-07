@@ -79,14 +79,25 @@ CART_CAPABLE = {"shufersal", "tivtaam"}
 # when a chain is added — which is how a Tiv Taam cart came to be filled
 # and then advertised with a Shufersal link.
 CART_URLS = {
+    # Shufersal opens in the browser, and that is not a choice we get to
+    # make: checked 2026-09-07, `shufersal.co.il/.well-known/
+    # apple-app-site-association` serves an HTML page rather than the
+    # JSON iOS requires, so the site has no Universal Links and no link
+    # can hand a tap to their app. A custom scheme is not an option
+    # either — Telegram only accepts http/https/tg:// in a button URL.
     "shufersal": "https://www.shufersal.co.il/online/he/cart/cartsummary",
     # Tiv Taam has no cart *page*: /cart redirects to the homepage, both
     # empty and with items in it (verified 2026-09-02 against the real
     # account). The cart is a side panel opened from the header, so the
     # honest link is the site itself, where the cart bar is the first
-    # thing at the top. A /cart link would land the household on the
-    # homepage looking for a basket that is one tap away in the header.
-    "tivtaam": "https://www.tivtaam.co.il/",
+    # thing at the top.
+    #
+    # `?in_app=1` opens the Tiv Taam app instead of Safari. Their AASA
+    # (checked 2026-09-07) declares appID HKTXU3DYP4.com.selfpoint.apps.
+    # TivTaam matching any path carrying an `in_app` query parameter, so
+    # this is their own documented way in rather than a guess. It stays
+    # harmless in a desktop browser, which simply ignores the parameter.
+    "tivtaam": "https://www.tivtaam.co.il/?in_app=1",
 }
 
 
