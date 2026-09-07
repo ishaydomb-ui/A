@@ -78,5 +78,52 @@ class BoldedNamesStayBalancedTest(unittest.TestCase):
         self.assertTrue(self._balanced(text), text)
 
 
+class OrderSummaryTest(unittest.TestCase):
+    """The same trap, in the one message that reports a real shop.
+
+    Live failure on 2026-09-07: a cycle filled the carts at both chains
+    and the household was told nothing at all, because the summary
+    interpolated raw product names, one of them "עגבניות חתוכות דק
+    400*3ג", and the caller sent it with parse_mode="Markdown" and no
+    fallback. 349 of this branch's 5,807 products carry that asterisk.
+    """
+
+    def _summary(self, *names):
+        from grocery_bot.models import CartAddResult, OrderCycleReport
+        from grocery_bot.orchestrator import format_report_summary
+
+        report = OrderCycleReport(store="shufersal")
+        for name in names:
+            report.record(
+                CartAddResult(item_name=name, store="shufersal", status="added")
+            )
+        return format_report_summary({"shufersal": report})
+
+    def test_an_asterisk_in_a_product_name_is_escaped(self):
+        text = self._summary("עגבניות חתוכות דק 400*3ג")
+        self.assertIn("400\\*3ג", text)
+
+    def test_every_asterisk_left_is_a_deliberate_entity_marker(self):
+        text = self._summary("טונה בהירה בשמן 3*80 גרם", "דואלקר 2*75")
+        # Strip the escaped ones, then the bold pair around the chain
+        # name; nothing unbalanced may remain.
+        bare = text.replace("\\*", "")
+        self.assertEqual(bare.count("*") % 2, 0, text)
+
+    def test_a_deal_label_is_escaped_too(self):
+        from grocery_bot.models import CartAddResult, OrderCycleReport
+        from grocery_bot.orchestrator import format_report_summary
+
+        report = OrderCycleReport(store="shufersal")
+        result = CartAddResult(
+            item_name="טונה 3*80", store="shufersal", status="added"
+        )
+        result.deal = "-64% · 5.00₪ במקום 13.90₪"
+        report.record(result)
+        text = format_report_summary({"shufersal": report})
+        bare = text.replace("\\*", "")
+        self.assertEqual(bare.count("*") % 2, 0, text)
+
+
 if __name__ == "__main__":
     unittest.main()

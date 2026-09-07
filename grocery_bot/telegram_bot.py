@@ -1345,7 +1345,14 @@ class GroceryBot:
             return
 
         summary = format_report_summary(reports)
-        await update.message.reply_text(summary or "לא היה מה להוסיף.", parse_mode="Markdown")
+        # Through _send_markdown, never reply_text: this send failed on a
+        # real order (2026-09-07, "can't find end of the entity") and the
+        # household got no summary at all for a cart that had actually
+        # been filled. _send_markdown falls back to plain text, so a
+        # formatting fault costs formatting, not the message.
+        await _send_markdown(
+            context, update.effective_chat.id, summary or "לא היה מה להוסיף."
+        )
         await self._send_alternatives(update.effective_chat.id, context, reports)
         await self._send_pending_ambiguities(update, context)
 
@@ -1742,11 +1749,7 @@ class GroceryBot:
 
         self.storage.mark_deferred_cycle_done(pending["id"])
         summary = format_report_summary(reports)
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=summary or "לא היה מה להוסיף.",
-            parse_mode="Markdown",
-        )
+        await _send_markdown(context, chat_id, summary or "לא היה מה להוסיף.")
         await self._send_alternatives(chat_id, context, reports)
         await self._ask_ambiguities(chat_id, context)
 

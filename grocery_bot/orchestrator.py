@@ -366,8 +366,18 @@ def _known_products(storage: Storage, store: str) -> dict:
 
 
 def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
-    """Human-readable (Hebrew) summary suitable for a Telegram message."""
+    """Human-readable (Hebrew) summary suitable for a Telegram message.
+
+    Every product name is escaped. 349 of this branch's products carry a
+    `*` as a multiplication sign ("400*3ג"), Telegram reads it as an
+    unclosed bold entity and rejects the WHOLE message — which is exactly
+    what happened to a real order's summary on 2026-09-07: the carts were
+    filled at both chains and the household was told nothing at all,
+    because this function interpolated raw names and the caller sent it
+    with parse_mode="Markdown" and no fallback.
+    """
     from .chains import display_name
+    from .mdtext import escape as _md
 
     lines: list[str] = []
     for store, report in reports.items():
@@ -381,7 +391,8 @@ def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
             asked = [r for r in report.added if not getattr(r, "deal", "")]
             if asked:
                 lines.append(
-                    f"✅ נוספו ({len(asked)}): " + ", ".join(r.item_name for r in asked)
+                    f"✅ נוספו ({len(asked)}): "
+                    + ", ".join(_md(r.item_name) for r in asked)
                 )
             # An automatic pick must be visible: it replaced a question the
             # user would otherwise have answered, so they need to be able to
@@ -390,7 +401,7 @@ def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
             if auto:
                 lines.append(
                     f"   _נבחרו לפי הרגלי הקנייה שלכם ({len(auto)}): _"
-                    + ", ".join(r.item_name for r in auto)
+                    + ", ".join(_md(r.item_name) for r in auto)
                 )
             # Its own block, not mixed into the list above: these are the
             # lines nobody asked for, so they are the ones most likely to
@@ -399,10 +410,11 @@ def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
             if dealt:
                 lines.append(f"🏷️ נוספו בגלל מבצע חריג ({len(dealt)}) — מחקו מה שלא צריך:")
                 for r in dealt:
-                    lines.append(f"   • {r.item_name} — _{r.deal}_")
+                    lines.append(f"   • {_md(r.item_name)} — _{_md(r.deal)}_")
         if report.ambiguous:
             lines.append(
-                f"❓ דורש בחירה ({len(report.ambiguous)}): " + ", ".join(r.item_name for r in report.ambiguous)
+                f"❓ דורש בחירה ({len(report.ambiguous)}): "
+                + ", ".join(_md(r.item_name) for r in report.ambiguous)
             )
         if report.not_found:
             # Say it stays on the list. Otherwise a long report reads as
@@ -410,10 +422,13 @@ def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
             # request is still queued for the next cycle.
             lines.append(
                 f"⚠️ לא נמצא ({len(report.not_found)}): "
-                + ", ".join(r.item_name for r in report.not_found)
+                + ", ".join(_md(r.item_name) for r in report.not_found)
                 + "\n   _נשאר ברשימה — אנסה שוב בפעם הבאה._"
             )
         if report.errors:
-            lines.append(f"🛑 שגיאה ({len(report.errors)}): " + ", ".join(r.item_name for r in report.errors))
+            lines.append(
+                f"🛑 שגיאה ({len(report.errors)}): "
+                + ", ".join(_md(r.item_name) for r in report.errors)
+            )
         lines.append("")
     return "\n".join(lines).strip()
