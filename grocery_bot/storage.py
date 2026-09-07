@@ -1097,6 +1097,24 @@ class Storage:
             ).fetchall()
         return dict(rows[0]) if len(rows) == 1 else None
 
+    def catalog_prices_by_barcode(self) -> dict[str, dict]:
+        """The whole catalogue keyed by EAN, in one query.
+
+        The bulk form of `catalog_price`, and the difference is not
+        cosmetic. `hotdeals.scan` called the single-row version once per
+        chain row; when Tiv Taam went from 743 observed rows to a 20,889
+        product feed that became ~21,000 separate SQLite round-trips and
+        the nudge went from seconds to **80** — past the 90s timeout the
+        delivering project allows, so the reminder started failing in
+        production. One query, one dict, same answer.
+        """
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT item_code, name, price, unit_of_measure_price, unit_of_measure "
+                "FROM catalog_products"
+            ).fetchall()
+        return {row["item_code"]: dict(row) for row in rows}
+
     def catalog_price(self, barcode: str) -> dict | None:
         """Shufersal's price for a barcode — its item_code *is* the EAN."""
         with closing(self._connect()) as conn:

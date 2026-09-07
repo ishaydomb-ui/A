@@ -171,10 +171,14 @@ def scan(storage, chains=None) -> list[HotDeal]:
     from .chains import CHAIN_NAMES
 
     candidates = chains or [c for c in CHAIN_NAMES if c != "shufersal"]
+    # One lookup table for the whole scan. Per-row queries here cost 80
+    # seconds once Tiv Taam brought a real feed with it — see
+    # Storage.catalog_prices_by_barcode.
+    catalog = storage.catalog_prices_by_barcode()
     deals: list[HotDeal] = []
     for chain in candidates:
         for barcode, row in storage.latest_store_prices(chain).items():
-            reference = storage.catalog_price(barcode)
+            reference = catalog.get(barcode)
             if not reference or not reference.get("price"):
                 continue
             deal = HotDeal(
