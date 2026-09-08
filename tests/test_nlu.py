@@ -136,3 +136,38 @@ class FullListTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ShoppedIntentTest(unittest.TestCase):
+    """Saying you have shopped must be enough; a command should not be.
+
+    Added 2026-09-08 from a real failure: Ishay told the bot in plain
+    words that he had completed a Shufersal order, the system knew it,
+    and the cart still sat empty for a day because the refill was gated
+    behind /done. Reporting a past purchase and asking to fill a cart
+    are opposite requests and must not collapse into one intent.
+    """
+
+    def test_the_fallback_parser_does_not_file_a_purchase_as_groceries(self):
+        # The rule-based path runs whenever the model is unavailable, and
+        # the old behaviour turned "הזמנתי משופרסל" into a shopping-list
+        # item of that name.
+        from grocery_bot.nlu import _fallback_parse
+
+        for phrase in ("הזמנתי משופרסל", "סיימתי קנייה", "שילמתי"):
+            parsed = _fallback_parse(phrase)
+            self.assertNotEqual(
+                [i.name for i in parsed.items], [phrase],
+                f"{phrase!r} was filed verbatim as an item",
+            )
+
+    def test_shopped_is_a_known_intent(self):
+        from grocery_bot.nlu import INTENTS
+
+        self.assertIn("shopped", INTENTS)
+
+    def test_the_prompt_separates_reporting_a_purchase_from_filling_a_cart(self):
+        from grocery_bot.nlu import _SYSTEM_PROMPT
+
+        self.assertIn("shopped", _SYSTEM_PROMPT)
+        self.assertIn("סיימתי קנייה", _SYSTEM_PROMPT)

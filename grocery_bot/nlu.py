@@ -34,6 +34,14 @@ logger = logging.getLogger(__name__)
 
 CLAUDE_TIMEOUT_SECONDS = 120
 
+# Ways the household says "the shop is done" — past tense, reporting a
+# purchase that already happened, which is what triggers a refill.
+_SHOPPED_PHRASES = (
+    "סיימתי קנייה", "סיימתי את הקנייה", "סיימתי להזמין", "השלמתי קנייה",
+    "השלמתי את ההזמנה", "ביצעתי הזמנה", "הזמנתי", "שילמתי", "קניתי",
+    "סיימתי לקנות",
+)
+
 INTENTS = {
     "add_item",
     "remove_item",
@@ -45,6 +53,7 @@ INTENTS = {
     "start_order",
     "add_to_cart",
     "report_waste",
+    "shopped",
     "smalltalk",
     "unclear",
 }
@@ -52,7 +61,7 @@ INTENTS = {
 _SYSTEM_PROMPT = """אתה מנתח הודעות של בוט קניות משפחתי בעברית. החזר JSON בלבד, בלי טקסט נוסף ובלי הסברים.
 
 שדות:
-- intent: אחד מ- add_item | remove_item | price_query | deals | show_list | recipe | meal_plan | start_order | add_to_cart | report_waste | smalltalk | unclear
+- intent: אחד מ- add_item | remove_item | price_query | deals | show_list | recipe | meal_plan | start_order | add_to_cart | report_waste | shopped | smalltalk | unclear
 - items: מערך של {"name","amount","unit","brand"} — רק שם המוצר עצמו, בלי פעלים כמו "תוסיף"/"תוריד"/"צריך".
   amount = מספר או null. unit = "גרם"/"קילו"/"יחידות"/"ליטר" או null. brand = שם יצרן אם צוין, אחרת null.
 - query: מחרוזת חיפוש (ל-price_query, ל-recipe שם המנה, ל-meal_plan תיאור)
@@ -78,6 +87,10 @@ _SYSTEM_PROMPT = """אתה מנתח הודעות של בוט קניות משפח
 - "תוסיף X" / "צריך X" (בלי להזכיר עגלה/סל) => add_item — רק לרשימה.
 - "תוסיף X לעגלה" / "תעדכן את העגלה עם X" / "תכניס X לסל" => add_to_cart, ו-items מכיל את X.
   זו בקשה להוסיף עכשיו לסל האמיתי, לא רק לרשימה.
+- **דיווח שהקנייה בוצעה** => intent=shopped. "סיימתי קנייה" / "הזמנתי" /
+  "השלמתי קנייה" / "שילמתי" / "ביצעתי הזמנה" / "הזמנתי משופרסל" / "קניתי".
+  זה דיווח על עבר — הקנייה כבר נעשתה — ולא בקשה למלא עגלה. אחריו העגלה
+  ממולאת מחדש אוטומטית, ולכן חשוב לא לבלבל בינו לבין start_order.
 - "מלא את העגלה" / "תעדכן את הסל" / "תעדכן את העגלה" (בלי פריטים) / "תתחיל הזמנה" / "תזמין" => start_order.
   זו בקשה להריץ מחזור מלא על כל מה שממתין. גם אם הניסוח לא מדויק — אם ברור שהכוונה לעדכן את הסל, זה start_order ולא unclear.
 - אם המשתמש מפנה ל"הפריטים האחרונים שביקשתי" או ניסוח דומה => start_order (או add_to_cart אם פירט אותם).
@@ -179,6 +192,13 @@ def _fallback_parse(message: str) -> ParsedMessage:
     text = message.strip()
     lowered = text.lower()
 
+    # A completed purchase is checked BEFORE the fill-the-cart phrases:
+    # "הזמנתי" is a past-tense report and "תזמין" is a request, and the
+    # two share a stem. Getting this order wrong once left a real cart
+    # empty for a day (2026-09-08) because the report was filed as a
+    # shopping-list item named after the sentence.
+    if any(phrase in lowered for phrase in _SHOPPED_PHRASES):
+        return ParsedMessage(intent="shopped", used_fallback=True)
     if any(phrase in lowered for phrase in ("מלא את העגלה", "תמלא את העגלה", "תתחיל הזמנה", "תתחיל מחזור", "להתחיל הזמנה")):
         return ParsedMessage(intent="start_order", used_fallback=True)
     if any(word in lowered for word in ("מבצע", "מבצעים", "הנחות")):

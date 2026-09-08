@@ -370,6 +370,17 @@ class GroceryBot:
             parse_mode="Markdown",
         )
 
+    async def _do_shopped(self, update, context, parsed, requested_by: str) -> None:
+        """Plain Hebrew — "הזמנתי", "סיימתי קנייה" — refills the cart.
+
+        Added 2026-09-08 after Ishay pointed out the obvious: he had told
+        me in words that he had completed a purchase, and the system
+        still sat waiting for him to type /done. Requiring a command for
+        something already said is the design failure his own audit brief
+        named — if you have to remember the syntax, that is on the tool.
+        """
+        await self.done_shopping(update, context)
+
     async def done_shopping(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/done — "I've paid". Records the shop and refills both carts.
 
@@ -592,6 +603,7 @@ class GroceryBot:
             "start_order": self._do_start_order,
             "add_to_cart": self._do_add_to_cart,
             "report_waste": self._do_report_waste,
+            "shopped": self._do_shopped,
         }.get(parsed.intent)
 
         if handler is None:  # unclear / smalltalk
