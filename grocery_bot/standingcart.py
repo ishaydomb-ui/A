@@ -149,6 +149,42 @@ def removals(storage, store: str, cart_items) -> list[dict]:
     ]
 
 
+def shop_detected_since_refill(storage, store: str = "shufersal") -> str:
+    """A newer order than our last refill means a shop happened. Returns
+    the order date, or "" when there is nothing new.
+
+    The backstop for the signal that actually matters. Ishay's own words
+    on finding an empty cart: he had *told* the bot he ordered, and it
+    still waited for a command. Free text now covers that, and this
+    covers the case where nobody says anything at all.
+
+    Deliberately slow and certain rather than fast. Measured 2026-09-08:
+    the Shufersal order placed on 09-07 was **not** in the chain's own
+    order history hours later, and only appeared about 36 hours after
+    checkout. So this cannot be the primary signal — it is the one that
+    catches what the others miss, a day or two late, which for a cart
+    that is not needed for five days is late enough to still be useful.
+    A confirmation email arrives within minutes and is the natural fast
+    path; it needs mailbox credentials this project does not hold.
+    """
+    from contextlib import closing
+
+    with closing(storage._connect()) as conn:  # noqa: SLF001 - storage-internal
+        row = conn.execute(
+            "SELECT MAX(placed_at) AS newest FROM order_log WHERE store = ?",
+            (store,),
+        ).fetchone()
+    newest = (row["newest"] or "") if row else ""
+    if not newest:
+        return ""
+    # A refill after the order means this shop is already handled; the
+    # cart it produced is what the household is looking at now.
+    last = last_shop(storage)
+    if last and newest[:10] <= last:
+        return ""
+    return newest
+
+
 def cart_contents(storage) -> list[tuple[str, int]]:
     """What we last put in each cart: (store key, item count).
 

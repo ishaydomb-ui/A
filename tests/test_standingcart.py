@@ -178,3 +178,47 @@ class MonthlyReportTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UnannouncedShopTests(unittest.TestCase):
+    """The backstop for a shop nobody mentioned.
+
+    From 2026-09-07: a real order was placed, the bot was told in plain
+    words, and the cart still sat empty for a day. Free text now handles
+    being told; this handles not being told at all.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.storage = Storage(str(Path(self._tmp.name) / "t.sqlite3"))
+
+    def _order(self, code, placed_at):
+        self.storage.log_orders(
+            [{"code": code, "placed_at": placed_at, "item_count": 40}], store="shufersal"
+        )
+
+    def test_an_order_newer_than_the_last_refill_is_a_shop(self):
+        standingcart.mark_shopped(self.storage, date(2026, 9, 1))
+        self._order("A1", "2026-09-07T06:15:00")
+        self.assertEqual(
+            standingcart.shop_detected_since_refill(self.storage)[:10], "2026-09-07"
+        )
+
+    def test_an_order_already_followed_by_a_refill_is_not_re_detected(self):
+        # Otherwise every nightly run would refill the same cart again.
+        self._order("A1", "2026-09-07T06:15:00")
+        standingcart.mark_shopped(self.storage, date(2026, 9, 8))
+        self.assertEqual(standingcart.shop_detected_since_refill(self.storage), "")
+
+    def test_an_order_on_the_same_day_as_the_refill_is_not_re_detected(self):
+        self._order("A1", "2026-09-08T06:15:00")
+        standingcart.mark_shopped(self.storage, date(2026, 9, 8))
+        self.assertEqual(standingcart.shop_detected_since_refill(self.storage), "")
+
+    def test_no_orders_at_all_is_silence_not_a_shop(self):
+        self.assertEqual(standingcart.shop_detected_since_refill(self.storage), "")
+
+    def test_a_first_ever_order_with_no_refill_history_counts(self):
+        self._order("A1", "2026-09-07T06:15:00")
+        self.assertTrue(standingcart.shop_detected_since_refill(self.storage))

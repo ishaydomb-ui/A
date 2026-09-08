@@ -114,6 +114,18 @@ SEARCH_POLL_MS = 2500
 # the caller turns [] into `not_found`, which files a weekly staple as
 # missing. Bounded, because an unbounded retry cannot tell "not ready"
 # from "never coming".
+# Interaction timeouts. Raised from 15s/8s on 2026-09-08 after a refill
+# of 106 items produced 104 `Locator.click: Timeout 15000ms` failures
+# while Shufersal, over the same connection in the same run, added 120
+# of 154. The difference was not the site: the household's Israeli exit
+# was running through a phone that measured 1.7s, 1.9s and then 8.1s for
+# a single page, and a 15s cap on one click has no room in that. The
+# items were found — only one came back ambiguous, against 39 the week
+# before — so the matching was right and the clock was wrong.
+ADD_CLICK_TIMEOUT_MS = 45000
+ADD_REPEAT_CLICK_TIMEOUT_MS = 20000
+SEARCH_BOX_TIMEOUT_MS = 30000
+
 SEARCH_ATTEMPTS = 3
 SEARCH_RETRY_MS = 3000
 
@@ -271,8 +283,8 @@ class TivTaamAdapter(StoreAdapter):
         self._dismiss_consent()
         box = self._page.locator(SEARCH_SELECTOR).first
         box.wait_for(state="visible", timeout=30000)
-        box.click(timeout=15000)
-        box.fill(term, timeout=15000)
+        box.click(timeout=SEARCH_BOX_TIMEOUT_MS)
+        box.fill(term, timeout=SEARCH_BOX_TIMEOUT_MS)
 
         needle = term.strip()[:4]
         for _ in range(SEARCH_POLLS):
@@ -362,7 +374,7 @@ class TivTaamAdapter(StoreAdapter):
             # reporting an add is the expensive direction: the item gets
             # re-queued and the household is told it never went in.
             before = self._cart_line_count()
-            button.first.click(timeout=15000)
+            button.first.click(timeout=ADD_CLICK_TIMEOUT_MS)
             after = before
             for _ in range(ADD_VERIFY_POLLS):
                 self._page.wait_for_timeout(ADD_VERIFY_POLL_MS)
@@ -372,7 +384,7 @@ class TivTaamAdapter(StoreAdapter):
 
             for _ in range(max(0, int(quantity) - 1)):
                 try:
-                    button.first.click(timeout=8000)
+                    button.first.click(timeout=ADD_REPEAT_CLICK_TIMEOUT_MS)
                     self._page.wait_for_timeout(2000)
                 except Exception:
                     break

@@ -697,6 +697,28 @@ class GroceryBot:
             report = await asyncio.to_thread(_sync)
             if report:
                 logger.info("Nightly learn done: %s", report)
+
+            # The backstop: an order nobody told us about. Free text and
+            # /done are faster and cover the normal case; this catches a
+            # shop that was simply never mentioned, and refills rather
+            # than leaving the household to find an empty cart days later
+            # — which is exactly what happened on 2026-09-07.
+            placed = await asyncio.to_thread(
+                standingcart.shop_detected_since_refill, self.storage
+            )
+            if placed:
+                chat_id = self.storage.get_state("digest_chat_id")
+                if chat_id:
+                    logger.info("Unannounced shop detected (%s); refilling", placed)
+                    await asyncio.to_thread(standingcart.mark_shopped, self.storage)
+                    await context.bot.send_message(
+                        chat_id=int(chat_id),
+                        text=(
+                            "ראיתי שהייתה הזמנה שלא סיפרתם לי עליה — "
+                            "ממלא את העגלה מחדש כרגיל."
+                        ),
+                    )
+                    await self._refill_carts(int(chat_id), context, factories)
         except Exception:
             logger.exception("Nightly learn failed; will retry tomorrow")
 
