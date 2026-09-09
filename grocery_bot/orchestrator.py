@@ -406,7 +406,7 @@ def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
     with parse_mode="Markdown" and no fallback.
     """
     from .chains import display_name
-    from .mdtext import escape as _md
+    from .htmltext import bold as _b, escape as _md
 
     lines: list[str] = []
     for store, report in reports.items():
@@ -415,7 +415,7 @@ def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
         # so "תוסיף לסל" is never about one cart — and a deal spotted at
         # one chain would be filled at the other's price, unless the reply
         # says where each item went.
-        lines.append(f"*{display_name(store)}*")
+        lines.append(_b(display_name(store)))
         if report.added:
             asked = [r for r in report.added if not getattr(r, "deal", "")]
             if asked:
@@ -429,7 +429,7 @@ def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
             auto = [r for r in report.added if getattr(r, "auto_resolved", "")]
             if auto:
                 lines.append(
-                    f"   _נבחרו לפי הרגלי הקנייה שלכם ({len(auto)}): _"
+                    f"   <i>נבחרו לפי הרגלי הקנייה שלכם ({len(auto)}): </i>"
                     + ", ".join(_md(r.item_name) for r in auto)
                 )
             # Its own block, not mixed into the list above: these are the
@@ -439,7 +439,7 @@ def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
             if dealt:
                 lines.append(f"🏷️ נוספו בגלל מבצע חריג ({len(dealt)}) — מחקו מה שלא צריך:")
                 for r in dealt:
-                    lines.append(f"   • {_md(r.item_name)} — _{_md(r.deal)}_")
+                    lines.append(f"   • {_md(r.item_name)} — <i>{_md(r.deal)}</i>")
         if report.ambiguous:
             lines.append(
                 f"❓ דורש בחירה ({len(report.ambiguous)}): "
@@ -452,7 +452,7 @@ def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
             lines.append(
                 f"⚠️ לא נמצא ({len(report.not_found)}): "
                 + ", ".join(_md(r.item_name) for r in report.not_found)
-                + "\n   _נשאר ברשימה — אנסה שוב בפעם הבאה._"
+                + "\n   <i>נשאר ברשימה — אנסה שוב בפעם הבאה.</i>"
             )
         if report.errors:
             lines.append(

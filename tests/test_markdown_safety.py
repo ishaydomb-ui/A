@@ -79,50 +79,54 @@ class BoldedNamesStayBalancedTest(unittest.TestCase):
 
 
 class OrderSummaryTest(unittest.TestCase):
-    """The same trap, in the one message that reports a real shop.
+    """The order summary now travels as HTML, and the contract inverts.
 
-    Live failure on 2026-09-07: a cycle filled the carts at both chains
-    and the household was told nothing at all, because the summary
-    interpolated raw product names, one of them "עגבניות חתוכות דק
-    400*3ג", and the caller sent it with parse_mode="Markdown" and no
-    fallback. 349 of this branch's 5,807 products carry that asterisk.
+    Under legacy Markdown the goal was to *escape* the asterisk in
+    "עגבניות חתוכות דק 400*3ג" — a product name 349 of this branch's
+    items share the shape of — because it could not be made safe inside
+    an entity. Under HTML the asterisk has no meaning, so the goal is
+    the opposite: it must reach the household **unchanged**. What needs
+    escaping instead is &, < and >.
+
+    Live cost of getting this wrong under Markdown, 2026-09-07: both
+    carts filled, the summary rejected, and the 39 disambiguation
+    questions that ran after it never sent.
     """
 
-    def _summary(self, *names):
+    def _summary(self, *names, deal=None):
         from grocery_bot.models import CartAddResult, OrderCycleReport
         from grocery_bot.orchestrator import format_report_summary
 
         report = OrderCycleReport(store="shufersal")
         for name in names:
-            report.record(
-                CartAddResult(item_name=name, store="shufersal", status="added")
+            result = CartAddResult(
+                item_name=name, store="shufersal", status="added"
             )
+            if deal:
+                result.deal = deal
+            report.record(result)
         return format_report_summary({"shufersal": report})
 
-    def test_an_asterisk_in_a_product_name_is_escaped(self):
+    def test_an_asterisk_in_a_product_name_survives_untouched(self):
         text = self._summary("עגבניות חתוכות דק 400*3ג")
-        self.assertIn("400\\*3ג", text)
+        self.assertIn("400*3ג", text)
+        self.assertNotIn("400\\*3ג", text, "no backslash escaping in HTML")
+        self.assertNotIn("400×3ג", text, "and no silent rewrite of the name")
 
-    def test_every_asterisk_left_is_a_deliberate_entity_marker(self):
-        text = self._summary("טונה בהירה בשמן 3*80 גרם", "דואלקר 2*75")
-        # Strip the escaped ones, then the bold pair around the chain
-        # name; nothing unbalanced may remain.
-        bare = text.replace("\\*", "")
-        self.assertEqual(bare.count("*") % 2, 0, text)
+    def test_html_special_characters_are_escaped(self):
+        text = self._summary("M&S ביסקוויט")
+        self.assertIn("M&amp;S", text)
 
-    def test_a_deal_label_is_escaped_too(self):
-        from grocery_bot.models import CartAddResult, OrderCycleReport
-        from grocery_bot.orchestrator import format_report_summary
+    def test_tags_are_balanced(self):
+        text = self._summary("טונה 3*80", deal="-64% · 5.00₪")
+        for tag in ("b", "i"):
+            self.assertEqual(
+                text.count(f"<{tag}>"), text.count(f"</{tag}>"), f"unbalanced <{tag}>"
+            )
 
-        report = OrderCycleReport(store="shufersal")
-        result = CartAddResult(
-            item_name="טונה 3*80", store="shufersal", status="added"
-        )
-        result.deal = "-64% · 5.00₪ במקום 13.90₪"
-        report.record(result)
-        text = format_report_summary({"shufersal": report})
-        bare = text.replace("\\*", "")
-        self.assertEqual(bare.count("*") % 2, 0, text)
+    def test_a_deal_label_travels_as_italic_not_underscores(self):
+        text = self._summary("טונה 3*80", deal="-64% · 5.00₪")
+        self.assertIn("<i>-64% · 5.00₪</i>", text)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import random
 
 from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -462,7 +463,7 @@ class GroceryBot:
 
         if reports:
             await asyncio.to_thread(standingcart.record_manifest, self.storage, reports)
-            await _send_markdown(
+            await _send_html(
                 context, chat_id, format_report_summary(reports) or "לא היה מה להוסיף."
             )
 
@@ -1502,7 +1503,7 @@ class GroceryBot:
         # household got no summary at all for a cart that had actually
         # been filled. _send_markdown falls back to plain text, so a
         # formatting fault costs formatting, not the message.
-        await _send_markdown(
+        await _send_html(
             context, update.effective_chat.id, summary or "לא היה מה להוסיף."
         )
         await self._send_alternatives(update.effective_chat.id, context, reports)
@@ -1901,7 +1902,7 @@ class GroceryBot:
 
         self.storage.mark_deferred_cycle_done(pending["id"])
         summary = format_report_summary(reports)
-        await _send_markdown(context, chat_id, summary or "לא היה מה להוסיף.")
+        await _send_html(context, chat_id, summary or "לא היה מה להוסיף.")
         await self._send_alternatives(chat_id, context, reports)
         await self._ask_ambiguities(chat_id, context)
 
@@ -1986,6 +1987,27 @@ async def _register_bot_metadata(application: Application) -> None:
         "בוט קניות משפחתי — מדברים איתו רגיל בעברית. מוסיף לרשימה, בודק "
         "מחירים ומבצעים אמיתיים בסניף, מפרק מתכונים למצרכים ובונה תפריט שבועי."
     )
+
+
+async def _send_html(context, chat_id: int, text: str, **kwargs):
+    """Send HTML, falling back to tag-stripped plain text.
+
+    The container legacy Markdown should always have been. Escaping is
+    three characters and works *inside* an entity as well as beside one,
+    so the failure this fallback exists for should now be unreachable —
+    it stays because a send that loses its formatting is survivable and
+    one that loses the message is not, which is a lesson this project
+    paid for with a real order's summary.
+    """
+    try:
+        return await context.bot.send_message(
+            chat_id=chat_id, text=text, parse_mode="HTML", **kwargs
+        )
+    except Exception:
+        logger.warning("HTML rejected; resending as plain text", exc_info=True)
+        plain = re.sub(r"<[^>]+>", "", text)
+        plain = (plain.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">"))
+        return await context.bot.send_message(chat_id=chat_id, text=plain, **kwargs)
 
 
 async def _send_markdown(context, chat_id: int, text: str, **kwargs):
