@@ -62,6 +62,10 @@ class Mall:
     address_terms: tuple  # the street/complex forms actually observed
     exclude_terms: tuple = field(default=())  # nearby sites that must not merge
     name_hints: tuple = field(default=())  # tie-breakers only, never sufficient
+    # What a person calls this place. Ishay will not type the canonical
+    # name — he types "רמת אביב", "בקניון רמת אביב" or "ramat aviv" —
+    # so the names people actually use are data, not an afterthought.
+    aliases: tuple = field(default=())
     # Some malls sit on an ordinary street, so the street name alone
     # over-collects: דיזנגוף 50 is the Center while 116, 122 and 269 are
     # street shops, and החשמונאים carries the TLV mall at 88-132 and
@@ -86,6 +90,8 @@ MALLS = (
         address_terms=("שבעת הכוכבים", "שבעת הכובים"),
         exclude_terms=("אילת",),
         name_hints=("שבעת הכוכבים",),
+        aliases=("שבעת הכוכבים", "שבעת הכובים", "7 הכוכבים", "שבעה כוכבים",
+                 "seven stars", "shivat hakochavim"),
     ),
     Mall(
         name="ביג פאשן גלילות",
@@ -98,6 +104,8 @@ MALLS = (
         # share the place name; הוד השרון and הרצליה are simply elsewhere.
         exclude_terms=("פי גלילות", "סינמה סיטי", "הוד השרון", "הרצליה"),
         name_hints=("גלילות",),
+        aliases=("ביג פאשן גלילות", "ביג גלילות", "פאשן גלילות", "גלילות",
+                 "big glilot", "glilot"),
     ),
     Mall(
         name="קניון עזריאלי, תל אביב",
@@ -106,6 +114,7 @@ MALLS = (
         address_terms=("מנחם בגין 132", "בגין 132", "פת 132", "פ ת 132"),
         exclude_terms=(),
         name_hints=("עזריאלי",),
+        aliases=("עזריאלי תל אביב", "עזריאלי תא", "עזריאלי", "azrieli"),
     ),
     Mall(
         name="דיזנגוף סנטר, תל אביב",
@@ -114,6 +123,8 @@ MALLS = (
         address_terms=("דיזנגוף סנטר", "דיזינגוף סנטר", "דיזנגוף", "דיזינגוף"),
         exclude_terms=(),
         name_hints=("דיזנגוף סנטר",),
+        aliases=("דיזנגוף סנטר", "דיזינגוף סנטר", "דיזנגוף מרכז", "דיזנגוף",
+                 "דיזינגוף", "dizengoff center", "dizengoff"),
         # The Center is number 50. דיזנגוף 116, 122 and 269 are shops on
         # the street and must not be folded in — the whole reason this
         # mall states a number at all.
@@ -129,6 +140,7 @@ MALLS = (
         # street, caught by the city test as well.
         exclude_terms=("שוסטר", "ברודצקי", "אשדוד"),
         name_hints=("רמת אביב",),
+        aliases=("קניון רמת אביב", "רמת אביב", "ramat aviv", "ramat aviv mall"),
         # The mall is Einstein 40. Einstein 68 is not it.
         house_numbers=(40,),
         numberless_terms=("קניון רמת אביב",),
@@ -139,6 +151,8 @@ MALLS = (
         address_terms=("החשמונאים",),
         exclude_terms=(),
         name_hints=("גינדי", "TLV"),
+        aliases=("tlv פאשן מול", "פאשן מול", "גינדי tlv", "קניון tlv", "גינדי",
+                 "tlv fashion mall", "tlv"),
         # One building with entrances across a run of street numbers —
         # 88, 94, 96, 100 and 132 all appear, and every row in that span
         # is a Gindi/TLV branch. Numbers further down HaHashmonaim are
@@ -242,6 +256,80 @@ def mall_of(address, branch="") -> str:
         if _claims(mall, normalised, name):
             return mall.name
     return ""
+
+
+# Words that carry no identifying information in a mall query. Stripping
+# them lets "בקניון רמת אביב", "הקניון של רמת אביב" and "רמת אביב" all
+# reduce to the same thing.
+_FILLER = ("קניון", "הקניון", "בקניון", "מתחם", "במתחם", "מרכז מסחרי",
+           "mall", "the", "של", "יש", "לי", "הנחה", "הנחות", "הטבה",
+           "הטבות", "חנויות", "חנות", "אילו", "איזה", "מה", "כמה", "ב",
+           "אני", "עכשיו", "כאן", "פה")
+# Hebrew's inseparable prefixes (ב ל מ ה ו כ ש) need no special handling
+# here, because matching is by substring: "ברמת אביב" already *contains*
+# "רמת אביב". An earlier version stripped them explicitly and applied the
+# same stripping to the aliases, which silently corrupted every alias
+# beginning with one of those letters — "שבעת הכוכבים" became
+# "בעת שבעת הכוכבים" and stopped matching itself. Substring is enough.
+
+
+# City names that can appear in a question. Used only to *veto* a match
+# whose city contradicts the question, never to make one.
+_CITIES = ("תל אביב", "הרצליה", "רמת השרון", "חיפה", "ירושלים", "באר שבע",
+           "אילת", "נתניה", "חולון", "רמלה", "מודיעין", "עכו", "אשדוד",
+           "ראשון לציון", "פתח תקווה", "רעננה", "כפר סבא", "גבעתיים",
+           "הוד השרון", "טבריה", "נס ציונה", "רחובות", "עפולה", "בת ים",
+           "אשקלון", "כרמיאל", "נהריה", "אור עקיבא", "בית שמש")
+
+
+def _norm_query(text) -> str:
+    out = _PUNCT.sub(" ", str(text or "")).lower()
+    out = out.replace("״", " ").replace("׳", " ")
+    words = [w for w in _SPACE.sub(" ", out).split() if w and w not in _FILLER]
+    return " ".join(words)
+
+
+def resolve(query) -> str:
+    """The mall a person means, from however they happen to say it.
+
+    Ishay types "יש לי הנחה בקניון רמת אביב", not the canonical name, so
+    matching has to survive Hebrew prefixes, the word קניון appearing or
+    not, both spellings of דיזנגוף, and Latin transliterations.
+
+    Longest alias wins: "עזריאלי" and "עזריאלי תל אביב" both match the
+    same mall, but where two malls could claim a query the more specific
+    name should decide it.
+    """
+    text = _norm_query(query)
+    if not text:
+        return ""
+    named_city = next((c for c in _CITIES if c in text), "")
+    best_name, best_len = "", 0
+    for mall in MALLS:
+        # A city in the question that is not this mall's city vetoes it.
+        # "קניון עזריאלי חיפה" must not answer for the Tel Aviv Azrieli —
+        # the chains are a brand, the mall is a place, and we hold only
+        # the Tel Aviv one.
+        if named_city and not any(c in text for c in mall.city_terms):
+            continue
+        for alias in mall.aliases:
+            folded = _norm_query(alias)
+            if folded and folded in text and len(folded) > best_len:
+                best_name, best_len = mall.name, len(folded)
+    return best_name
+
+
+def chains_for_query(query, rows=None) -> tuple:
+    """(mall name, chains) for a free-text question, or ("", []) if unknown."""
+    name = resolve(query)
+    if not name:
+        return "", []
+    return name, chains_in(name, rows)
+
+
+def known_malls() -> list:
+    """Every mall this module can answer for — for a "which malls?" reply."""
+    return [mall.name for mall in MALLS]
 
 
 def coverage(rows=None) -> dict:

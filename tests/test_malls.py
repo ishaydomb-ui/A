@@ -122,6 +122,74 @@ class HouseNumbersSeparateAMallFromItsStreet(unittest.TestCase):
         self.assertEqual(malls.mall_of("ויצמן 207 כפר סבא"), "")
 
 
+class NamesPeopleActuallyUse(unittest.TestCase):
+    """Ishay types the mall the way he says it, not the canonical name.
+
+    Every phrasing here is one he or a reasonable person would send, and
+    the module is only useful if all of them land.
+    """
+
+    RAMAT_AVIV = "קניון רמת אביב, תל אביב"
+    DIZENGOFF = "דיזנגוף סנטר, תל אביב"
+    AZRIELI = "קניון עזריאלי, תל אביב"
+    GLILOT = "ביג פאשן גלילות"
+    SEVEN = "קניון שבעת הכוכבים, הרצליה"
+    TLV = "TLV פאשן מול (גינדי), תל אביב"
+
+    def test_a_whole_sentence_resolves(self):
+        self.assertEqual(malls.resolve("יש לי הנחה בקניון רמת אביב"), self.RAMAT_AVIV)
+        self.assertEqual(malls.resolve("אילו חנויות בהנחה בקניון עזריאלי"), self.AZRIELI)
+        self.assertEqual(malls.resolve("מה יש לי ברמת אביב"), self.RAMAT_AVIV)
+        self.assertEqual(malls.resolve("אני בגלילות"), self.GLILOT)
+
+    def test_hebrew_prefixes_do_not_block_a_match(self):
+        """ב/ה on the front of a word is not a different word."""
+        for query in ("רמת אביב", "ברמת אביב", "הקניון ברמת אביב", "קניון רמת אביב"):
+            self.assertEqual(malls.resolve(query), self.RAMAT_AVIV, query)
+
+    def test_a_prefix_letter_inside_an_alias_is_not_stripped(self):
+        """שבעת begins with ש, an inseparable prefix. An earlier version
+        stripped prefixes from the aliases too and broke this."""
+        for query in ("שבעת הכוכבים", "בשבעת הכוכבים הרצליה", "קניון שבעת הכוכבים"):
+            self.assertEqual(malls.resolve(query), self.SEVEN, query)
+
+    def test_spelling_variants_and_short_forms(self):
+        self.assertEqual(malls.resolve("דיזינגוף סנטר"), self.DIZENGOFF)
+        self.assertEqual(malls.resolve("דיזנגוף"), self.DIZENGOFF)
+        self.assertEqual(malls.resolve("7 הכוכבים"), self.SEVEN)
+        self.assertEqual(malls.resolve("ביג גלילות"), self.GLILOT)
+        self.assertEqual(malls.resolve("גינדי"), self.TLV)
+
+    def test_latin_transliterations(self):
+        self.assertEqual(malls.resolve("ramat aviv"), self.RAMAT_AVIV)
+        self.assertEqual(malls.resolve("dizengoff center"), self.DIZENGOFF)
+        self.assertEqual(malls.resolve("azrieli"), self.AZRIELI)
+        self.assertEqual(malls.resolve("big glilot"), self.GLILOT)
+        self.assertEqual(malls.resolve("tlv fashion mall"), self.TLV)
+        self.assertEqual(malls.resolve("seven stars"), self.SEVEN)
+
+    def test_a_contradicting_city_refuses_rather_than_guessing(self):
+        """The chains are a brand; the mall is a place. We hold only the
+        Tel Aviv Azrieli, so a Haifa question must not answer with it."""
+        self.assertEqual(malls.resolve("קניון עזריאלי חיפה"), "")
+        self.assertEqual(malls.resolve("עזריאלי ירושלים"), "")
+        self.assertEqual(malls.resolve("שבעת הכוכבים אילת"), "")
+
+    def test_an_unknown_mall_returns_nothing(self):
+        for query in ("יש לי הנחה בקניון מלחה", "קניון איילון", "בסופר", ""):
+            self.assertEqual(malls.resolve(query), "", query)
+
+    def test_chains_for_query_pairs_the_mall_with_its_chains(self):
+        rows = [{"chainID": "1", "חנות": "פוקס", "סניף": "פוקס",
+                 "כתובת": "איינשטיין 40 תל אביב - יפו"}]
+        name, found = malls.chains_for_query("יש לי הנחה בקניון רמת אביב", rows)
+        self.assertEqual(name, self.RAMAT_AVIV)
+        self.assertEqual([c[0] for c in found], ["פוקס"])
+
+    def test_an_unresolvable_query_yields_no_mall_and_no_chains(self):
+        self.assertEqual(malls.chains_for_query("קניון איילון", []), ("", []))
+
+
 class Api(unittest.TestCase):
     def test_an_unknown_mall_returns_nothing_rather_than_raising(self):
         self.assertEqual(malls.chains_in("קניון שלא קיים"), [])

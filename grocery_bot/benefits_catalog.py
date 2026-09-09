@@ -344,11 +344,28 @@ def has_trustworthy_address(row: dict) -> bool:
 
 
 def mall_of(row: dict) -> str:
-    """The mall this row sits in, when its address genuinely says so."""
+    """The mall this row sits in, when its address genuinely says so.
+
+    A known mall is resolved by `malls.py`, which decides on the address
+    and rejects the near-misses — a branch *named* for a mall brand while
+    standing in another city, a neighbouring site sharing a place name,
+    or a mall name that is an ordinary street somewhere else.
+
+    The regex below stays only as the fallback for malls that module does
+    not model yet. It reads a mall name out of the address text, so it is
+    a guess, not an identification: it cannot tell דיזנגוף 50 from
+    דיזנגוף 122, and it will happily invent a mall from any address that
+    happens to contain the word קניון.
+    """
     import re as _re
 
     if not has_trustworthy_address(row):
         return ""
+    from . import malls
+
+    known = malls.mall_of(row.get("כתובת") or "", row.get("סניף") or "")
+    if known:
+        return known
     address = row.get("כתובת") or ""
     found = _re.search(r"(קניון\s+[^,]{2,20}|[^,]{2,20}\s+סנטר)", address)
     return found.group(1).strip() if found else ""

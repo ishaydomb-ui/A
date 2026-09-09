@@ -33,7 +33,10 @@ Run with: python -m grocery_bot.cli <command>
                           all rows, machine-readable)
     benefits-remember "<term>" "<merchant>"  resolve a term to one merchant
     benefits-branches [query] [--json]  street addresses for those stores
-                          (partial — the branch crawl is incremental)
+                          (937 of 972 chains as of 2026-09-09)
+    benefits-mall <mall> [--json]      benefit chains in a named mall,
+                          named however you'd say it ("רמת אביב",
+                          "בקניון רמת אביב", "ramat aviv")
     coffee-catalog [query] [--json]  harvested coffee-cart directory
                           (coffeetrail.co.il — name/description/address)
     coffee-nearby <lat> <lng> [--radius KM] [--open-now] [--json]
@@ -50,7 +53,8 @@ wrong prices rather than failing loudly.
 **What the household's other bot (מירי) can call.** Everything in
 `_DB_ONLY_COMMANDS` needs nothing but `GROCERY_BOT_DB_PATH`: add-item,
 remove-item, list-items, price, deals, recipe, recipe-text, meal-plan,
-nudge, confirm-card, benefits-catalog, benefits-branches, price-compare, basket,
+nudge, confirm-card, benefits-catalog, benefits-branches, benefits-mall,
+price-compare, basket,
 coffee-catalog, coffee-nearby, coffee-terms, coffee-by-term.
 No Telegram token, no store session, no exit node — that project has no use for this
 one's secrets. `add-to-cart` is the exception and is listed separately in
@@ -785,6 +789,97 @@ def _benefits_branches(storage: Storage, args: list[str]) -> int:
     return 0 if rows else 1
 
 
+def _benefits_mall(storage: Storage, args: list[str]) -> int:
+    """Which benefit chains sit in a named mall — see malls.py.
+
+    Answers the question Ishay actually asks, in the words he asks it:
+    "יש לי הנחה בקניון רמת אביב". The mall name is resolved from free
+    text, so קניון/prefixes/spelling variants/English all land on the
+    same place, and a contradicting city ("קניון עזריאלי חיפה") returns
+    nothing rather than the Tel Aviv mall's shops.
+
+    The discount shown is the *best live* wallet rate for that chain. A
+    wallet that can no longer be loaded is excluded — the catalogue keeps
+    a dead wallet's rate looking current, which already produced one
+    wrong answer.
+    """
+    import json
+
+    from . import malls
+
+    as_json = "--json" in args
+    query = " ".join(a for a in args if not a.startswith("--")).strip()
+    if not query:
+        print("usage: benefits-mall <mall name>")
+        print("known: " + " | ".join(malls.known_malls()))
+        return 2
+
+    mall_name, found = malls.chains_for_query(query)
+    if not mall_name:
+        if as_json:
+            print(json.dumps({"query": query, "mall": None, "chains": []},
+                             ensure_ascii=False))
+        else:
+            print(f'לא זוהה קניון מוכר ב-"{query}".')
+            print("קניונים ידועים: " + " | ".join(malls.known_malls()))
+        return 1
+
+    rows = [
+        {"chain": chain, "branch": branch, "address": address,
+         "discount": discount, "wallet": wallet}
+        for chain, branch, address, discount, wallet in _with_discounts(found)
+    ]
+    if as_json:
+        print(json.dumps({"query": query, "mall": mall_name, "chains": rows},
+                         ensure_ascii=False))
+        return 0
+
+    print(f"{mall_name} — {len(rows)} רשתות עם הטבה")
+    for row in rows:
+        rate = f"{row['discount']:.0f}%" if row["discount"] else "—"
+        print(f"  {rate:>5}  {row['chain'][:28]:30} {row['wallet']}")
+    return 0
+
+
+def _with_discounts(found):
+    """Attach the best *loadable* wallet rate to each chain in a mall."""
+    import csv as _csv
+    import os as _os
+
+    from .benefits_catalog import _data_dir
+
+    path = _os.path.join(_data_dir(), "lab_rescue", "catalog_full.csv")
+    rates = {}
+    try:
+        with open(path, encoding="utf-8-sig") as handle:
+            for row in _csv.DictReader(handle):
+                name = (row.get("חנות") or "").strip()
+                wallet = (row.get("ארנק") or "").strip()
+                if not name or wallet in _DEAD_WALLETS:
+                    continue
+                try:
+                    rate = float(str(row.get("הנחה%") or "0").replace("%", ""))
+                except ValueError:
+                    continue
+                if rate > rates.get(name, (0, ""))[0]:
+                    rates[name] = (rate, wallet)
+    except OSError:
+        pass
+    out = []
+    for chain, branch, address in found:
+        rate, wallet = rates.get(chain, (0.0, "—"))
+        out.append((chain, branch, address, rate, wallet))
+    out.sort(key=lambda r: (-r[3], r[0]))
+    return out
+
+
+# Wallets whose rate still appears in the catalogue but which can no
+# longer be loaded. `isLoadAllowed=0` on 2026-09-09; the CSV has no such
+# column, so a dead wallet reads as a live discount unless named here.
+# See docs/BENEFITS.md, "The catalogue lies about wallet status".
+_DEAD_WALLETS = {"מבצע הוקרה 25%"}
+
+
 def _confirm_card(storage: Storage, args: list[str]) -> int:
     """Record that the benefit card was loaded this month.
 
@@ -964,6 +1059,7 @@ _DB_ONLY_COMMANDS = {
     # disk, not a live fetch.
     "benefits-catalog": _benefits_catalog,
     "benefits-branches": _benefits_branches,
+    "benefits-mall": _benefits_mall,
     "benefits-remember": _benefits_remember,
     # Reads flat JSON under data/coffeetrail/ (gitignored, external
     # public data), not the sqlite database. No token, no store session.
