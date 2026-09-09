@@ -117,3 +117,29 @@ class NothingFailsSilently(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIs(payload["rates_known"], True)
         self.assertEqual(payload["problems"]["catalog_error"], "")
+
+
+class ClosedWalletsComeFromStatusNotAName(unittest.TestCase):
+    """Matching a dead wallet by its Hebrew display name breaks the day
+    the club rewords it. The published status file is the real signal."""
+
+    def test_a_rate_is_closed_only_when_every_wallet_offering_it_is(self):
+        """Two wallets share 15%; one being shut must not hide the other."""
+        closed = cli._closed_rates()
+        self.assertIn(25.0, closed)
+        self.assertNotIn(15.0, closed)
+        self.assertNotIn(30.0, closed)
+
+    def test_the_source_of_the_exclusion_is_reported(self):
+        _, text = _run("רמת אביב", "--json")
+        payload = json.loads(text)
+        self.assertEqual(payload["problems"]["closed_rates_source"],
+                         "wallet_status.json")
+
+    def test_a_missing_status_file_falls_back_rather_than_trusting_nothing(self):
+        import os
+        from unittest import mock
+
+        with mock.patch("grocery_bot.benefits_catalog._data_dir",
+                        return_value=os.path.join(os.sep, "nonexistent-dir")):
+            self.assertEqual(cli._closed_rates(), set())

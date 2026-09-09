@@ -544,6 +544,32 @@ the six wallets that were blank:
 | מסעדות | 20% | 500 | 500 | yes |
 | חודש ההוקרה (פג 30.6.26) | 25% | 500 | 500 | **no — `isLoadAllowed=0`** |
 
+### `wallet_status.json` — the published wallet status (2026-09-09)
+
+`data/benefits/wallet_status.json`, written by
+`scripts/write_wallet_status.py` while a session is live. **This is the
+file another project should read**, rather than hard-coding a rate, a
+name or a date.
+
+Per wallet: `wallet_id`, `name`, `discount_rate`, `is_load_allowed`,
+`max_balance`, `max_deposit_per_month`, `max_deposit_yearly`, and
+`expiry_from_name`. **Balances are deliberately absent** — personal,
+hourly, and no consumer needs them to answer "can this be used, at what
+rate".
+
+`is_load_allowed` is the structural signal and the one to branch on.
+`expiry_from_name` is named for what it is: parsed from the display
+string, "" when the date is impossible (a wallet named 31/9 has no such
+day) rather than silently accepted or silently skipped.
+
+This exists because the budget project had no way to read wallet status
+and hard-coded two expiry dates instead — a coupling to the club's
+wording. It also lets this project stop matching a dead wallet by its
+Hebrew name: `benefits-mall` now excludes a **rate** only when every
+wallet offering it is closed, so 25% drops out while 15% survives with
+two wallets sharing it. The name list remains a fallback for a missing
+file.
+
 **Where the expiry dates come from, and why that matters.**
 `GetCardGeneralInfo` has no expiry field. Its wallet record carries
 `walletName`, `walletID`, `walletBalance`, `loadedThisMonth`,

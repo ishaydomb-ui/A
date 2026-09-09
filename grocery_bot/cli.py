@@ -884,7 +884,10 @@ def _with_discounts(found):
 
     path = _os.path.join(_data_dir(), "lab_rescue", "catalog_full.csv")
     rates: dict = {}
-    problems: dict = {"catalog_error": "", "unparseable_rates": 0}
+    closed = _closed_rates()
+    problems: dict = {"catalog_error": "", "unparseable_rates": 0,
+                      "closed_rates_source": "wallet_status.json" if closed
+                      else "fallback name list"}
     try:
         with open(path, encoding="utf-8-sig") as handle:
             for row in _csv.DictReader(handle):
@@ -901,6 +904,8 @@ def _with_discounts(found):
                     # Counted, not dropped in silence: a rate we cannot
                     # read is a chain we may under-report.
                     problems["unparseable_rates"] += 1
+                    continue
+                if rate in closed:
                     continue
                 if rate > rates.get(name, (0.0, ""))[0]:
                     rates[name] = (rate, wallet)
@@ -920,11 +925,44 @@ def _with_discounts(found):
     return out, problems
 
 
-# Wallets whose rate still appears in the catalogue but which can no
-# longer be loaded. `isLoadAllowed=0` on 2026-09-09; the CSV has no such
-# column, so a dead wallet reads as a live discount unless named here.
+# Fallback only. Preferred source is `data/benefits/wallet_status.json`
+# (see `_closed_rates`), because matching a wallet by its Hebrew display
+# name breaks silently the day the club rewords it — the coupling class
+# that bit all three household projects on 2026-09-09.
 # See docs/BENEFITS.md, "The catalogue lies about wallet status".
 _DEAD_WALLETS = {"מבצע הוקרה 25%"}
+
+
+def _closed_rates() -> set:
+    """Discount rates that no wallet can still issue.
+
+    Read from the published wallet status rather than inferred from a
+    name. A rate is only excluded when **every** wallet offering it is
+    closed — two wallets share 15%, and one of them being shut must not
+    hide the other.
+
+    Returns an empty set when the file is missing, which leaves
+    `_DEAD_WALLETS` as the fallback: under-trusting the file is safe,
+    since the caller also drops rows by wallet name.
+    """
+    import json as _json
+    import os as _os
+
+    from .benefits_catalog import _data_dir
+
+    path = _os.path.join(_data_dir(), "wallet_status.json")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            wallets = (_json.load(handle) or {}).get("wallets") or []
+    except (OSError, ValueError):
+        return set()
+    by_rate: dict = {}
+    for wallet in wallets:
+        rate = wallet.get("discount_rate")
+        if rate is None:
+            continue
+        by_rate.setdefault(float(rate), []).append(bool(wallet.get("is_load_allowed")))
+    return {rate for rate, states in by_rate.items() if not any(states)}
 
 
 def _confirm_card(storage: Storage, args: list[str]) -> int:
