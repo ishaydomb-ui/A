@@ -17,8 +17,23 @@ function textOf(data: MedicationData, key: string, locale: Locale): string {
   return value?.state === 'provided' && value.text ? value.text : '';
 }
 
+/**
+ * Search text for a locale, falling back to the other locale when this one
+ * has no content.
+ *
+ * Without this a clinician searching in the Hebrew interface could not find a
+ * record whose content is only in English — which is most of them, since drug
+ * names are routinely written in Latin script. This mirrors how resolveField
+ * already picks the text to display.
+ */
+function searchTextOf(data: MedicationData, key: string, locale: Locale): string {
+  const own = textOf(data, key, locale);
+  if (own) return own;
+  return textOf(data, key, locale === 'en' ? 'he' : 'en');
+}
+
 function joinNormalized(data: MedicationData, keys: string[], locale: Locale): string {
-  return normalizeText(keys.map((k) => textOf(data, k, locale)).filter(Boolean).join(' \n '));
+  return normalizeText(keys.map((k) => searchTextOf(data, k, locale)).filter(Boolean).join(' \n '));
 }
 
 /**
