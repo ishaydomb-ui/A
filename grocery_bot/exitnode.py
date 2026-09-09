@@ -129,9 +129,21 @@ def ensure_israeli_exit(proxy: str):
     if status.available:
         return status
 
-    candidates = list_exit_nodes()
+    advertised = list_exit_nodes()
+    # Only nodes Tailscale currently sees as online. Without this filter
+    # the walk would happily *select* a node that has been unreachable
+    # for days, and the loop's own "leave the last attempt in place"
+    # then left the proxy pointed at it — which is precisely what was
+    # found on 2026-09-09: the exit node set to a TV box last seen eight
+    # days earlier, while the household's phone sat online and unused.
+    # One transient probe failure was enough to park the whole system on
+    # a dead route, and every store request failed until someone noticed.
+    candidates = [node for node in advertised if node.online]
+    skipped = [node.hostname for node in advertised if not node.online]
+    if skipped:
+        logger.info("Ignoring offline exit nodes: %s", ", ".join(skipped))
     if not candidates:
-        logger.info("No exit nodes advertised; nothing to fail over to")
+        logger.info("No online exit nodes advertised; nothing to fail over to")
         return status
 
     for node in candidates:
@@ -146,6 +158,10 @@ def ensure_israeli_exit(proxy: str):
             node.hostname,
             probed.detail,
         )
-    # Nothing worked: leave the last attempt in place and report honestly,
-    # so the caller queues the cycle instead of running it into a wall.
+
+    # Nothing reached Israel. Leave the selection on an online node
+    # anyway: a route that is merely failing right now can recover on its
+    # own, while one pointed at a device that is switched off cannot.
+    if candidates:
+        select_exit_node(candidates[0])
     return check_israeli_exit(proxy)

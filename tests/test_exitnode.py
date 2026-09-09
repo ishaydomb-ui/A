@@ -120,3 +120,65 @@ class FailoverTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OfflineNodesAreNeverSelected(unittest.TestCase):
+    """A node that is switched off must never be routed through.
+
+    Found live on 2026-09-09: the exit node was set to a TV box last seen
+    eight days earlier while the household's phone was online and idle.
+    One transient probe failure had been enough to walk the loop onto the
+    dead node, and the old code then deliberately left it there. Every
+    store request failed until a person noticed.
+    """
+
+    def setUp(self):
+        from grocery_bot import exitnode
+
+        self.exitnode = exitnode
+        self.selected = []
+
+    def _patch(self, nodes, reachable):
+        """reachable: hostnames whose probe comes back as Israeli."""
+        from grocery_bot.connectivity import ExitStatus
+
+        self.exitnode.list_exit_nodes = lambda: nodes
+        def _select(node):
+            self.selected.append(node.hostname)
+            return True
+        self.exitnode.select_exit_node = _select
+        state = {"current": None}
+        def _check(proxy):
+            host = self.selected[-1] if self.selected else None
+            ok = host in reachable
+            return ExitStatus(available=ok, detail="", country="IL" if ok else "")
+        self.exitnode.check_israeli_exit = _check
+
+    def _node(self, hostname, ip, online):
+        return self.exitnode.ExitNode(
+            node_id=hostname, hostname=hostname, ip=ip, online=online, os_name="x"
+        )
+
+    def test_an_offline_node_is_not_even_tried(self):
+        nodes = [self._node("phone", "1.1.1.1", True),
+                 self._node("dead-tv-box", "2.2.2.2", False)]
+        self._patch(nodes, reachable={"phone"})
+        status = self.exitnode.ensure_israeli_exit("socks5://localhost:1055")
+        self.assertTrue(status.available)
+        self.assertNotIn("dead-tv-box", self.selected)
+
+    def test_a_failing_probe_does_not_park_us_on_an_offline_node(self):
+        # Nothing reaches Israel; the selection must still end on the
+        # online node, because an offline one can never recover by itself.
+        nodes = [self._node("phone", "1.1.1.1", True),
+                 self._node("dead-tv-box", "2.2.2.2", False)]
+        self._patch(nodes, reachable=set())
+        self.exitnode.ensure_israeli_exit("socks5://localhost:1055")
+        self.assertNotIn("dead-tv-box", self.selected)
+        self.assertEqual(self.selected[-1], "phone")
+
+    def test_with_no_online_nodes_nothing_is_selected_at_all(self):
+        nodes = [self._node("dead-tv-box", "2.2.2.2", False)]
+        self._patch(nodes, reachable=set())
+        self.exitnode.ensure_israeli_exit("socks5://localhost:1055")
+        self.assertEqual(self.selected, [])
