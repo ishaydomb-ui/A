@@ -71,6 +71,23 @@ appeared in Shufersal's own order history hours later, so "what was
 actually bought vs what the list proposed" cannot be computed yet. The
 nightly sync will pick it up.
 
+## 2b. Malls — answering "which shops here have a discount" (2026-09-09)
+
+`grocery_bot/malls.py` + `benefits-mall` in the CLI. Six malls modelled:
+שבעת הכוכבים הרצליה 52 chains, דיזנגוף סנטר 41, ביג פאשן גלילות 37,
+עזריאלי ת"א 35, רמת אביב 32, TLV גינדי 23.
+
+**The rule that matters if you extend it:** a mall is decided by the
+*address*, never by what a branch calls itself. Measured — "עזריאלי" in
+a branch name returns shops in Holon, Haifa, Ramla, Modiin and Akko;
+"גלילות" catches קניון פי גלילות, a different site. Three malls also
+need a house number, because they sit on ordinary streets (דיזנגוף 50 is
+the Center, 116/122/269 are not; החשמונאים 88-132 is TLV).
+
+Adding a mall means reading its real address forms out of the harvest
+first — every term in the file was observed, none invented. 28 tests,
+including 35 real phrasings.
+
 ## 3. Blocked, and on what
 
 - **The Israeli exit runs through Ishay's iPhone, not the TV box.** The
@@ -85,8 +102,23 @@ nightly sync will pick it up.
   three times running while the site finds it fine by hand. The proper
   fix is the Self-Point API's `filters[must][term][localBarcode]`, which
   the API honours, so the browser only ever performs the add.
-- **behatsdaa and Victory** — unchanged, see `docs/BENEFITS.md`. Both
-  still need the noVNC-from-phone route.
+- **behatsdaa needs one more login; the address work is done.** Ishay
+  logged in 2026-09-09 and the session was captured, which unblocked the
+  branch harvest: **937 of 972 chains with physical branches now have
+  street addresses, up from 222** — the "77% have no address" blocker
+  cited all over these docs is closed. The session has since expired
+  (`AccessToken` and `.AspNetCore.Session` are gone from both the saved
+  state and the browser profile). Two things wait on a fresh login:
+  `scripts/harvest_wallet_chains.py` (per-wallet רשימת רשתות — queued,
+  exited `SESSION_EXPIRED` on its first run) and the last **35 chains**
+  without addresses. Restart the watcher via
+  `systemd-run --user --unit=behatsdaa-watch --collect -E DISPLAY=:99
+  -E WATCH_HOURS=8 -E PLAYWRIGHT_PROXY=socks5://localhost:1055
+  .venv/bin/python3 scripts/behatsdaa_watch_login.py` and have him log in
+  on noVNC; detection now reads the browser's whole cookie jar and will
+  catch it.
+- **Victory** — unchanged, see `docs/BENEFITS.md`. Still needs the
+  noVNC-from-phone route.
 
 ## 4. Handover procedure
 
