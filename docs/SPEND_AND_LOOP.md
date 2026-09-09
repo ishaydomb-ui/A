@@ -45,6 +45,14 @@ only on the OpenAI key would show grocery as costing nothing, which is
 not true; it would show it as costing nothing *in dollars*, which is a
 different statement.
 
+## Decision (Ishay, 2026-09-09): loop yes, spend log not for now
+
+*"Hybrid loop. No need for spend here for now."* The loop is built —
+`grocery_bot/loop.py`, wired into `parse_message`. The spend log is
+**not built and not to be built here** until he says otherwise; the
+assessment below is kept because the reasoning still holds if it comes
+back, and because the premise correction above matters regardless.
+
 ## Recommendation on the spend log: adopt, in a different currency
 
 Worth having, with one design change. **The unit cannot be USD.** A
@@ -71,8 +79,10 @@ unavailable this bot silently degrades to rule-based parsing, and today
 nothing records how often that happens. That is the same family as the
 bugs below — a degradation nobody reads.
 
-**Not built. Ishay's approval requested first**, per his instruction,
-because it records who sent which message.
+**Not built — Ishay declined it here for now (2026-09-09).** The
+premise correction above still stands on its own: any spend report built
+only on the OpenAI key shows this project at zero, which is true only in
+dollars.
 
 ## Recommendation on the loop: yes, but only past the classifier
 
@@ -98,9 +108,29 @@ without asking.
 
 **So the recommendation is a hybrid, not a replacement:** keep the
 classifier for the common path, and invoke a loop only when the
-classifier returns `unclear` or an ambiguity is detected. That preserves
-latency for the majority of messages and adds thinking where the bot is
-currently weakest.
+classifier returns `unclear`. That preserves latency for the majority of
+messages and adds thinking where the bot is currently weakest.
+
+**Built 2026-09-09, `grocery_bot/loop.py`.** Measured end to end on the
+live model:
+
+| Message | Path | Result |
+|---|---|---|
+| "תזמין עכשיו הכל" | classifier only, 11.5s | `start_order` — loop never ran |
+| "תוסיף חלב" | classifier only, 9.1s | `add_item` |
+| "נגמר" | classifier `unclear` → loop, 21.3s | `unclear` **with a focused question**: "מה נגמר בדיוק? תגיד לי את שם המוצר" |
+
+The last row is the whole point: before, that message produced a bare
+shrug. The extra ~12s is paid only when the classifier has already
+failed.
+
+**The barrier, and why it is in code.** `loop.sanitise` refuses
+`start_order`, `add_to_cart` and `shopped` whatever the model returns,
+and refuses any intent not in `INTENTS`. `shopped` is on that list
+because it refills both real carts — its blast radius is a cart, not a
+log line. A refused proposal becomes an `unclear` that asks. Cart
+actions remain fully reachable through the classifier, which is where a
+clearly-worded request already lands.
 
 **Two of Miri's measurements transfer directly.**
 

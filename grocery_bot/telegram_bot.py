@@ -600,7 +600,7 @@ class GroceryBot:
         # (cadence digest, alerts) have somewhere to go.
         self.storage.set_state("digest_chat_id", str(update.effective_chat.id))
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-        parsed = await asyncio.to_thread(parse_message, text)
+        parsed = await asyncio.to_thread(parse_message, text, self.storage)
         requested_by = update.effective_user.first_name if update.effective_user else "unknown"
 
         handler = {

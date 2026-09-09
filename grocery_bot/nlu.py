@@ -238,8 +238,16 @@ def _fallback_parse(message: str) -> ParsedMessage:
     )
 
 
-def parse_message(message: str) -> ParsedMessage:
-    """Classify one free-text message; never raises."""
+def parse_message(message: str, storage=None) -> ParsedMessage:
+    """Classify one free-text message; never raises.
+
+    `storage` is optional and only enables the second pass: when this
+    classifier gives up, `loop.reconsider` gets one attempt with the
+    standing list and pending items preloaded (see `loop.py`). The
+    common path is untouched — a confident answer is never re-litigated,
+    because the loop costs another 7-9s and the classifier is already
+    right here.
+    """
     text = (message or "").strip()
     if not text:
         return ParsedMessage(intent="unclear")
@@ -248,12 +256,12 @@ def parse_message(message: str) -> ParsedMessage:
         payload = _extract_json(_ask_model(text))
     except Exception:
         logger.warning("NLU: model unavailable, using rule-based fallback", exc_info=True)
-        return _fallback_parse(text)
+        return _reconsider_if_unclear(_fallback_parse(text), text, storage)
 
     intent = str(payload.get("intent") or "").strip()
     if intent not in INTENTS:
         logger.warning("NLU: model returned unknown intent %r", intent)
-        return _fallback_parse(text)
+        return _reconsider_if_unclear(_fallback_parse(text), text, storage)
 
     items = []
     for raw_item in payload.get("items") or []:
@@ -271,12 +279,42 @@ def parse_message(message: str) -> ParsedMessage:
             )
         )
 
-    return ParsedMessage(
-        intent=intent,
-        items=items,
-        query=str(payload.get("query") or "").strip(),
-        reply=str(payload.get("reply") or "").strip(),
+    return _reconsider_if_unclear(
+        ParsedMessage(
+            intent=intent,
+            items=items,
+            query=str(payload.get("query") or "").strip(),
+            reply=str(payload.get("reply") or "").strip(),
+        ),
+        text,
+        storage,
     )
+
+
+def _reconsider_if_unclear(parsed: ParsedMessage, text: str, storage) -> ParsedMessage:
+    """Give up only after the thinking pass has also had a go.
+
+    Deliberately narrow. The loop is offered nothing but `unclear`, so a
+    confident classification can never be overturned by it, and the
+    common path pays none of its latency. If the loop is unavailable or
+    adds nothing it returns None and the original result stands — the
+    bot is never worse off than before this existed.
+    """
+    if parsed.intent != "unclear":
+        return parsed
+    try:
+        from .loop import reconsider
+    except Exception:  # noqa: BLE001
+        return parsed
+    try:
+        second = reconsider(text, storage)
+    except Exception:  # noqa: BLE001
+        logger.warning("NLU: second pass failed, keeping unclear", exc_info=True)
+        return parsed
+    if second is None:
+        return parsed
+    logger.info("NLU: second pass resolved %r -> %s", text[:40], second.intent)
+    return second
 
 
 _RECIPE_PROMPT = """אתה עוזר קניות. קיבלת בקשה למנה. החזר JSON בלבד:
