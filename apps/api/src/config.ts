@@ -45,7 +45,7 @@ const schema = z.object({
   SMTP_URL: z.string().optional(),
   MAIL_FROM: z.string().default('no-reply@localhost'),
 
-  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   TRUST_PROXY: booleanish.default(false),
 });
 

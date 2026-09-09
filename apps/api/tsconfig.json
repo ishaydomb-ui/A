@@ -11,8 +11,7 @@
     "noEmit": true,
     "outDir": "dist",
     "rootDir": "src",
-    "types": ["node"],
-    "paths": { "@med/shared": ["../../packages/shared/src/index.ts"] }
+    "types": ["node"]
   },
   "include": ["src/**/*.ts"]
 }
