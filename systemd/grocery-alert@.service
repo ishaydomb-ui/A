@@ -16,8 +16,14 @@ Type=oneshot
 WorkingDirectory=%h/grocery-automation
 EnvironmentFile=%h/grocery-automation/.env
 Environment=TZ=Asia/Jerusalem
-ExecStart=/usr/bin/python3 %h/grocery-automation/scripts/notify.py \
-    "🛑 *%i* נכשל בשרת. בדקו עם: systemctl --user status %i"
+# Through the gate, not straight to the notifier: a single transient
+# failure of a job that retries every 30 minutes is not news, and two
+# such alerts reached the household's phone on 2026-09-08 for problems
+# that had already fixed themselves. The gate counts recent failures in
+# the journal and stays silent below the threshold; grocery-bot still
+# alerts on the first one, because nothing retries the bot.
+ExecStart=/usr/bin/python3 %h/grocery-automation/scripts/alert_gate.py %i \
+    "🛑 *%i* נכשל שוב בשרת (יותר מפעם אחת). בדקו עם: systemctl --user status %i"
 
 NoNewPrivileges=true
 PrivateTmp=true
