@@ -109,11 +109,52 @@ def _find(pattern: str) -> list[Path]:
     return found
 
 
+_CHAIN_ID_CACHE: dict[str, str] | None = None
+_ADDRESS_CACHE: dict[str, str] | None = None
+
+
 def _read_csv(path: Path) -> list[dict]:
     if not path.exists():
         return []
     with path.open(encoding="utf-8-sig", newline="") as f:
         return list(csv.DictReader(f))
+
+
+def _chain_ids_by_name() -> dict[str, str]:
+    """Store name -> chainID, from the raw harvest.
+
+    The join key the curated file lost. Cached per process: this runs on
+    every catalogue load and the file is a few thousand rows.
+    """
+    global _CHAIN_ID_CACHE
+    if _CHAIN_ID_CACHE is None:
+        found: dict[str, str] = {}
+        for path in _find("catalog_full.csv"):
+            for row in _read_csv(path):
+                name = (row.get("חנות") or "").strip()
+                if name and row.get("chainID"):
+                    found.setdefault(name, str(row["chainID"]).strip())
+        _CHAIN_ID_CACHE = found
+    return _CHAIN_ID_CACHE
+
+
+def _addresses_by_chain() -> dict[str, str]:
+    """chainID -> one representative street address.
+
+    A chain has many branches; the catalogue row is the chain, so it
+    carries the first real address as evidence that we know where this
+    merchant physically is. Per-branch detail stays in load_branches().
+    """
+    global _ADDRESS_CACHE
+    if _ADDRESS_CACHE is None:
+        found: dict[str, str] = {}
+        for row in load_branches():
+            chain_id = str(row.get("chainID") or "").strip()
+            address = (row.get("כתובת") or "").strip()
+            if chain_id and address and chain_id not in found:
+                found[chain_id] = address
+        _ADDRESS_CACHE = found
+    return _ADDRESS_CACHE
 
 
 def load_catalog() -> list[dict]:
@@ -134,9 +175,24 @@ def load_catalog() -> list[dict]:
     when the distinction matters.
     """
     rows: list[dict] = []
+    chain_ids = _chain_ids_by_name()
+    addresses = _addresses_by_chain()
     for path in _find("catalog_tagged.csv"):
         for row in _read_csv(path):
             row.setdefault("club", "בהצדעה")
+            # The tagged file was hand-curated without `chainID`, which is
+            # the only key the harvested branch data is filed under — so
+            # 3,326 real street addresses sat on disk unusable, and the
+            # catalogue could answer "which city" but never "where". The
+            # id is recovered from the raw harvest by store name, which
+            # matches all 982 rows because the tagged file was derived
+            # from it in the first place.
+            chain_id = chain_ids.get((row.get("חנות") or "").strip())
+            if chain_id:
+                row.setdefault("chainID", chain_id)
+                branch = addresses.get(str(chain_id).strip())
+                if branch:
+                    row.setdefault("כתובת", branch)
             rows.append(row)
     # MAX, and any club harvested later, land beside the rescued data.
     for path in _find("*_catalog.csv"):
