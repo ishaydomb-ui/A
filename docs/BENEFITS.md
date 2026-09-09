@@ -616,6 +616,61 @@ because the table on its own is a trap:
   different ceilings (₪2,500 vs ₪1,500), so treating 15% as one bucket
   merges two things.
 
+
+### How redemption actually works (site FAQ + terms, read 2026-09-09)
+
+Read from the club's own published pages with a live session: the terms
+at `https://www.dts.co.il/HtmlView/07082023-1` and the site's שאלות
+ותשובות. Recorded because it decides how the wallets can be *used*, not
+just how much they hold.
+
+**One card, several wallets.** `GetCardGeneralInfo` reports a single
+card number and a single balance which is the exact sum of the wallet
+balances (₪2,294.69 = 500 + 721.14 + 1,071.95 + 1.6 + three zeros,
+verified). Wallets are sub-balances of one physical card, not separate
+cards.
+
+**Redemption is per wallet, by barcode.** The FAQ: *"ארנק דיגיטלי -
+מימוש כסף טעון ברשתות – לוחצים על תשלום בקופה בעמוד טעינת כרטיס
+ומציגים את הקוד בקופה"*, and the barcode is generated from inside a
+chosen wallet (*"בארנק הטעון 'תשלום בקופה' » הפק ברקוד"*). **So there is
+no mechanism that combines two wallets into one payment** — each is its
+own code presented at the till. Whether a cashier will accept two codes
+as split tender on one purchase is a shop-level question the club does
+not address, and remains unverified.
+
+**Each wallet covers a different chain list**, exposed by a
+'רשימת רשתות' button per wallet: *"לכל ארנק רשימה שונה"*. That button is
+a better source for wallet→chain coverage than `catalog_tagged.csv`,
+which the club warns goes stale — *"רשימת הרשתות וגובה ההנחה מתעדכנים
+מעת לעת בהתאם למבצעים"*. Not yet harvested.
+
+**Loading rules.**
+- Caps are enforced server-side: *"לא ניתן לבצע טעינות מעבר למגבלות –
+  המערכת לא מאפשרת"*. There is no over-loading a wallet.
+- No instalments: *"לא ניתן לבצע טעינה בתשלומים"*.
+- **A load can be cancelled by the member, online, within 365 days, at
+  no cost** — and only about five minutes after the load itself. This
+  makes loading a low-risk move: an unspent ראש השנה ₪500 can be undone
+  before the wallet expires.
+- **`GetTimeBetweenDischargeAndCharge = 300` now has a meaning**, where
+  it was previously a guess: 300 seconds is that five-minute wait before
+  a load can be cancelled.
+- Online redemption works only at chains listed as online in the wallet:
+  *"לא ניתן לממש רכישות באמצעות כרטיס נטען באתרי הרשתות פרט לרשתות
+  המפורטות בארנקי הרשתות כקניות אונליין"*.
+
+**When eligibility ends**, wallets and remaining balances move to a
+'בהצדעה ממשיכים' site rather than being forfeited.
+
+**What the published rules do NOT say:** nothing in the terms or FAQ
+addresses combining wallets in a single transaction — searching the
+terms for לשלב / שילוב / בו זמנית / כפל returns nothing. The per-wallet
+barcode is the strongest evidence, and it is mechanical, not a stated
+policy. The purchase-limit tables in terms section ז are about voucher
+categories (cinema, meals, attractions), not wallets, and they carry a
+useful exemption: *"מגבלות אינן חלות על מבצעים"*.
+
 ## Open questions for Ishay (also in HANDOFF §5)
 
 - Availability window for the OTP login.
