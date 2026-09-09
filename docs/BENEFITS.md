@@ -28,10 +28,13 @@ pull-only by construction — it answers a declared intent, never browses.
 Two things it makes measurable, and both expose the critical path:
 - **Coverage at the moment of intent.** "Which clothing shops here have a
   benefit" needs merchant + category + *location*. Location is the gap:
-  no coordinates, no home/work, and **77% of catalogue merchants have no
-  address** — so "near me / next door" is unbuildable today beyond a city
-  filter. Closing the branch-address coverage and getting a location
-  source is therefore the highest-leverage work toward this criterion.
+  no coordinates and no home/work. **Address coverage was closed on
+  2026-09-09: 937 of 972 chains with physical branches now have street
+  addresses, up from 222 (77% missing).** That unlocked the first real
+  answer to "which clothing shops here have a benefit" — `benefits-mall`,
+  six malls modelled by address (see `grocery_bot/malls.py`). Still
+  missing for true "near me": coordinates and a location source; the mall
+  route works because a mall is a named place he can type.
 - **Capture vs leftover.** "How much did I use, how to optimise loading"
   is the account layer — the ₪700/month card, the wallet decode Nigel
   built. It needs live balances (behatsdaa login) to be exact.
@@ -66,7 +69,7 @@ originate here must treat them as of these dates and no newer:
 |---|---|---|---|
 | behatsdaa store catalog (982) | `catalog_tagged.csv` | harvested **2026-09-03 06:05** | **No** — static snapshot |
 | behatsdaa full catalog (2903) | `catalog_full.csv` | harvested **2026-09-02 22:02** | No |
-| behatsdaa branch addresses | `branches*.csv` | **2026-09-02 22:53 → 09-03 07:47** (partial crawl) | No |
+| behatsdaa branch addresses | `branches*.csv` + `branches_all.csv` | **2026-09-09** — 937 of 972 chains (was 222) | Re-runnable (`scripts/harvest_behatsdaa_branches.py`), needs a fresh login |
 | card activity history | `activities.csv` (in the Strategist's lab) | newest transaction **2026-08-03** | No |
 | voucher history | `purchases_general.csv` (Strategist's lab) | newest order **2026-08-27** | No |
 | **MAX** catalog (10,981) | `max_catalog.csv` | harvested **2026-09-03 20:03** | Re-runnable (`scripts/harvest_max.py`), but not scheduled |

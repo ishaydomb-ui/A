@@ -143,7 +143,8 @@ the budget bot.
 | Command | Notes |
 |---|---|
 | `benefits-catalog [query] [--json]` | Harvested benefit-club stores: wallets, discount ceilings, cities |
-| `benefits-branches [query] [--json]` | Street addresses + phone for those stores (partial — the crawl is incremental) |
+| `benefits-branches [query] [--json]` | Street addresses + phone for those stores (937 of 972 chains, 2026-09-09) |
+| `benefits-mall <mall> [--json]` | Benefit chains in a named mall, named however the household says it |
 | `benefits-remember "<term>" "<merchant>"` | Record that a term resolves to one merchant. `--forget "<term>"` drops it |
 
 **Ask-when-unsure (disambiguation).** When `benefits-catalog "פוקס"`
@@ -191,11 +192,45 @@ Real output, run 2026-09-03:
     • רשת מקסיקנה (מקסיקנה - כפר סבא)
        התעש 24 כפר סבא · 1700500993
 
+### `benefits-mall` — "which shops here have a discount" (2026-09-09)
+
+The location question Ishay actually asks, and the reason the branch
+addresses were worth harvesting. **Call it with his words, not a
+canonical name** — it resolves "רמת אביב", "בקניון רמת אביב", "הקניון
+ברמת אביב", "ramat aviv", "דיזינגוף סנטר", "7 הכוכבים", "גינדי",
+"big glilot" and whole sentences like "יש לי הנחה בקניון רמת אביב".
+
+    $ benefits-mall "יש לי הנחה בקניון רמת אביב"
+    קניון רמת אביב, תל אביב — 32 רשתות עם הטבה
+        30%  ARMANI EXCHANGE                ראש השנה 30%
+        30%  אופטיקנה                       ראש השנה 30%
+        ...
+
+Six malls are modelled: שבעת הכוכבים הרצליה (52 chains), דיזנגוף סנטר
+(41), ביג פאשן גלילות (37), עזריאלי ת"א (35), רמת אביב (32), TLV גינדי
+(23). **An unknown mall exits 1 and says so** — it never guesses a
+nearby one. Exit 2 with no argument prints the known list.
+
+**Two behaviours worth relying on.** A mall is decided by the *address*,
+never by what a branch calls itself, because chains name a branch after
+a mall brand wherever that brand stands — "עזריאלי" in a branch name
+returns shops in Holon, Haifa, Ramla, Modiin and Akko. And a city named
+in the question vetoes a mall elsewhere: **"קניון עזריאלי חיפה" returns
+nothing**, because only the Tel Aviv Azrieli is held. If the household
+asks about a mall outside the six, the honest answer is "I don't have
+that mall," not the shops of a different one.
+
+**The rate shown is the best *loadable* wallet rate.** The 25% חודש
+ההוקרה wallet is excluded: it still carries a live-looking rate in the
+catalogue but expired 30.6.26 and reports `isLoadAllowed=0`. A rate from
+the catalogue alone is not evidence a wallet can be used — see
+`docs/BENEFITS.md`.
+
 **⚠️ Canonical routing — an address miss is not a benefit miss.**
 `benefits-catalog` is the **authority on whether a benefit exists**;
-`benefits-branches` only *adds a street address*. The branch crawl is
-partial — **760 of 982 merchants (77%) have a benefit but no crawled
-address** — so a merchant returning nothing from `benefits-branches` means
+`benefits-branches` only *adds a street address*. The crawl is now
+**937 of 972 chains with physical branches (2026-09-09, was 222)** —
+so a merchant returning nothing from `benefits-branches` means
 **"address unknown," never "no benefit / no such store."** Never let a
 branches miss override a catalogue hit. If the catalogue says a merchant
 has a 15% benefit and branches has no row, the truthful answer is "yes,
