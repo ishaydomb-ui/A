@@ -544,6 +544,23 @@ the six wallets that were blank:
 | מסעדות | 20% | 500 | 500 | yes |
 | חודש ההוקרה (פג 30.6.26) | 25% | 500 | 500 | **no — `isLoadAllowed=0`** |
 
+**Where the expiry dates come from, and why that matters.**
+`GetCardGeneralInfo` has no expiry field. Its wallet record carries
+`walletName`, `walletID`, `walletBalance`, `loadedThisMonth`,
+`loadingMode`, `discountMode`, `discountRate`, `maxBalance`,
+`maxDepositForMonth`, `maxDeposit`, `maxAmountToLoad`, `isLoadMoney`,
+`maxBalanceAllWallets` and `maxDepositYearly` — and nothing else. **The
+dates above are parsed out of the human-readable `walletName` string**
+("מבצע ראש השנה 30% הנחה רשתות עד 30/9/2026", "בהצדעה –מבצע חודש ההוקרה
+25% הנחה רשתות עד ה-30.6.26"). So a date is only as reliable as the
+club's own naming, and a reworded name loses it silently.
+
+`isLoadAllowed` is the one *structural* signal that a wallet is closed,
+and it is the field to trust over any parsed date. The budget project
+adopted these expiries into its charge decoder (family-budget-automation
+`src/classify/rules.js`, commit d81aa09, 2026-09-09), so a change to
+either date needs telling them, not just editing here.
+
 `maxDepositYearly` is 99,999,999 on every wallet — effectively no annual
 cap. **`maxBalance` is therefore the binding constraint**, and it answers
 the question Ishay asked on 2026-09-09: you cannot accumulate over a year
