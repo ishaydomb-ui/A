@@ -35,6 +35,20 @@ export function setSessionCookie(reply: FastifyReply, token: string, expiresAt: 
   });
 }
 
+/**
+ * Capability assertion usable outside a route hook, e.g. when one endpoint
+ * serves both a public and a privileged view.
+ */
+export function assertCapability(
+  user: AuthenticatedUser | undefined,
+  capability: Capability,
+): asserts user is AuthenticatedUser {
+  if (!user) throw unauthorized();
+  if (!roleHasCapability(user.role, capability)) {
+    throw forbidden('forbidden', 'Your role does not permit this action.');
+  }
+}
+
 export function clearSessionCookie(reply: FastifyReply): void {
   reply.clearCookie(SESSION_COOKIE, { path: '/', domain: config.cookieDomain });
 }

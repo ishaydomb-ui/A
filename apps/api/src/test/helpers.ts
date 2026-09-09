@@ -134,3 +134,38 @@ export async function ensureTestDatabase(): Promise<void> {
     await exec('createdb', ['medcat_test']).catch(() => undefined);
   }
 }
+
+/**
+ * Signs in an administrator, completing TOTP enrolment on the way.
+ * Administrators cannot obtain a session without MFA, so tests that need
+ * admin rights must go through the full challenge flow.
+ */
+export async function loginAsAdmin(
+  app: FastifyInstance,
+  email: string,
+  password = TEST_PASSWORD,
+): Promise<string> {
+  const { authenticator } = await import('otplib');
+
+  const first = await app.inject({
+    method: 'POST', url: '/api/auth/login', payload: { email, password },
+  });
+  const body = first.json();
+
+  if (body.status === 'mfa_enrollment_required') {
+    const start = await app.inject({
+      method: 'POST', url: '/api/auth/mfa/enroll/start',
+      payload: { challengeToken: body.challengeToken },
+    });
+    const secret = start.json().secret as string;
+    const done = await app.inject({
+      method: 'POST', url: '/api/auth/mfa/enroll/complete',
+      payload: { challengeToken: body.challengeToken, code: authenticator.generate(secret) },
+    });
+    if (done.statusCode !== 200) throw new Error(`admin enrolment failed: ${done.body}`);
+    return sessionCookie(done);
+  }
+
+  if (body.status === 'ok') return sessionCookie(first);
+  throw new Error(`unexpected admin login status: ${body.status}`);
+}
