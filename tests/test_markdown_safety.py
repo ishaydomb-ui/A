@@ -124,6 +124,31 @@ class OrderSummaryTest(unittest.TestCase):
                 text.count(f"<{tag}>"), text.count(f"</{tag}>"), f"unbalanced <{tag}>"
             )
 
+    def test_every_html_metacharacter_is_escaped(self):
+        """Nigel's precondition, and the reason it is not optional: the
+        overlap between what the old escape handled (_ * ` [ ]) and what
+        HTML needs (& < >) is **zero**. Swapping parse_mode without
+        swapping the escape implementation in the same commit would
+        trade one silent-failure class for another, and "M&S ביסקוויט"
+        would have broken a message exactly as "6*330" did."""
+        text = self._summary("M&S ביסקוויט", "מוצר <מיוחד>")
+        self.assertIn("M&amp;S", text)
+        self.assertIn("&lt;מיוחד&gt;", text)
+        self.assertNotIn("M&S", text)
+
+    def test_the_plain_text_fallback_restores_the_original(self):
+        """"The message arrived less pretty" rather than "the message was
+        lost" — the failure mode that would have saved the silent
+        cross-chain deals button."""
+        import re as _re
+
+        text = self._summary("M&S ביסקוויט", "עגבניות 400*3ג")
+        plain = _re.sub(r"<[^>]+>", "", text)
+        plain = plain.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+        self.assertIn("M&S ביסקוויט", plain)
+        self.assertIn("400*3ג", plain)
+        self.assertNotIn("<b>", plain)
+
     def test_a_deal_label_travels_as_italic_not_underscores(self):
         text = self._summary("טונה 3*80", deal="-64% · 5.00₪")
         self.assertIn("<i>-64% · 5.00₪</i>", text)
