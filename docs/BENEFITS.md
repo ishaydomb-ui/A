@@ -526,10 +526,35 @@ restating them.
   charged ₪651 (700 × 0.93 = the 7% discount) — which is exactly the
   ₪651 statement line the decode below resolves to this wallet.
 
-The behatsdaa API also exposes `maxDepositForMonth` per wallet in
-`GetCardGeneralInfo`, but that needs a logged-in session we do not have,
-so ₪700 is confirmed only for the food wallet, from the account screen.
-The `maxBalance` column, being from the catalogue, is complete.
+**Completed 2026-09-09 — every monthly cap now measured, not inferred.**
+The session that was missing arrived, and `GetCardGeneralInfo` gave the
+whole table. It confirms the ₪700 food figure Ishay reported and fills
+the six wallets that were blank:
+
+| Wallet | Rate | `maxBalance` ₪ | `maxDepositForMonth` ₪ | Loadable |
+|---|---|---|---|---|
+| מבצע ראש השנה (עד 30/9/2026) | 30% | 500 | 500 | yes |
+| ארנק בתשלום פייטר | 15% | 2,500 | 2,500 | yes |
+| רשתות בהצדעה | 15% | 1,500 | 1,000 | yes |
+| מזון + אתרי אונליין | 7% | 1,500 | 700 | yes |
+| קרפור (סיטי ומרקט בלבד) | 10% | 750 | 750 | yes |
+| מסעדות | 20% | 500 | 500 | yes |
+| חודש ההוקרה (פג 30.6.26) | 25% | 500 | 500 | **no — `isLoadAllowed=0`** |
+
+`maxDepositYearly` is 99,999,999 on every wallet — effectively no annual
+cap. **`maxBalance` is therefore the binding constraint**, and it answers
+the question Ishay asked on 2026-09-09: you cannot accumulate over a year
+and redeem in one purchase, because a wallet never holds more than its
+ceiling. Reloading requires spending first. The most a single ראש השנה
+redemption can be worth is **₪150** (30% of ₪500).
+
+**The catalogue lies about wallet status, and this is the trap.** The
+25% חודש ההוקרה wallet appears in `catalog_tagged.csv` with a live-looking
+rate, and was reported to Ishay that day as one of four current options
+for קניון רמת אביב. It expired 30.6.26. The CSV carries the *rate* but
+not `isLoadAllowed` or the expiry, so **a rate from the catalogue is not
+evidence that a wallet is usable** — check `GetCardGeneralInfo` before
+quoting one as available.
 
 **A charge decodes as `face value × (1 − wallet rate)`** — verified
 against the budget project's real statement lines:
