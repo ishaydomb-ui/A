@@ -561,3 +561,82 @@ class UnharvestedClubTests(unittest.TestCase):
     def test_quoted_club_name_matches_despite_the_internal_quote(self):
         from grocery_bot.benefits_catalog import unharvested_club
         self.assertEqual(unharvested_club('הר"י'), 'הר"י')
+
+
+class HebrewQueryTests(unittest.TestCase):
+    """A question phrased the way a person speaks must still find things.
+
+    From a real exchange on 2026-09-09: Ishay asked Miri "מה יש לי הנחה
+    בקניון בראשון לציון?" and was told nothing matched, while the bare
+    city name matched 658 rows. Two separate faults — a Hebrew prefix the
+    substring match could not see through, and a multi-word query treated
+    as one literal string.
+    """
+
+    def _rows(self):
+        return [
+            {"club": "מקס", "חנות": "המאפה הצרפתי", "קטגוריה": "מסעדות",
+             "עיר": "ראשון לציון", "כתובת": "קניון רוט, ראשון לציון"},
+            {"club": "מקס", "חנות": "חנות כלשהי", "קטגוריה": "אופנה",
+             "עיר": "חיפה", "כתובת": "הרצל 1, חיפה"},
+            {"club": "בהצדעה", "חנות": "הצדף", "קטגוריה": "מסעדות",
+             "ערים": "ראשון לציון"},
+        ]
+
+    def _search(self, query, rows=None):
+        from unittest.mock import patch
+        from grocery_bot import benefits_catalog as bc
+
+        with patch.object(bc, "load_catalog", lambda: rows or self._rows()):
+            return bc.search_catalog(query)
+
+    def test_a_hebrew_prefix_does_not_hide_the_city(self):
+        self.assertTrue(self._search("בראשון לציון"))
+
+    def test_an_extra_word_does_not_empty_the_result(self):
+        # "קניון ראשון לציון" must not return nothing just because no
+        # single field holds that exact phrase.
+        self.assertTrue(self._search("קניון ראשון לציון"))
+
+    def test_behatsdaa_cities_are_searched_too(self):
+        """`ערים` is behatsdaa's field; searching only MAX's `עיר` left
+        916 merchants findable by name alone."""
+        hits = self._search("ראשון לציון")
+        self.assertIn("בהצדעה", [h.get("club") for h in hits])
+
+    def test_a_real_location_outranks_a_city_in_the_merchant_name(self):
+        rows = [
+            {"club": "מקס", "חנות": "פינקל בל - ראשון לציון", "קטגוריה": "מתנות",
+             "עיר": "ירושלים", "כתובת": "קניון מלחה, ירושלים"},
+            {"club": "מקס", "חנות": "המאפה הצרפתי", "קטגוריה": "מסעדות",
+             "עיר": "ראשון לציון", "כתובת": "קניון רוט, ראשון לציון"},
+        ]
+        first = self._search("קניון ראשון לציון", rows)[0]
+        self.assertEqual(first["חנות"], "המאפה הצרפתי")
+
+
+class PlaceholderAddressTests(unittest.TestCase):
+    """MAX files merchants that are elsewhere under one Jerusalem mall.
+
+    104 rows, two distinct address strings between them, with their own
+    names saying גבעתיים / זכרון יעקב / מיטב. Measured 2026-09-09.
+    """
+
+    def test_the_shared_placeholder_is_not_a_location(self):
+        from grocery_bot import benefits_catalog as bc
+
+        row = {"חנות": "רולה טורטיה בר - גבעתיים", "כתובת": "קניון מלחה, ירושלים"}
+        self.assertFalse(bc.has_trustworthy_address(row))
+        self.assertEqual(bc.mall_of(row), "")
+
+    def test_a_real_mall_address_is_read(self):
+        from grocery_bot import benefits_catalog as bc
+
+        row = {"חנות": "שוגיס", "כתובת": "סחרוב 21, קניון הזהב, ראשון לציון"}
+        self.assertTrue(bc.has_trustworthy_address(row))
+        self.assertEqual(bc.mall_of(row), "קניון הזהב")
+
+    def test_no_address_is_not_a_mall(self):
+        from grocery_bot import benefits_catalog as bc
+
+        self.assertEqual(bc.mall_of({"חנות": "x"}), "")

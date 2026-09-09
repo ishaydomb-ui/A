@@ -174,9 +174,48 @@ def _norm(text: str) -> str:
     return (text or "").lower().translate(_APOSTROPHES)
 
 
+# Hebrew glues these onto the front of a word: "בראשון לציון" is
+# "ראשון לציון" with a ב. A substring search never sees through it, so a
+# question phrased the way a person speaks matched nothing while the bare
+# city name matched 658 rows.
+_PREFIXES = ("ב", "ל", "מ", "ה", "ו", "כ", "ש")
+
+# Below this length, stripping a prefix does more harm than good: "בית"
+# would become "ית" and match noise.
+_MIN_STEM = 3
+
+
+def _variants(word: str) -> tuple[str, ...]:
+    """The word, plus its form without a leading inseparable prefix."""
+    if len(word) > _MIN_STEM and word[0] in _PREFIXES:
+        return (word, word[1:])
+    return (word,)
+
+
+def _matches_token(row: dict, token: str, fields: tuple[str, ...]) -> bool:
+    """Does one word of the query appear anywhere in this row?"""
+    haystacks = [_norm(row.get(field) or "") for field in fields]
+    return any(
+        variant in haystack
+        for variant in _variants(_norm(token))
+        for haystack in haystacks
+    )
+
+
 def _matches(row: dict, query: str, fields: tuple[str, ...]) -> bool:
-    q = _norm(query)
-    return any(q in _norm(row.get(field) or "") for field in fields)
+    """Every word of the query must appear somewhere in the row.
+
+    Word-by-word rather than as one string. A person asks "קניון בראשון
+    לציון"; the catalogue holds "ראשון לציון" in a city field and never
+    that whole phrase anywhere, so the literal match returned nothing
+    while the city alone returned hundreds. Requiring each word to appear
+    *somewhere* in the row keeps the search precise without demanding the
+    question be phrased the way the data was filed.
+    """
+    tokens = [t for t in _norm(query).split() if t]
+    if not tokens:
+        return False
+    return all(_matches_token(row, token, fields) for token in tokens)
 
 
 def search_catalog(query: str) -> list[dict]:
@@ -197,9 +236,74 @@ def search_catalog(query: str) -> list[dict]:
     # club name silently returns another club's merchants. Filtering by
     # club is an exact-match job on the `club` field — do it on the rows,
     # not through this substring search.
-    fields = ("חנות", "קטגוריה", "תת-קטגוריה", "עיר", "אזור")
-    hits = [row for row in load_catalog() if _matches(row, q, fields)]
-    return sorted(hits, key=lambda row: _relevance(row, q))
+    # `ערים` is behatsdaa's city field and `עיר` is MAX's — searching
+    # only the latter left 916 behatsdaa merchants findable by name and
+    # by nothing else, so a city question missed the club that actually
+    # carries the household's wallets.
+    fields = ("חנות", "קטגוריה", "תת-קטגוריה", "עיר", "ערים", "אזור", "כתובת")
+    rows = load_catalog()
+    hits = [row for row in rows if _matches(row, q, fields)]
+
+    # Nothing matched every word. Rather than answer "no benefits here"
+    # to a question that had one word too many in it, retry on the words
+    # that do land — a mall in a city we cover is still a city we cover,
+    # and saying so beats a flat no. The caller is told which words were
+    # actually used so the answer can say so out loud.
+    if not hits:
+        tokens = [t for t in _norm(q).split() if t]
+        for drop in range(1, len(tokens)):
+            kept = tokens[drop:]
+            hits = [
+                row for row in rows
+                if all(_matches_token(row, t, fields) for t in kept)
+            ]
+            if hits:
+                break
+    return sorted(hits, key=lambda row: (_location_score(row, q), *_relevance(row, q)))
+
+
+# Where a row actually *is*, as opposed to what it is called. MAX names
+# many merchants "<brand> - <city>" while the address points somewhere
+# else entirely — "פינקל בל - ראשון לציון" sits at "קניון מלחה,
+# ירושלים". Matching a city word against the merchant name therefore
+# proves nothing about geography, so a row that matches inside these
+# fields is ranked ahead of one that only matched its name.
+_LOCATION_FIELDS = ("עיר", "ערים", "אזור", "כתובת")
+
+
+# MAX files a shared placeholder address against merchants that are not
+# there: 104 rows carry "קניון מלחה, ירושלים" between just two distinct
+# address strings, while their own names say גבעתיים, זכרון יעקב, מיטב.
+# Measured 2026-09-09. Treating it as a location would put a hundred
+# shops in a mall none of them occupy, which is worse than admitting we
+# do not know where they are.
+_PLACEHOLDER_ADDRESSES = ("קניון מלחה, ירושלים",)
+
+
+def has_trustworthy_address(row: dict) -> bool:
+    address = (row.get("כתובת") or "").strip()
+    if not address:
+        return False
+    return not any(bad in address for bad in _PLACEHOLDER_ADDRESSES)
+
+
+def mall_of(row: dict) -> str:
+    """The mall this row sits in, when its address genuinely says so."""
+    import re as _re
+
+    if not has_trustworthy_address(row):
+        return ""
+    address = row.get("כתובת") or ""
+    found = _re.search(r"(קניון\s+[^,]{2,20}|[^,]{2,20}\s+סנטר)", address)
+    return found.group(1).strip() if found else ""
+
+
+def _location_score(row: dict, query: str) -> int:
+    """How many query words land in a location field. Higher is better."""
+    tokens = [t for t in _norm(query).split() if t]
+    return -sum(
+        1 for token in tokens if _matches_token(row, token, _LOCATION_FIELDS)
+    )
 
 
 def _relevance(row: dict, query: str) -> tuple[int, int]:
