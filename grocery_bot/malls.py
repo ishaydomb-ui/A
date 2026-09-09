@@ -62,6 +62,17 @@ class Mall:
     address_terms: tuple  # the street/complex forms actually observed
     exclude_terms: tuple = field(default=())  # nearby sites that must not merge
     name_hints: tuple = field(default=())  # tie-breakers only, never sufficient
+    # Some malls sit on an ordinary street, so the street name alone
+    # over-collects: דיזנגוף 50 is the Center while 116, 122 and 269 are
+    # street shops, and החשמונאים carries the TLV mall at 88-132 and
+    # unrelated businesses further down. Where that is true the mall
+    # states its house numbers and a row without one is refused.
+    house_numbers: tuple = field(default=())
+    house_range: tuple = field(default=())  # inclusive (low, high)
+    # A few rows name the complex instead of a street ("קניון רמת אביב"),
+    # carrying no usable number. These terms admit such a row despite a
+    # house-number rule, and only these.
+    numberless_terms: tuple = field(default=())
 
 
 # Ordered most specific first: a row is assigned to the first mall that
@@ -96,7 +107,80 @@ MALLS = (
         exclude_terms=(),
         name_hints=("עזריאלי",),
     ),
+    Mall(
+        name="דיזנגוף סנטר, תל אביב",
+        city_terms=("תל אביב",),
+        # Both spellings appear in the harvest for the same address.
+        address_terms=("דיזנגוף סנטר", "דיזינגוף סנטר", "דיזנגוף", "דיזינגוף"),
+        exclude_terms=(),
+        name_hints=("דיזנגוף סנטר",),
+        # The Center is number 50. דיזנגוף 116, 122 and 269 are shops on
+        # the street and must not be folded in — the whole reason this
+        # mall states a number at all.
+        house_numbers=(50, 1),
+        numberless_terms=("דיזנגוף סנטר", "דיזינגוף סנטר"),
+    ),
+    Mall(
+        name="קניון רמת אביב, תל אביב",
+        city_terms=("תל אביב",),
+        address_terms=("קניון רמת אביב", "איינשטיין", "אינשטיין"),
+        # מרכז שוסטר and ברודצקי are separate centres in the same
+        # neighbourhood, not this mall; אשדוד has its own אריק איינשטיין
+        # street, caught by the city test as well.
+        exclude_terms=("שוסטר", "ברודצקי", "אשדוד"),
+        name_hints=("רמת אביב",),
+        # The mall is Einstein 40. Einstein 68 is not it.
+        house_numbers=(40,),
+        numberless_terms=("קניון רמת אביב",),
+    ),
+    Mall(
+        name="TLV פאשן מול (גינדי), תל אביב",
+        city_terms=("תל אביב",),
+        address_terms=("החשמונאים",),
+        exclude_terms=(),
+        name_hints=("גינדי", "TLV"),
+        # One building with entrances across a run of street numbers —
+        # 88, 94, 96, 100 and 132 all appear, and every row in that span
+        # is a Gindi/TLV branch. Numbers further down HaHashmonaim are
+        # ordinary street businesses, hence a range rather than the
+        # street name alone.
+        house_range=(88, 132),
+    ),
 )
+
+
+def _house_number(address: str, street: str):
+    """The house number following `street`, or None if there is none.
+
+    Taken relative to the street rather than as "the first number in the
+    string", because addresses carry other digits — a row reading
+    "החשמונאים 88 88 תל אביב" repeats it, and city names can be followed
+    by numbers of their own.
+    """
+    index = address.find(street)
+    if index < 0:
+        return None
+    match = re.search(r"\d+", address[index + len(street):])
+    return int(match.group()) if match else None
+
+
+def _number_ok(mall: Mall, address: str) -> bool:
+    """Whether the house number satisfies a mall that declares one."""
+    if not (mall.house_numbers or mall.house_range):
+        return True
+    if any(term in address for term in mall.numberless_terms):
+        return True
+    for street in mall.address_terms:
+        if street not in address:
+            continue
+        number = _house_number(address, street)
+        if number is None:
+            continue
+        if number in mall.house_numbers:
+            return True
+        if mall.house_range and mall.house_range[0] <= number <= mall.house_range[1]:
+            return True
+    return False
 
 
 def _claims(mall: Mall, address: str, branch: str) -> bool:
@@ -105,7 +189,9 @@ def _claims(mall: Mall, address: str, branch: str) -> bool:
         return False
     if not any(term in address for term in mall.city_terms):
         return False
-    return any(term in address for term in mall.address_terms)
+    if not any(term in address for term in mall.address_terms):
+        return False
+    return _number_ok(mall, address)
 
 
 def load_rows(pattern: str = DATA_GLOB) -> list:
