@@ -816,8 +816,14 @@ def _benefits_mall(storage: Storage, args: list[str]) -> int:
 
     mall_name, found = malls.chains_for_query(query)
     if not mall_name:
+        # `recognized` exists because {"mall": null, "chains": []} reads
+        # exactly like "this mall has no discounts" — the single wrong
+        # answer this command was built to prevent. A consumer that pipes
+        # the JSON and drops the exit code would report it that way.
+        # Raised by Miri 2026-09-09, who hit it on "קניון בראשון לציון".
         if as_json:
-            print(json.dumps({"query": query, "mall": None, "chains": []},
+            print(json.dumps({"query": query, "mall": None, "recognized": False,
+                              "chains": [], "known_malls": malls.known_malls()},
                              ensure_ascii=False))
         else:
             print(f'לא זוהה קניון מוכר ב-"{query}".')
@@ -830,8 +836,8 @@ def _benefits_mall(storage: Storage, args: list[str]) -> int:
         for chain, branch, address, discount, wallet in _with_discounts(found)
     ]
     if as_json:
-        print(json.dumps({"query": query, "mall": mall_name, "chains": rows},
-                         ensure_ascii=False))
+        print(json.dumps({"query": query, "mall": mall_name, "recognized": True,
+                          "chains": rows}, ensure_ascii=False))
         return 0
 
     print(f"{mall_name} — {len(rows)} רשתות עם הטבה")
