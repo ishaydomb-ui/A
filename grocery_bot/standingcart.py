@@ -98,6 +98,30 @@ def plan_refill(storage, store: str, list_key: str = DEFAULT_LIST) -> RefillPlan
     return RefillPlan(store=store, terms=terms, deals=picks)
 
 
+def tag_deal_results(report, plan) -> int:
+    """Mark the lines a refill added *because of a promotion*.
+
+    The order cycle tags these as it goes; the standing-cart refill does
+    not, because it fills through `add_terms_to_cart` — a path that only
+    knows terms, not why each term is on the list. The consequence was
+    found by Ishay on 2026-09-09 asking which items were deals:
+    `/lastdeals` was empty after a refill that had added six of them, and
+    the answer had to be reconstructed from a log file. A feature nobody
+    can query is not a feature.
+
+    Matching is on the term the pick was searched under, which is what
+    `add_terms_to_cart` records as the item name.
+    """
+    labels = {p.term: p.label for p in (plan.deals or [])}
+    tagged = 0
+    for result in report.added:
+        label = labels.get(result.item_name)
+        if label:
+            result.deal = label
+            tagged += 1
+    return tagged
+
+
 def record_manifest(storage, reports) -> None:
     """Remember what we put in, so a later removal can be recognised.
 

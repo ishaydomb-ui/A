@@ -51,7 +51,12 @@ from .listbuilder import as_paste_text, available_lists, build as build_list, su
 from .exitnode import ensure_israeli_exit
 from .learn import digest_due, sync_from_orders
 from .nlu import ParsedItem, build_meal_plan, expand_recipe, parse_message
-from .orchestrator import add_terms_to_cart, format_report_summary, run_order_cycle
+from .orchestrator import (
+    add_terms_to_cart,
+    format_report_summary,
+    record_deals,
+    run_order_cycle,
+)
 from .pantry import split_ingredients
 from .radar import find_stockup_deals, format_stockup_deals
 from .storage import Storage
@@ -459,10 +464,15 @@ class GroceryBot:
             store_reports = await asyncio.to_thread(
                 add_terms_to_cart, self.storage, {store: factory}, plan.terms
             )
+            # Tag what went in because of a promotion, so /lastdeals can
+            # answer afterwards instead of the household having to ask.
+            if store in store_reports:
+                standingcart.tag_deal_results(store_reports[store], plan)
             reports.update(store_reports)
 
         if reports:
             await asyncio.to_thread(standingcart.record_manifest, self.storage, reports)
+            await asyncio.to_thread(record_deals, self.storage, reports)
             await _send_html(
                 context, chat_id, format_report_summary(reports) or "לא היה מה להוסיף."
             )

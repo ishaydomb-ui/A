@@ -222,3 +222,68 @@ class UnannouncedShopTests(unittest.TestCase):
     def test_a_first_ever_order_with_no_refill_history_counts(self):
         self._order("A1", "2026-09-07T06:15:00")
         self.assertTrue(standingcart.shop_detected_since_refill(self.storage))
+
+
+class DealTaggingTests(unittest.TestCase):
+    """A refill must record *why* an item is in the cart.
+
+    Ishay, 2026-09-09: "which items were added because of a deal?"
+    /lastdeals was empty after a refill that had added six, because the
+    standing-cart path fills through add_terms_to_cart, which knows the
+    terms but not why each one is on the list. The answer had to be dug
+    out of a log file.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.storage = Storage(str(Path(self._tmp.name) / "t.sqlite3"))
+
+    def _plan_and_report(self):
+        from grocery_bot.dealfill import DealPick
+        from grocery_bot.models import CartAddResult, OrderCycleReport
+
+        plan = standingcart.RefillPlan(
+            store="shufersal",
+            terms=[("חלב", 1), ("דבש טבעי לחיץ", 1)],
+            deals=[DealPick(term="דבש טבעי לחיץ", catalog_name="דבש טבעי לחיץ 250 גרם",
+                            shelf_price=16.90, deal_price=5.00, discount=0.70,
+                            description="מבצע")],
+        )
+        report = OrderCycleReport(store="shufersal")
+        for name in ("חלב", "דבש טבעי לחיץ"):
+            report.record(CartAddResult(item_name=name, store="shufersal", status="added"))
+        return plan, report
+
+    def test_only_the_promotion_driven_line_is_tagged(self):
+        plan, report = self._plan_and_report()
+        self.assertEqual(standingcart.tag_deal_results(report, plan), 1)
+        tagged = [r for r in report.added if r.deal]
+        self.assertEqual([r.item_name for r in tagged], ["דבש טבעי לחיץ"])
+        self.assertIn("-70%", tagged[0].deal)
+
+    def test_the_household_s_usual_items_stay_untagged(self):
+        plan, report = self._plan_and_report()
+        standingcart.tag_deal_results(report, plan)
+        milk = next(r for r in report.added if r.item_name == "חלב")
+        self.assertEqual(milk.deal, "")
+
+    def test_a_refill_with_no_deals_tags_nothing(self):
+        from grocery_bot.models import CartAddResult, OrderCycleReport
+
+        plan = standingcart.RefillPlan(store="shufersal", terms=[("חלב", 1)], deals=[])
+        report = OrderCycleReport(store="shufersal")
+        report.record(CartAddResult(item_name="חלב", store="shufersal", status="added"))
+        self.assertEqual(standingcart.tag_deal_results(report, plan), 0)
+
+    def test_tagged_results_reach_the_stored_record(self):
+        """The end of the chain: what /lastdeals reads."""
+        import json
+
+        from grocery_bot.orchestrator import record_deals
+
+        plan, report = self._plan_and_report()
+        standingcart.tag_deal_results(report, plan)
+        record_deals(self.storage, {"shufersal": report})
+        stored = json.loads(self.storage.get_state("last_deal_picks"))
+        self.assertEqual([p["name"] for p in stored["picks"]], ["דבש טבעי לחיץ"])

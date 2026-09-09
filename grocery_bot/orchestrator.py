@@ -156,11 +156,11 @@ def run_order_cycle(
     # otherwise the only record of it, and on 2026-09-07 that message
     # failed to send on a real order — leaving no way at all to answer
     # "what did it add, and why". A record on disk survives a bad send.
-    _record_deals(storage, reports)
+    record_deals(storage, reports)
     return reports
 
 
-def _record_deals(storage: Storage, reports: dict[str, OrderCycleReport]) -> None:
+def record_deals(storage: Storage, reports: dict[str, OrderCycleReport]) -> None:
     import json
     from datetime import datetime, timezone
 
