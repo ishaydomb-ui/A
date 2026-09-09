@@ -570,6 +570,18 @@ wallet offering it is closed, so 25% drops out while 15% survives with
 two wallets sharing it. The name list remains a fallback for a missing
 file.
 
+**A stored status file cannot notice an expiry passing.**
+`is_load_allowed` was true at the moment of capture; the date moves on
+its own afterwards with nothing in the file changing. The 30% ראש השנה
+wallet expires 2026-09-30, so a status file written 2026-09-09 and read
+in October would still present it as live — offering a discount that no
+longer exists, the money-losing direction of wrong. So a consumer must
+check **both**: the flag, and `expiry_from_name` against today.
+`benefits-mall` does (`cli._wallet_is_open`), and treats the expiry day
+itself as still valid, since "עד 30/9" includes the 30th. An unreadable
+expiry falls back to the flag rather than silently closing a live
+wallet.
+
 **Where the expiry dates come from, and why that matters.**
 `GetCardGeneralInfo` has no expiry field. Its wallet record carries
 `walletName`, `walletID`, `walletBalance`, `loadedThisMonth`,

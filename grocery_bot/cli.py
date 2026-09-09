@@ -933,13 +933,44 @@ def _with_discounts(found):
 _DEAD_WALLETS = {"מבצע הוקרה 25%"}
 
 
-def _closed_rates() -> set:
+def _wallet_is_open(wallet: dict, today=None) -> bool:
+    """Whether this wallet can still issue a discount, as of `today`.
+
+    Two conditions, and the second is the one a stored file cannot keep
+    up with. `is_load_allowed` was true at the moment of capture; an
+    expiry passes on its own afterwards, with nothing in the file
+    changing. The 30% ראש השנה wallet expires 2026-09-30, so a status
+    file written on 2026-09-09 and read in October would still present
+    it as live — offering a discount that no longer exists, which is the
+    money-losing direction of wrong.
+    """
+    from datetime import date as _date
+
+    if not wallet.get("is_load_allowed"):
+        return False
+    expiry = (wallet.get("expiry_from_name") or "").strip()
+    if not expiry:
+        return True
+    try:
+        year, month, day = (int(part) for part in expiry.split("-"))
+        expires = _date(year, month, day)
+    except ValueError:
+        # An unreadable expiry is not a licence to assume "open" — but
+        # it is also not evidence of closure. Trust `is_load_allowed`
+        # and let the caller's staleness note carry the doubt.
+        return True
+    return (today or _date.today()) <= expires
+
+
+def _closed_rates(today=None) -> set:
     """Discount rates that no wallet can still issue.
 
     Read from the published wallet status rather than inferred from a
-    name. A rate is only excluded when **every** wallet offering it is
+    name. A rate is excluded only when **every** wallet offering it is
     closed — two wallets share 15%, and one of them being shut must not
-    hide the other.
+    hide the other. (Nigel's point, and it holds in reverse too: a rate
+    is not a wallet id, which is why 15% and 25% stay unattributable in
+    the budget project's decoder regardless of status.)
 
     Returns an empty set when the file is missing, which leaves
     `_DEAD_WALLETS` as the fallback: under-trusting the file is safe,
@@ -961,7 +992,7 @@ def _closed_rates() -> set:
         rate = wallet.get("discount_rate")
         if rate is None:
             continue
-        by_rate.setdefault(float(rate), []).append(bool(wallet.get("is_load_allowed")))
+        by_rate.setdefault(float(rate), []).append(_wallet_is_open(wallet, today))
     return {rate for rate, states in by_rate.items() if not any(states)}
 
 

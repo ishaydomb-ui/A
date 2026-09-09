@@ -143,3 +143,44 @@ class ClosedWalletsComeFromStatusNotAName(unittest.TestCase):
         with mock.patch("grocery_bot.benefits_catalog._data_dir",
                         return_value=os.path.join(os.sep, "nonexistent-dir")):
             self.assertEqual(cli._closed_rates(), set())
+
+
+class AnExpiryPassesWithoutTheFileChanging(unittest.TestCase):
+    """`is_load_allowed` was true when captured. The date moves on its
+    own, and a stored status file cannot notice.
+
+    The 30% ראש השנה wallet expires 2026-09-30. A file written
+    2026-09-09 and read in October still says loadable — so reading the
+    flag alone would keep offering a discount that no longer exists,
+    which is the money-losing direction of wrong.
+    """
+
+    from datetime import date
+
+    def test_the_30_percent_wallet_is_live_before_its_expiry(self):
+        self.assertNotIn(30.0, cli._closed_rates(self.date(2026, 9, 9)))
+
+    def test_it_is_still_live_on_the_expiry_day_itself(self):
+        """"עד 30/9" includes the 30th."""
+        self.assertNotIn(30.0, cli._closed_rates(self.date(2026, 9, 30)))
+
+    def test_it_is_closed_the_day_after_with_no_file_change(self):
+        self.assertIn(30.0, cli._closed_rates(self.date(2026, 10, 1)))
+
+    def test_a_dateless_wallet_is_unaffected_by_the_passage_of_time(self):
+        """מסעדות 20% and the 15% wallets carry no date in their name."""
+        far_future = cli._closed_rates(self.date(2030, 1, 1))
+        self.assertNotIn(20.0, far_future)
+        self.assertNotIn(15.0, far_future)
+        self.assertNotIn(7.0, far_future)
+
+    def test_an_already_closed_wallet_stays_closed(self):
+        self.assertIn(25.0, cli._closed_rates(self.date(2026, 9, 9)))
+
+    def test_an_unreadable_expiry_does_not_silently_close_a_live_wallet(self):
+        wallet = {"is_load_allowed": True, "expiry_from_name": "not-a-date"}
+        self.assertTrue(cli._wallet_is_open(wallet, self.date(2030, 1, 1)))
+
+    def test_the_flag_still_wins_when_it_says_closed(self):
+        wallet = {"is_load_allowed": False, "expiry_from_name": "2099-01-01"}
+        self.assertFalse(cli._wallet_is_open(wallet, self.date(2026, 9, 9)))
