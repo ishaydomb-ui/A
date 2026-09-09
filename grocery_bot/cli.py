@@ -830,32 +830,61 @@ def _benefits_mall(storage: Storage, args: list[str]) -> int:
             print("קניונים ידועים: " + " | ".join(malls.known_malls()))
         return 1
 
+    priced, problems = _with_discounts(found)
+    rates_known = not problems["catalog_error"]
     rows = [
         {"chain": chain, "branch": branch, "address": address,
          "discount": discount, "wallet": wallet}
-        for chain, branch, address, discount, wallet in _with_discounts(found)
+        for chain, branch, address, discount, wallet in priced
     ]
     if as_json:
         print(json.dumps({"query": query, "mall": mall_name, "recognized": True,
-                          "chains": rows}, ensure_ascii=False))
-        return 0
+                          "rates_known": rates_known, "chains": rows,
+                          "problems": problems}, ensure_ascii=False))
+        return 0 if rates_known else 4
+
+    if not rates_known:
+        # Never print a mall full of dashes as if it were an answer.
+        print(f"{mall_name} — {len(rows)} רשתות, אבל אחוזי ההנחה לא נקראו")
+        print(f"⚠️  קטלוג ההטבות לא נקרא ({problems['catalog_error']}).")
+        print("   הרשתות למטה נמצאות בקניון; אחוז ההנחה לא ידוע — לא אפס.")
+        for row in rows:
+            print(f"     ?  {row['chain'][:28]}")
+        return 4
 
     print(f"{mall_name} — {len(rows)} רשתות עם הטבה")
     for row in rows:
         rate = f"{row['discount']:.0f}%" if row["discount"] else "—"
         print(f"  {rate:>5}  {row['chain'][:28]:30} {row['wallet']}")
+    if problems["unparseable_rates"]:
+        print(f"⚠️  {problems['unparseable_rates']} שורות בקטלוג עם אחוז לא קריא "
+              "— ייתכן שהנחה לא מוצגת.")
     return 0
 
 
 def _with_discounts(found):
-    """Attach the best *loadable* wallet rate to each chain in a mall."""
+    """Attach the best *loadable* wallet rate to each chain in a mall.
+
+    Returns (rows, problems). **Nothing here fails silently**, because
+    every silent failure in this function produces the same wrong
+    answer — a chain shown with no discount, which reads as "no benefit
+    here" and is exactly what this command exists to prevent. An earlier
+    version swallowed both an unreadable catalogue and an unparseable
+    rate; the first would have shown a whole mall as discount-free.
+
+    (Miri hit this family on 2026-09-09 from the other side: an
+    `expiry_radar` that skipped a date it could not parse, making
+    "2024-09-31" — September has 30 days — invisible to the scan meant
+    to watch it. A value that looks written and nobody reads.)
+    """
     import csv as _csv
     import os as _os
 
     from .benefits_catalog import _data_dir
 
     path = _os.path.join(_data_dir(), "lab_rescue", "catalog_full.csv")
-    rates = {}
+    rates: dict = {}
+    problems: dict = {"catalog_error": "", "unparseable_rates": 0}
     try:
         with open(path, encoding="utf-8-sig") as handle:
             for row in _csv.DictReader(handle):
@@ -863,20 +892,32 @@ def _with_discounts(found):
                 wallet = (row.get("ארנק") or "").strip()
                 if not name or wallet in _DEAD_WALLETS:
                     continue
-                try:
-                    rate = float(str(row.get("הנחה%") or "0").replace("%", ""))
-                except ValueError:
+                raw = str(row.get("הנחה%") or "").replace("%", "").strip()
+                if not raw:
                     continue
-                if rate > rates.get(name, (0, ""))[0]:
+                try:
+                    rate = float(raw)
+                except ValueError:
+                    # Counted, not dropped in silence: a rate we cannot
+                    # read is a chain we may under-report.
+                    problems["unparseable_rates"] += 1
+                    continue
+                if rate > rates.get(name, (0.0, ""))[0]:
                     rates[name] = (rate, wallet)
-    except OSError:
-        pass
+    except OSError as exc:
+        problems["catalog_error"] = f"{type(exc).__name__}: {path}"
+
     out = []
     for chain, branch, address in found:
+        if problems["catalog_error"]:
+            # Unknown, not zero. The caller must say so rather than
+            # print a mall full of dashes.
+            out.append((chain, branch, address, None, ""))
+            continue
         rate, wallet = rates.get(chain, (0.0, "—"))
         out.append((chain, branch, address, rate, wallet))
-    out.sort(key=lambda r: (-r[3], r[0]))
-    return out
+    out.sort(key=lambda r: (-(r[3] or 0), r[0]))
+    return out, problems
 
 
 # Wallets whose rate still appears in the catalogue but which can no

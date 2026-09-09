@@ -71,3 +71,49 @@ class RatesShown(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NothingFailsSilently(unittest.TestCase):
+    """A chain shown without a discount reads as "no benefit here".
+
+    So every path that could not determine a rate must say so, rather
+    than let the absence look like a zero. The catalogue being
+    unreadable is the dangerous one: it would render an entire mall as
+    discount-free while looking like a normal answer.
+    """
+
+    def test_an_unreadable_catalogue_is_reported_not_shown_as_no_discounts(self):
+        import os
+        from unittest import mock
+
+        with mock.patch.object(cli, "_data_dir", create=True):
+            with mock.patch("grocery_bot.benefits_catalog._data_dir",
+                            return_value=os.path.join(os.sep, "nonexistent-dir")):
+                code, text = _run("רמת אביב")
+        self.assertEqual(code, 4, "an unreadable catalogue must not exit 0")
+        self.assertIn("לא ידוע", text)
+        self.assertNotIn("0%", text)
+
+    def test_the_json_flags_that_rates_are_unknown(self):
+        import os
+        from unittest import mock
+
+        with mock.patch("grocery_bot.benefits_catalog._data_dir",
+                        return_value=os.path.join(os.sep, "nonexistent-dir")):
+            code, text = _run("רמת אביב", "--json")
+        payload = json.loads(text)
+        self.assertEqual(code, 4)
+        self.assertIs(payload["rates_known"], False)
+        # The mall is still recognized — the failure is about rates only.
+        self.assertIs(payload["recognized"], True)
+        self.assertTrue(payload["chains"])
+        # A rate that could not be read is null, never 0.
+        self.assertTrue(all(c["discount"] is None for c in payload["chains"]))
+        self.assertTrue(payload["problems"]["catalog_error"])
+
+    def test_a_healthy_run_reports_no_problems(self):
+        code, text = _run("רמת אביב", "--json")
+        payload = json.loads(text)
+        self.assertEqual(code, 0)
+        self.assertIs(payload["rates_known"], True)
+        self.assertEqual(payload["problems"]["catalog_error"], "")
