@@ -283,7 +283,26 @@ class TivTaamAdapter(StoreAdapter):
         self._dismiss_consent()
         box = self._page.locator(SEARCH_SELECTOR).first
         box.wait_for(state="visible", timeout=30000)
-        box.click(timeout=SEARCH_BOX_TIMEOUT_MS)
+
+        # Close whatever the previous search left open before touching
+        # the box. The autocomplete stays open between searches — the
+        # wrapper keeps an `auto-complete-options-shown` class — and
+        # clicking the input while Angular is re-rendering that list
+        # blocks until the timeout, which is what failed most of a
+        # 106-item refill on 2026-09-09 even on a healthy connection.
+        try:
+            self._page.keyboard.press("Escape")
+        except Exception:  # noqa: BLE001 - closing is best-effort
+            pass
+
+        # The click is not required: `fill` focuses the element itself.
+        # It is kept because Angular's binding wants a real focus event
+        # on some renders, but it must never be fatal — a search that
+        # cannot be clicked can still usually be typed into.
+        try:
+            box.click(timeout=5000)
+        except Exception:  # noqa: BLE001
+            logger.debug("Tiv Taam: search box not clickable; typing anyway")
         box.fill(term, timeout=SEARCH_BOX_TIMEOUT_MS)
 
         needle = term.strip()[:4]
