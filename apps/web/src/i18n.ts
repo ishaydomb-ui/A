@@ -54,6 +54,11 @@ const EN = {
   mfaEnrollHelp:
     'Your role requires two-factor authentication. Scan this code with an authenticator app, then enter the code it shows.',
   mfaSecretManual: 'Or enter this key manually:',
+  mfaOpenAuthenticator: 'Open my authenticator app',
+  mfaOpenAuthenticatorHint:
+    'Adds the account automatically, then come back here and enter the 6-digit code it shows.',
+  mfaOtherDevice: 'Setting it up on another device instead',
+  mfaCodeHint: 'Six digits from your authenticator app — not the setup key above.',
   mfaRecoveryHeading: 'Save your recovery codes',
   mfaRecoveryHelp:
     'Each code can be used once if you lose your authenticator. Store them somewhere safe — they will not be shown again.',
@@ -184,6 +189,11 @@ const HE = {
   mfaEnrollHelp:
     'התפקיד שלך מחייב אימות דו-שלבי. סרוק את הקוד באפליקציית אימות והזן את הקוד שמוצג בה.',
   mfaSecretManual: 'לחלופין, הזן מפתח זה ידנית:',
+  mfaOpenAuthenticator: 'פתיחת אפליקציית האימות',
+  mfaOpenAuthenticatorHint:
+    'החשבון יתווסף אוטומטית. חזור לכאן והזן את הקוד בן 6 הספרות שמוצג בה.',
+  mfaOtherDevice: 'הגדרה במכשיר אחר',
+  mfaCodeHint: 'שש ספרות מאפליקציית האימות — לא המפתח שמופיע למעלה.',
   mfaRecoveryHeading: 'שמור את קודי השחזור',
   mfaRecoveryHelp:
     'כל קוד ניתן לשימוש פעם אחת אם אפליקציית האימות אינה זמינה. שמור אותם במקום בטוח — הם לא יוצגו שוב.',

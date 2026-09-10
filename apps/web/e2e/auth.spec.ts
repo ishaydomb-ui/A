@@ -54,6 +54,22 @@ test.describe('multi-factor authentication', () => {
     await expect(page).toHaveURL(/\/sign-in/);
   });
 
+  test('offers a one-tap link to an authenticator app', async ({ page }) => {
+    // A QR code cannot be scanned from the screen displaying it, so on a phone
+    // this link is the only workable route into enrolment.
+    await signIn(page, 'mfaAdmin', PASSWORD, { waitForShell: false });
+    const link = page.getByRole('link', { name: /authenticator/i });
+    await expect(link).toBeVisible();
+
+    const href = await link.getAttribute('href');
+    expect(href).toMatch(/^otpauth:\/\/totp\//);
+    expect(new URL(href!).searchParams.get('secret')).toMatch(/^[A-Z2-7]+$/);
+
+    // The key and the QR stay available for setting it up elsewhere.
+    await page.getByText(/another device/i).click();
+    await expect(page.getByRole('img', { name: /QR code/i })).toBeVisible();
+  });
+
   test('completing enrolment signs the administrator in', async ({ page }) => {
     await signInAsAdmin(page, 'mfaAdmin');
     await expect(page.getByRole('heading', { level: 1, name: /catalogue/i })).toBeVisible();

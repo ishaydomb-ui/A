@@ -69,8 +69,16 @@ export async function signInAsAdmin(
   await signIn(page, who, PASSWORD, { waitForShell: false });
   await expect(page.getByRole('heading', { name: /two-factor|דו-שלבי/i })).toBeVisible();
 
-  const secret = await page.locator('.mono').first().innerText();
-  await page.getByLabel(/authentication code|קוד אימות/i).fill(await totp(secret.trim()));
+  // Read the secret out of the authenticator link rather than the on-screen
+  // key: it is the value a phone would actually hand to its authenticator app,
+  // so this exercises the same path a real enrolment takes.
+  const otpauth = await page
+    .getByRole('link', { name: /authenticator|אפליקציית האימות/i })
+    .getAttribute('href');
+  const secret = new URL(otpauth!).searchParams.get('secret');
+  if (!secret) throw new Error(`no secret in otpauth URL: ${otpauth}`);
+
+  await page.getByLabel(/authentication code|קוד אימות/i).fill(await totp(secret));
   await page.getByRole('button', { name: /verify|אימות/i }).click();
 
   // On first enrolment the recovery codes are shown once and the session is

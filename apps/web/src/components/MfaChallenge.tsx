@@ -100,18 +100,35 @@ export function MfaChallenge({
 
       {enrolling && enrollment && (
         <div className="center" style={{ marginBlockEnd: 16 }}>
-          <img
-            src={enrollment.qrDataUrl}
-            width={180}
-            height={180}
-            alt="QR code for setting up your authenticator app"
-          />
-          <p className="small muted" style={{ marginBlockEnd: 4 }}>
-            {t.mfaSecretManual}
+          {/*
+            A QR code cannot be scanned from the same screen that shows it, so
+            on a phone this link is the way in: iOS and Android hand an
+            otpauth:// URL straight to an installed authenticator app, which
+            adds the account without anything being typed.
+          */}
+          <a className="btn btn-primary btn-block" href={enrollment.otpauthUrl}>
+            {t.mfaOpenAuthenticator}
+          </a>
+          <p className="small muted" style={{ marginBlock: 8 }}>
+            {t.mfaOpenAuthenticatorHint}
           </p>
-          <p className="mono" style={{ wordBreak: 'break-all' }}>
-            {enrollment.secret}
-          </p>
+
+          <details style={{ marginBlockEnd: 12 }}>
+            <summary className="small">{t.mfaOtherDevice}</summary>
+            <img
+              src={enrollment.qrDataUrl}
+              width={180}
+              height={180}
+              alt="QR code for setting up your authenticator app"
+              style={{ marginBlockStart: 12 }}
+            />
+            <p className="small muted" style={{ marginBlockEnd: 4 }}>
+              {t.mfaSecretManual}
+            </p>
+            <p className="mono" style={{ wordBreak: 'break-all', userSelect: 'all' }}>
+              {enrollment.secret}
+            </p>
+          </details>
         </div>
       )}
 
@@ -126,9 +143,17 @@ export function MfaChallenge({
           inputMode="numeric"
           autoComplete="one-time-code"
           autoFocus
+          maxLength={13}
+          placeholder="000000"
+          aria-describedby={`${codeId}-hint`}
           // A 6-digit TOTP or a hyphenated recovery code.
           pattern="[0-9A-Za-z\-\s]{6,13}"
         />
+        {/* The setup key and the code look alike enough that pasting the key
+            here is the obvious mistake to make. */}
+        <p className="hint" id={`${codeId}-hint`}>
+          {t.mfaCodeHint}
+        </p>
       </div>
 
       <button type="submit" className="btn btn-primary btn-block" disabled={busy || code.trim().length < 6}>
