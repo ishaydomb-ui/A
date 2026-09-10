@@ -103,21 +103,29 @@ else
 fi
 
 # --- Done ------------------------------------------------------------------
-printf '\n------------------------------------------------------------\n'
-printf '  Open:      %s\n\n' "$URL"
-printf '  Email:     %s\n' "$ADMIN_EMAIL"
+# Every literal line goes through a '%s\n' format. A format string that starts
+# with a dash is parsed as options by printf, which is what broke this before:
+# the closing rule printed nothing and took the exit status with it.
+rule() { printf '%s\n' "------------------------------------------------------------"; }
+
+printf '\n'
+rule
+printf '%s\n\n' "  Open:      $URL"
+printf '%s\n'   "  Email:     $ADMIN_EMAIL"
 
 if [ -n "${GENERATED_PASSWORD:-}" ]; then
-    printf '  Password:  %s\n\n' "$ADMIN_PASSWORD"
-    printf '  \033[33mThis password was generated. Save it now - it is not stored.\033[0m\n'
+    printf '%s\n\n' "  Password:  $ADMIN_PASSWORD"
+    printf '  \033[33m%s\033[0m\n' "This password was generated. Save it now - it is not stored."
 else
-    printf '  Password:  (the one you set in ADMIN_PASSWORD)\n'
+    printf '%s\n' "  Password:  (the one you set in ADMIN_PASSWORD)"
 fi
 
 printf '\n'
-printf '  At first sign-in you will be asked to set up two-factor\n'
-printf '  authentication. That is required for administrators.\n'
-printf '  Save the ten recovery codes you are shown.\n\n'
-printf '  The catalogue is in evaluation: every record is marked as\n'
-printf '  not clinically reviewed, and must not be used clinically.\n'
-printf '------------------------------------------------------------\n\n'
+printf '%s\n' "  At first sign-in you will be asked to set up two-factor"
+printf '%s\n' "  authentication. That is required for administrators."
+printf '%s\n' "  Save the ten recovery codes you are shown."
+printf '\n'
+printf '%s\n' "  The catalogue is in evaluation: every record is marked as"
+printf '%s\n' "  not clinically reviewed, and must not be used clinically."
+rule
+printf '\n'

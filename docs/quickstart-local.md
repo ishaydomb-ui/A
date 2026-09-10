@@ -91,12 +91,34 @@ docker compose -f docker-compose.local.yml exec db \
 For encryption, retention and a tested restore, use the full stack's backup
 service — see [backup-and-restore.md](backup-and-restore.md).
 
+## Checking on it
+
+```bash
+./ops/local-status.sh
+```
+
+Shows the containers, whether the site answers, the accounts that exist, how
+many records are published, the open findings, and the last of the API log.
+
 ## If it does not come up
 
 ```bash
 docker compose -f docker-compose.local.yml ps          # what is running
 docker compose -f docker-compose.local.yml logs api    # nearly always says why
 curl -i http://localhost:8080/readyz                   # expect {"status":"ready"...}
+```
+
+## If you lost the generated password
+
+`create-admin` updates an existing account, so run it again with a password
+you choose:
+
+```bash
+docker compose -f docker-compose.local.yml exec \
+  -e BOOTSTRAP_EMAIL='you@example.org' \
+  -e BOOTSTRAP_NAME='Your Name' \
+  -e BOOTSTRAP_PASSWORD='a-long-passphrase-you-pick' \
+  api node dist/scripts/create-admin.js
 ```
 
 Common causes:
