@@ -4,7 +4,7 @@ import { authenticator } from 'otplib';
 import { query } from '../db/pool.js';
 import { decryptSecret } from '../lib/crypto.js';
 import {
-  TEST_PASSWORD, closeTestApp, createTestApp, loginAs, mailbox,
+  TEST_PASSWORD, closeTestApp, createTestApp, loginAs, loginAsAdmin, mailbox,
   resetDatabase, seedUser, sessionCookie, shutdown,
 } from '../test/helpers.js';
 
@@ -409,6 +409,128 @@ describe('sessions', () => {
     await query(`UPDATE users SET status = 'suspended' WHERE id = $1`, [user.id]);
     const res = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie } });
     expect(res.statusCode).toBe(401);
+  });
+});
+
+describe('account administration', () => {
+  it('corrects a display name and keeps the change in the audit log', async () => {
+    const admin = await seedUser({ email: 'admin@example.org', role: 'admin' });
+    const target = await seedUser({
+      email: 'liri@example.org', role: 'clinical_reviewer', displayName: 'Liri',
+    });
+    const cookie = await loginAsAdmin(app, 'admin@example.org');
+
+    const res = await app.inject({
+      method: 'PATCH', url: `/api/users/${target.id}`, headers: { cookie },
+      payload: { displayName: 'Liran Korotkin Barzelay' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user).toMatchObject({ displayName: 'Liran Korotkin Barzelay' });
+
+    const { rows } = await query(
+      `SELECT display_name FROM users WHERE id = $1`, [target.id],
+    );
+    expect(rows[0].display_name).toBe('Liran Korotkin Barzelay');
+
+    // A name is part of the record a reviewer signs off under, so the previous
+    // value has to remain recoverable.
+    const log = await query(
+      `SELECT detail FROM audit_log WHERE action = 'users.updated' AND entity_id = $1`,
+      [target.id],
+    );
+    expect(log.rows[0].detail).toMatchObject({
+      before: { displayName: 'Liri' },
+      after: { displayName: 'Liran Korotkin Barzelay' },
+    });
+    expect(admin.id).toBeTruthy();
+  });
+
+  it('leaves the role and the session alone when only the name changes', async () => {
+    await seedUser({ email: 'admin@example.org', role: 'admin' });
+    const target = await seedUser({
+      email: 'liri@example.org', role: 'clinical_reviewer', displayName: 'Liri',
+    });
+    const targetCookie = await loginAs(app, 'liri@example.org');
+    const adminCookie = await loginAsAdmin(app, 'admin@example.org');
+
+    await app.inject({
+      method: 'PATCH', url: `/api/users/${target.id}`, headers: { cookie: adminCookie },
+      payload: { displayName: 'Liran Korotkin Barzelay' },
+    });
+
+    // Renaming is not a privilege change, so it must not sign the person out
+    // in the middle of a review.
+    const me = await app.inject({
+      method: 'GET', url: '/api/auth/me', headers: { cookie: targetCookie },
+    });
+    expect(me.statusCode).toBe(200);
+    expect(me.json().user).toMatchObject({
+      role: 'clinical_reviewer', displayName: 'Liran Korotkin Barzelay',
+    });
+  });
+
+  it('reissues an invitation and revokes the earlier link', async () => {
+    await seedUser({ email: 'admin@example.org', role: 'admin' });
+    const cookie = await loginAsAdmin(app, 'admin@example.org');
+
+    const invited = await app.inject({
+      method: 'POST', url: '/api/users/invitations', headers: { cookie },
+      payload: { email: 'liri@example.org', displayName: 'Liri', role: 'clinical_reviewer' },
+    });
+    const first = new URL(invited.json().invitationLink).searchParams.get('token')!;
+
+    const again = await app.inject({
+      method: 'POST', url: `/api/users/${invited.json().userId}/invitations/resend`,
+      headers: { cookie },
+    });
+    expect(again.statusCode).toBe(200);
+    const second = new URL(again.json().invitationLink).searchParams.get('token')!;
+    expect(second).not.toBe(first);
+
+    // The first link must stop working, or a link that leaked stays usable.
+    const stale = await app.inject({ method: 'GET', url: `/api/auth/invitations/${first}` });
+    expect(stale.statusCode).toBe(400);
+    expect(stale.json().error.code).toBe('invalid_token');
+    const fresh = await app.inject({ method: 'GET', url: `/api/auth/invitations/${second}` });
+    expect(fresh.statusCode).toBe(200);
+  });
+
+  it('refuses to reissue an invitation for an account already in use', async () => {
+    await seedUser({ email: 'admin@example.org', role: 'admin' });
+    const active = await seedUser({ email: 'liri@example.org', role: 'clinical_reviewer' });
+    const cookie = await loginAsAdmin(app, 'admin@example.org');
+
+    const res = await app.inject({
+      method: 'POST', url: `/api/users/${active.id}/invitations/resend`, headers: { cookie },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('already_active');
+  });
+
+  it('refuses a rename from anyone without the users:manage capability', async () => {
+    const target = await seedUser({ email: 'liri@example.org', role: 'clinical_reviewer' });
+    await seedUser({ email: 'editor@example.org', role: 'editor' });
+    const cookie = await loginAs(app, 'editor@example.org');
+
+    const res = await app.inject({
+      method: 'PATCH', url: `/api/users/${target.id}`, headers: { cookie },
+      payload: { displayName: 'Renamed By An Editor' },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('refuses to blank a display name', async () => {
+    await seedUser({ email: 'admin@example.org', role: 'admin' });
+    const target = await seedUser({ email: 'liri@example.org', role: 'clinical_reviewer' });
+    const cookie = await loginAsAdmin(app, 'admin@example.org');
+
+    for (const displayName of ['', '   ']) {
+      const res = await app.inject({
+        method: 'PATCH', url: `/api/users/${target.id}`, headers: { cookie },
+        payload: { displayName },
+      });
+      expect(res.statusCode).toBe(400);
+    }
   });
 });
 

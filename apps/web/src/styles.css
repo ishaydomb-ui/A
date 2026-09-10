@@ -413,6 +413,11 @@ textarea { min-height: 90px; resize: vertical; }
 
 .search-bar { position: relative; display: flex; gap: var(--space-2); }
 .search-bar input[type='search'] { flex: 1; }
+
+/* Renaming happens inside a table cell, where a full-width field would push
+   its own Save and Cancel buttons onto another line. */
+.name-edit { flex-wrap: nowrap; }
+.name-edit input[type='text'] { width: auto; flex: 1 1 12rem; min-width: 8rem; }
 .search-clear {
   position: absolute;
   inset-inline-end: 96px;

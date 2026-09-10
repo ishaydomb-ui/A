@@ -225,6 +225,24 @@ refuses to run with a non-secure cookie on anything but a loopback address,
 because that would put the session cookie on the open internet in clear. Use
 one of the three above instead.
 
+## Giving a colleague access
+
+Two different links are involved, and sending the wrong one is the usual
+mistake.
+
+- **The address of the site.** `http://localhost:8080` is not it. That address
+  exists only inside *your* SSH tunnel, on *your* device; it means nothing to
+  anyone else. A colleague needs either the temporary public address from
+  `./ops/expose-tunnel.sh` or a real hostname (options 2 and 3 above).
+- **Their invitation link.** Created by **Users → Invite a clinician** and
+  shown on screen. It is single-use and expires in 72 hours.
+
+Order matters. The invitation link is built from `PUBLIC_URL`, so open the
+tunnel *first* and create the invitation *afterwards* — otherwise the link
+points at `localhost` and will not open on their phone. If that has already
+happened, **Users** → re-invite the person; the earlier link is revoked and the
+new one carries the current address.
+
 ## When to move to a server
 
 Move when any of these becomes true:

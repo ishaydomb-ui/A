@@ -58,8 +58,13 @@ because an administrator created them.
    `active`. Opening that link proves control of the mailbox, so it also
    verifies the address.
 
-Invitation links expire (72 hours by default) and work once. Re-invite from
-the Users screen if one lapses; the earlier link is revoked.
+Invitation links expire (72 hours by default) and work once. **Re-invite**, in
+the accounts table beside anyone still `invited`, issues a fresh one and
+revokes the earlier link.
+
+A link also carries the address the system is configured with, so one created
+before the site had an address a colleague can open points at `localhost` and
+will not work for them. Re-invite once the real address is in place.
 
 ### Choosing a role
 
@@ -67,6 +72,18 @@ Give people the least they need. Most clinicians want **Physician** — read
 access to published content, nothing more. Reserve **Admin** for the small
 number of people who genuinely administer the system, since it carries user
 management and publication.
+
+### Correcting a name
+
+Names get entered in a hurry, and a reviewer's name appears on the approvals
+they sign. **Users → Rename**, next to the name in the accounts table, changes
+it; Escape or **Cancel** leaves it as it was. The previous name and the new one
+are both written to the audit log.
+
+Renaming is not a change of privilege, so it does not sign the person out — a
+reviewer part-way through a record keeps their session. Re-running the
+bootstrap script will *not* rename an existing account; it deliberately leaves
+the display name alone.
 
 ## Suspending and removing access
 

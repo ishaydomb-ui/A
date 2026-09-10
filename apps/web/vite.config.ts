@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
@@ -14,4 +14,12 @@ export default defineConfig({
     },
   },
   build: { outDir: 'dist', sourcemap: true },
+
+  // Everything under e2e/ belongs to Playwright. Without this Vitest collects
+  // those files as its own, fails to resolve `@playwright/test`, and reports
+  // the whole client suite as broken.
+  test: {
+    include: ['src/**/*.test.{ts,tsx}'],
+    passWithNoTests: true,
+  },
 });

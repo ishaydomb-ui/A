@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ROLES } from '@med/shared';
 import { useI18n } from '../i18n.ts';
 import { ApiError, api } from '../lib/api.ts';
@@ -17,6 +17,16 @@ export function UsersPage() {
   const [displayName, setDisplayName] = useState('');
   const [role, setRole] = useState<string>('physician');
 
+  // The row currently being renamed, and the name typed into it. Only one row
+  // is editable at a time, so a half-finished edit cannot be left behind on a
+  // row that has scrolled out of sight.
+  const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
+
+  // Re-inviting is done from a row that can be well below the fold, while the
+  // link it produces is shown with the invitation form at the top. Screen
+  // readers hear it announced; bring it into view for everyone else.
+  const invitationRef = useRef<HTMLDivElement>(null);
+
   const load = useCallback(() => {
     api
       .get<{ users: PublicUser[] }>('/api/users')
@@ -25,6 +35,10 @@ export function UsersPage() {
   }, [t]);
 
   useEffect(load, [load]);
+
+  useEffect(() => {
+    if (invitationLink) invitationRef.current?.scrollIntoView({ block: 'center' });
+  }, [invitationLink]);
 
   async function invite(event: React.FormEvent) {
     event.preventDefault();
@@ -48,10 +62,32 @@ export function UsersPage() {
     }
   }
 
+  /**
+   * Issues a fresh invitation. An invitation link carries the address the API
+   * is configured with, so one created before the site had a reachable address
+   * points somewhere the recipient cannot open; re-inviting revokes it and
+   * builds a new one.
+   */
+  async function resendInvitation(id: string) {
+    setError(null);
+    setInvitationLink(null);
+    try {
+      const result = await api.post<{ invitationLink: string }>(
+        `/api/users/${id}/invitations/resend`,
+        {},
+      );
+      setInvitationLink(result.invitationLink);
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.errorGeneric);
+    }
+  }
+
   async function update(id: string, patch: Record<string, string>) {
     setError(null);
     try {
       await api.patch(`/api/users/${id}`, patch);
+      setRenaming(null);
       load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.errorGeneric);
@@ -108,17 +144,19 @@ export function UsersPage() {
           </button>
         </form>
 
-        {invitationLink && (
-          <Notice tone="success" title="Invitation created">
-            <p>
-              If no mail server is configured the message is written to the server's outbox instead
-              of being sent. Deliver this single-use link to the person yourself:
-            </p>
-            <p className="mono" style={{ wordBreak: 'break-all' }}>
-              {invitationLink}
-            </p>
-          </Notice>
-        )}
+        <div ref={invitationRef}>
+          {invitationLink && (
+            <Notice tone="success" title="Invitation created">
+              <p>
+                If no mail server is configured the message is written to the server's outbox
+                instead of being sent. Deliver this single-use link to the person yourself:
+              </p>
+              <p className="mono" style={{ wordBreak: 'break-all' }}>
+                {invitationLink}
+              </p>
+            </Notice>
+          )}
+        </div>
       </section>
 
       <section aria-labelledby="users-heading">
@@ -141,7 +179,56 @@ export function UsersPage() {
               <tbody>
                 {users.map((user) => (
                   <tr key={user.id}>
-                    <th scope="row">{user.displayName}</th>
+                    <th scope="row">
+                      {renaming?.id === user.id ? (
+                        <form
+                          className="row name-edit"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            const value = renaming.value.trim();
+                            if (value) void update(user.id, { displayName: value });
+                          }}
+                        >
+                          <label htmlFor={`name-${user.id}`} className="sr-only">
+                            Full name for {user.email}
+                          </label>
+                          <input
+                            id={`name-${user.id}`}
+                            type="text"
+                            value={renaming.value}
+                            autoFocus
+                            required
+                            maxLength={200}
+                            onChange={(e) => setRenaming({ id: user.id, value: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') setRenaming(null);
+                            }}
+                          />
+                          <button type="submit" className="btn btn-sm btn-primary">
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => setRenaming(null)}
+                          >
+                            {t.cancel}
+                          </button>
+                        </form>
+                      ) : (
+                        <span className="row">
+                          {user.displayName}
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-secondary"
+                            aria-label={`Rename ${user.displayName}`}
+                            onClick={() => setRenaming({ id: user.id, value: user.displayName })}
+                          >
+                            Rename
+                          </button>
+                        </span>
+                      )}
+                    </th>
                     <td className="small">{user.email}</td>
                     <td>
                       <label htmlFor={`role-${user.id}`} className="sr-only">
@@ -190,6 +277,14 @@ export function UsersPage() {
                             onClick={() => void update(user.id, { status: 'active' })}
                           >
                             Reinstate
+                          </button>
+                        ) : user.status === 'invited' ? (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => void resendInvitation(user.id)}
+                          >
+                            Re-invite
                           </button>
                         ) : null}
                       </div>
