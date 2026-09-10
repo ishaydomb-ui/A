@@ -59,6 +59,7 @@ from .orchestrator import (
 )
 from .pantry import split_ingredients
 from .radar import find_stockup_deals, format_stockup_deals
+from . import safesend
 from .storage import Storage
 
 logger = logging.getLogger(__name__)
@@ -2063,9 +2064,16 @@ def build_application(config: Config, storage: Storage) -> Application:
     # callback query after ~15s, so those taps arrived expired -- no toast,
     # no edit, nothing. That is the whole "I press buttons and nothing
     # happens" report.
+    # `SafeBot` gives every send in the project a plain-text fallback,
+    # including the 40 that pass parse_mode="Markdown" straight to
+    # reply_text. Two real messages have been lost to a rejected
+    # parse_mode — a deals button that did nothing, and an order summary
+    # that vanished after both carts were already filled. Injected here
+    # rather than patched onto the bot because telegram.Bot uses
+    # __slots__; see safesend.py.
     application = (
         Application.builder()
-        .token(config.telegram_bot_token)
+        .bot(safesend.SafeBot(config.telegram_bot_token))
         .post_init(_register_bot_metadata)
         .concurrent_updates(True)
         .build()
