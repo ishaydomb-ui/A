@@ -19,20 +19,11 @@ export function CompareTray({
 
   return (
     <div className="compare-tray" role="region" aria-label={t.compareTrayLabel}>
-      <div className="compare-chips">
-        {selected.map((slug) => (
-          <span className="chip" key={slug}>
-            {slug}
-            <button type="button" onClick={() => onRemove(slug)} aria-label={`${t.compareRemove}: ${slug}`}>
-              ×
-            </button>
-          </span>
-        ))}
-      </div>
-
-      <p className="small muted" style={{ margin: 0 }}>
+      <span className="compare-tray-count">{t.compareSelectedCount(selected.length)}</span>
+      <span className="small muted">
         {selected.length < 2 ? t.compareEmpty : t.compareLimit(maxCompare)}
-      </p>
+      </span>
+      <span className="spacer" />
 
       <button type="button" className="btn btn-sm btn-secondary" onClick={onClear}>
         {t.compareClear}
@@ -45,6 +36,17 @@ export function CompareTray({
       >
         {t.compareOpen}
       </button>
+
+      <div className="compare-chips">
+        {selected.map((slug) => (
+          <span className="chip" key={slug}>
+            {slug}
+            <button type="button" onClick={() => onRemove(slug)} aria-label={`${t.compareRemove}: ${slug}`}>
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

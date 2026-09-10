@@ -30,8 +30,13 @@
   --accent-2-hover:  #7e3c50;
   --accent-2-text:   #ffffff;
   --accent-2-subtle: #fbeef1;
-  --header-wash-1: rgb(11 95 165 / 6%);
-  --header-wash-2: rgb(154 74 97 / 6%);
+  /* Pre-blended, fully opaque — the header is `position: sticky`, and a
+     translucent background there lets scrolled content show through and
+     collide with the header's own text. These are the same two hues at the
+     same low strength, blended onto --bg-raised ahead of time instead of at
+     paint time, so the wash is solid at every pixel. */
+  --header-wash-1: #f0f5fa;
+  --header-wash-2: #f9f4f6;
 
   --danger:        #a3212b;  /* 6.6:1 on --bg */
   --danger-subtle: #fdeced;
@@ -64,8 +69,16 @@
   --shadow-1: 0 1px 2px rgb(16 24 32 / 8%), 0 1px 3px rgb(16 24 32 / 6%);
   --shadow-2: 0 8px 24px rgb(16 24 32 / 14%);
 
-  --header-height: 56px;
+  --header-height: 52px;
   --content-max: 1200px;
+  --content-reading-max: 860px;
+
+  /* One scale, so a new sticky or floating element picks a layer instead of
+     guessing a number that happens to work today. */
+  --z-header: 30;
+  --z-dropdown: 40;
+  --z-sheet: 50;
+  --z-compare-bar: 25;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -90,8 +103,8 @@
     --accent-2-hover:  #f4c6d3;
     --accent-2-text:   #2e1620;
     --accent-2-subtle: #2e1620;
-    --header-wash-1: rgb(108 178 245 / 7%);
-    --header-wash-2: rgb(238 176 194 / 6%);
+    --header-wash-1: #212c39;
+    --header-wash-2: #282b34;
 
     --danger:        #ff9a9f;
     --danger-subtle: #341a1d;
@@ -115,7 +128,7 @@
   --text: #eef2f6; --text-muted: #aeb9c6; --text-faint: #8e9aa8;
   --accent: #6cb2f5; --accent-hover: #8ac3f8; --accent-text: #08111c; --accent-subtle: #17293c;
   --accent-2: #eeb0c2; --accent-2-hover: #f4c6d3; --accent-2-text: #2e1620; --accent-2-subtle: #2e1620;
-  --header-wash-1: rgb(108 178 245 / 7%); --header-wash-2: rgb(238 176 194 / 6%);
+  --header-wash-1: #212c39; --header-wash-2: #282b34;
   --danger: #ff9a9f; --danger-subtle: #341a1d;
   --warning: #f0c07a; --warning-subtle: #33260f;
   --success: #7fd2a4; --success-subtle: #12291e;
@@ -207,23 +220,29 @@ mark {
 .app-header {
   position: sticky;
   inset-block-start: 0;
-  z-index: 20;
+  z-index: var(--z-header);
   /* A barely-there wash rather than a plain fill — the two accents meeting
-     at low opacity over the raised surface, not a redesign of it. */
+     at low strength over the raised surface, not a redesign of it. Fully
+     opaque at every stop: this header is sticky, so anything translucent
+     here lets scrolled content show through and collide with its own text. */
   background: linear-gradient(135deg, var(--header-wash-1) 0%, var(--bg-raised) 45%, var(--header-wash-2) 100%);
   border-block-end: 1px solid var(--border);
 }
 .app-header-inner {
   max-width: var(--content-max);
   margin-inline: auto;
-  padding: var(--space-2) var(--space-4);
+  padding-inline: var(--space-4);
+  padding-block: var(--space-2);
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-height: var(--header-height);
-  flex-wrap: wrap;
+  /* Never wraps: on a narrow phone the nav scrolls sideways instead of
+     pushing the header down over several lines. */
+  flex-wrap: nowrap;
 }
 .brand {
+  flex: none;
   font-weight: 700;
   font-size: 1rem;
   color: var(--text);
@@ -232,8 +251,18 @@ mark {
 }
 .brand:hover { color: var(--text); }
 
-.app-nav { display: flex; gap: var(--space-1); flex-wrap: wrap; }
+.app-nav {
+  display: flex;
+  gap: var(--space-1);
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.app-nav::-webkit-scrollbar { display: none; }
 .app-nav a {
+  flex: none;
+  white-space: nowrap;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-s);
   color: var(--text-muted);
@@ -246,7 +275,54 @@ mark {
   background: var(--accent-subtle);
   color: var(--accent);
 }
-.header-end { margin-inline-start: auto; display: flex; align-items: center; gap: var(--space-2); }
+.header-end { flex: none; display: flex; align-items: center; gap: var(--space-2); }
+
+/* The overflow menu bundling language / account / sign out. Both this and
+   .header-end exist in the DOM at once; only one is ever visible, decided by
+   width alone, so nothing needs a resize listener to stay correct. Hidden
+   with `display`, so the inactive copy is also out of the tab order. */
+.user-menu { display: none; position: relative; flex: none; }
+.user-menu summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 40px;
+  block-size: 40px;
+  min-inline-size: 44px;
+  min-block-size: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-raised);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+.user-menu summary::-webkit-details-marker,
+.user-menu summary::marker { display: none; content: ''; }
+.user-menu summary:hover { background: var(--bg-hover); }
+.user-menu[open] summary { border-color: var(--accent); background: var(--accent-subtle); color: var(--accent); }
+.user-menu-panel {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: calc(100% + var(--space-2));
+  z-index: var(--z-dropdown);
+  min-inline-size: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+}
+.user-menu-panel > * { inline-size: 100%; justify-content: flex-start; }
+@media (max-width: 640px) {
+  .header-end { display: none; }
+  .user-menu { display: block; }
+}
 
 .app-main {
   flex: 1;
@@ -254,6 +330,15 @@ mark {
   max-width: var(--content-max);
   margin-inline: auto;
   padding: var(--space-4);
+}
+
+/* Caps a single column of label/value pairs or prose at a comfortable
+   reading width, rather than stretching it across the full 1200px main
+   column — used by pages that are read top-to-bottom, not scanned as a
+   grid (the medication detail record, legal text). */
+.reading-width {
+  max-width: var(--content-reading-max);
+  margin-inline: auto;
 }
 
 .app-footer {
@@ -434,7 +519,21 @@ textarea { min-height: 90px; resize: vertical; }
 /* --- Search ---------------------------------------------------------------- */
 
 .search-bar { position: relative; display: flex; gap: var(--space-2); }
-.search-bar input[type='search'] { flex: 1; }
+.search-bar input[type='search'] {
+  flex: 1;
+  padding-inline-start: calc(var(--space-3) + 18px + var(--space-2));
+}
+.search-bar input[type='search']::-webkit-search-cancel-button { -webkit-appearance: none; }
+.search-icon {
+  position: absolute;
+  inset-inline-start: var(--space-3);
+  inset-block-start: 50%;
+  transform: translateY(-50%);
+  inline-size: 18px;
+  block-size: 18px;
+  color: var(--text-faint);
+  pointer-events: none;
+}
 
 /* Renaming happens inside a table cell, where a full-width field would push
    its own Save and Cancel buttons onto another line. */
@@ -494,7 +593,10 @@ textarea { min-height: 90px; resize: vertical; }
 .search-layout { display: grid; gap: var(--space-4); }
 @media (min-width: 900px) {
   .search-layout { grid-template-columns: 240px 1fr; align-items: start; }
-  .filter-panel { position: sticky; inset-block-start: calc(var(--header-height) + var(--space-4)); }
+  .filter-panel-desktop {
+    position: sticky;
+    inset-block-start: calc(var(--header-height) + var(--space-4));
+  }
 }
 
 .filter-panel h2 { font-size: 0.9375rem; }
@@ -502,25 +604,111 @@ textarea { min-height: 90px; resize: vertical; }
 .filter-group h3 { font-size: 0.875rem; color: var(--text-muted); margin-block-end: var(--space-1); }
 .filter-count { color: var(--text-faint); font-size: 0.8125rem; margin-inline-start: auto; }
 
-.results-meta {
+/* The compact "Filters" trigger used on narrow screens, opening the sheet
+   below. On desktop the panel is shown directly instead — see FilterPanel. */
+.filters-trigger { display: inline-flex; align-items: center; gap: 6px; }
+.filters-trigger .count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 18px;
+  block-size: 18px;
+  padding-inline: 4px;
+  border-radius: 100px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+/* A bottom sheet on a phone, built on the native <dialog> element so focus
+   trapping, Escape-to-close and the backdrop come for free. */
+dialog.sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  max-block-size: 85dvh;
+  margin: 0;
+  border: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 0;
+  background: var(--bg-raised);
+  color: var(--text);
+  box-shadow: var(--shadow-2);
+}
+dialog.sheet::backdrop { background: rgb(8 12 18 / 45%); }
+.sheet-header {
+  position: sticky;
+  inset-block-start: 0;
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-block-end: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+.sheet-header h2 { margin: 0; font-size: 1rem; }
+.sheet-body { padding: var(--space-4); overflow-y: auto; }
+.sheet-footer {
+  position: sticky;
+  inset-block-end: 0;
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-block-start: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+.sheet-footer .btn { flex: 1; }
+
+.results-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
   flex-wrap: wrap;
   margin-block: var(--space-3);
   font-size: 0.875rem;
   color: var(--text-muted);
 }
+.results-toolbar .spacer { flex: 1; }
+.active-filter-chips { display: flex; gap: var(--space-1); flex-wrap: wrap; align-items: center; }
+.active-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px var(--space-2);
+  border-radius: 100px;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  max-inline-size: 220px;
+}
+.active-filter-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.active-filter-chip button {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 0 2px;
+  min-height: 20px;
+}
 
 /*
    The compact result list. Rows, not large cards: the source site rendered
-   44 tall cards on one page, which is unusable on a phone.
+   44 tall cards on one page, which is unusable on a phone. The generic name
+   leads; trade names and classification are visibly secondary.
 */
 .result-list { list-style: none; margin: 0; padding: 0; border-block-start: 1px solid var(--border); }
 .result-row {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
   border-block-end: 1px solid var(--border);
 }
 .result-row:hover { background: var(--bg-hover); }
@@ -534,29 +722,85 @@ textarea { min-height: 90px; resize: vertical; }
   min-inline-size: 0;
 }
 .result-name {
-  font-weight: 600;
+  font-weight: 650;
   font-size: 0.9375rem;
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
   flex-wrap: wrap;
+  overflow-wrap: anywhere;
 }
-.result-trade { color: var(--text-muted); font-weight: 450; font-size: 0.875rem; }
+.result-trade {
+  color: var(--text-muted);
+  font-weight: 450;
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
 .result-meta {
-  margin-block-start: 2px;
+  margin-block-start: var(--space-1);
   font-size: 0.8125rem;
   color: var(--text-muted);
   display: flex;
-  gap: var(--space-2);
+  gap: var(--space-1);
   flex-wrap: wrap;
   align-items: center;
 }
-.result-compare { flex: none; padding-inline-end: var(--space-2); }
+/* A fixed-width column, so the control lines up the same way on every row
+   regardless of how many lines the name and trade names take above it. */
+.result-compare {
+  flex: 0 0 auto;
+  inline-size: 44px;
+  block-size: 44px;
+}
+.result-compare label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 100%;
+  block-size: 100%;
+  border-radius: var(--radius-s);
+  cursor: pointer;
+}
+.result-compare label:hover { background: var(--bg-hover); }
+.result-compare input {
+  inline-size: 20px;
+  block-size: 20px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* First-load placeholder, shaped like the rows it stands in for so nothing
+   shifts once real results arrive. Mirrors .result-row's box model rather
+   than sharing the class — a placeholder must never be selectable as one of
+   the real results it is standing in for. */
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-2);
+  min-height: 44px;
+  border-block-end: 1px solid var(--border);
+}
+.skeleton-row-main { flex: 1; display: flex; flex-direction: column; justify-content: center; min-inline-size: 0; }
+.skeleton-block {
+  display: block;
+  border-radius: var(--radius-s);
+  background: linear-gradient(90deg, var(--bg-subtle) 25%, var(--border) 50%, var(--bg-subtle) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-block { animation: none; background: var(--bg-subtle); }
+}
 
 .compare-tray {
   position: sticky;
   inset-block-end: 0;
-  z-index: 15;
+  z-index: var(--z-compare-bar);
   margin-block-start: var(--space-4);
   padding: var(--space-3) var(--space-4);
   background: var(--bg-raised);
@@ -568,7 +812,8 @@ textarea { min-height: 90px; resize: vertical; }
   gap: var(--space-3);
   flex-wrap: wrap;
 }
-.compare-chips { display: flex; gap: var(--space-2); flex-wrap: wrap; flex: 1; }
+.compare-tray-count { font-weight: 650; font-size: 0.9375rem; }
+.compare-chips { display: flex; gap: var(--space-2); flex-wrap: wrap; flex: 1 1 100%; order: 3; }
 .chip {
   display: inline-flex;
   align-items: center;
@@ -719,22 +964,50 @@ dialog::backdrop { background: rgb(8 12 18 / 55%); }
    Evaluation banner.
 
    Shown while the catalogue may hold content published before clinical
-   review. Deliberately unmissable: high contrast, full width, above the
-   content rather than beneath it.
+   review. Still unmissable — the warning colour, an icon, a heading — but
+   compact by default rather than claiming several lines above every screen;
+   a person can open it for the full text, and can close it again, but it
+   never disappears entirely.
 --------------------------------------------------------------------------- */
 .evaluation-banner {
   background: var(--warning-subtle);
-  border-block-end: 2px solid var(--warning);
+  border-block-end: 1px solid var(--warning);
   color: var(--text);
 }
 .evaluation-banner-inner {
   max-width: var(--content-max);
   margin-inline: auto;
-  padding: var(--space-3) var(--space-4);
-  font-size: 0.875rem;
+  padding: var(--space-2) var(--space-4);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: 0.8125rem;
   line-height: 1.45;
 }
-.evaluation-banner strong { color: var(--warning); }
+.evaluation-icon { flex: none; inline-size: 18px; block-size: 18px; margin-block-start: 1px; color: var(--warning); }
+.evaluation-text { flex: 1; min-inline-size: 0; }
+.evaluation-text strong { color: var(--warning); }
+.evaluation-text p { margin: 0; }
+.evaluation-text.is-collapsed p {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.evaluation-toggle {
+  flex: none;
+  min-height: 32px;
+  padding: 4px var(--space-2);
+  border: none;
+  background: none;
+  color: var(--warning);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
 
 /* ---------------------------------------------------------------------------
    Record footer.

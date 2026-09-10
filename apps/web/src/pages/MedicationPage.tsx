@@ -72,7 +72,7 @@ export function MedicationPage() {
     detail.publishedUnvalidated || /unvalidated/i.test(detail.validationStatus);
 
   return (
-    <article>
+    <article className="reading-width">
       <p>
         <Link to="/">← {t.backToResults}</Link>
       </p>

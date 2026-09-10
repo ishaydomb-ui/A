@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useI18n } from '../i18n.ts';
+import { useMediaQuery } from '../lib/useMediaQuery.ts';
 import { api, qs } from '../lib/api.ts';
 
 interface Suggestion {
@@ -105,6 +106,8 @@ export function SearchBar({
     }
   }
 
+  const shortPlaceholder = useMediaQuery('(max-width: 480px)');
+
   return (
     <div ref={containerRef}>
       <label htmlFor={inputId} className="sr-only">
@@ -119,6 +122,17 @@ export function SearchBar({
           onSubmit(value);
         }}
       >
+        <svg
+          className="search-icon"
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          aria-hidden="true"
+        >
+          <circle cx="8.7" cy="8.7" r="6.2" />
+          <path d="m17 17-3.6-3.6" strokeLinecap="round" />
+        </svg>
         <input
           id={inputId}
           ref={inputRef}
@@ -126,7 +140,7 @@ export function SearchBar({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={t.searchPlaceholder}
+          placeholder={shortPlaceholder ? t.searchPlaceholderShort : t.searchPlaceholder}
           aria-describedby={hintId}
           role="combobox"
           aria-expanded={open}

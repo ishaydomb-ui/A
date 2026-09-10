@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { STATE_FILES, openFilters, search, setLocale } from './helpers.ts';
+import { STATE_FILES, openFilters, openUserActions, search, setLocale } from './helpers.ts';
 
 // Reuses the physician session established by the setup project.
 test.use({ storageState: STATE_FILES.physician });
@@ -108,7 +108,8 @@ test.describe('Hebrew interface', () => {
   test('the language toggle switches direction both ways', async ({ page }) => {
     // The toggle's accessible name is itself localised, as it should be, so
     // the locator has to match it in either language.
-    const toggle = page.getByRole('button', { name: /language|שפה/i });
+    const actions = await openUserActions(page);
+    const toggle = actions.getByRole('button', { name: /language|שפה/i });
 
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
     await toggle.click();
@@ -121,7 +122,8 @@ test.describe('Hebrew interface', () => {
   });
 
   test('the chosen language survives a reload', async ({ page }) => {
-    await page.getByRole('button', { name: /language|שפה/i }).click();
+    const actions = await openUserActions(page);
+    await actions.getByRole('button', { name: /language|שפה/i }).click();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');

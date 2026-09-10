@@ -72,6 +72,7 @@ const EN = {
   // Search
   searchLabel: 'Search medications',
   searchPlaceholder: 'Generic name, trade name, class, indication…',
+  searchPlaceholderShort: 'Search medications…',
   searchHint: 'Search by generic name, trade name, group, indication, mechanism or keyword.',
   searchSubmit: 'Search',
   clearSearch: 'Clear search',
@@ -90,6 +91,12 @@ const EN = {
   filterFormulation: 'Formulation',
   loadMore: 'Load more',
   resultsRegion: 'Search results',
+  menu: 'Menu',
+  closeFilters: 'Close filters',
+  removeFilterValue: (label: string) => `Remove filter: ${label}`,
+  evaluationDetails: 'Details',
+  evaluationHide: 'Hide',
+  compareSelectedCount: (n: number) => (n === 1 ? '1 medication selected' : `${n} medications selected`),
 
   // Detail
   detailRegion: 'Medication details',
@@ -224,6 +231,7 @@ const HE = {
 
   searchLabel: 'חיפוש תרופות',
   searchPlaceholder: 'שם גנרי, שם מסחרי, קבוצה, התוויה…',
+  searchPlaceholderShort: 'חיפוש תרופה…',
   searchHint: 'ניתן לחפש לפי שם גנרי, שם מסחרי, קבוצה, התוויה, מנגנון או מילת מפתח.',
   searchSubmit: 'חיפוש',
   clearSearch: 'ניקוי החיפוש',
@@ -242,6 +250,12 @@ const HE = {
   filterFormulation: 'צורת מתן',
   loadMore: 'טעינת עוד',
   resultsRegion: 'תוצאות החיפוש',
+  menu: 'תפריט',
+  closeFilters: 'סגירת מסננים',
+  removeFilterValue: (label: string) => `הסרת מסנן: ${label}`,
+  evaluationDetails: 'פרטים',
+  evaluationHide: 'הסתרה',
+  compareSelectedCount: (n: number) => (n === 1 ? 'נבחרה תרופה אחת' : `נבחרו ${n} תרופות`),
 
   detailRegion: 'פרטי התרופה',
   openDetails: 'פתיחת פרטים עבור',

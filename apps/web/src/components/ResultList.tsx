@@ -4,6 +4,30 @@ import type { SearchHit } from '../lib/types.ts';
 import { Highlight } from './Highlight.tsx';
 
 /**
+ * Placeholder rows shown only on the very first load of a query, before any
+ * hit has ever arrived — a later refetch keeps showing the previous results
+ * until the new ones are ready, so this never appears mid-search.
+ */
+export function ResultListSkeleton({ count = 6 }: { count?: number }) {
+  return (
+    <ul className="result-list" aria-hidden="true">
+      {Array.from({ length: count }, (_, i) => (
+        // Deliberately NOT .result-row: that class means "an actual result"
+        // to the rest of the app (and to tests locating real rows), and a
+        // placeholder must never be mistaken for one mid-swap.
+        <li key={i} className="skeleton-row">
+          <span className="skeleton-row-main">
+            <span className="skeleton-block" style={{ inlineSize: '38%', blockSize: '0.95em' }} />
+            <span className="skeleton-block" style={{ inlineSize: '22%', blockSize: '0.7em', marginBlockStart: 6 }} />
+          </span>
+          <span className="skeleton-block" style={{ inlineSize: 44, blockSize: 44, borderRadius: 'var(--radius)' }} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
  * The compact result list.
  *
  * One scannable row per medication rather than a large card, so a phone shows
@@ -29,6 +53,12 @@ export function ResultList({
         const isSelected = selected.includes(hit.slug);
         const atLimit = !isSelected && selected.length >= maxCompare;
         const name = hit.genericName ?? hit.slug;
+        // A class equal to its own group name (e.g. "Antipsychotics —
+        // Antipsychotics") says nothing a single tag doesn't already say.
+        const sameGroupAndClass =
+          !!hit.therapeuticGroup &&
+          !!hit.drugClass &&
+          hit.therapeuticGroup.trim().toLowerCase() === hit.drugClass.trim().toLowerCase();
 
         return (
           <li key={hit.slug} className="result-row">
@@ -45,7 +75,9 @@ export function ResultList({
                 {hit.therapeuticGroup && (
                   <span className="badge badge-accent">{hit.therapeuticGroup}</span>
                 )}
-                {hit.drugClass && <span className="badge badge-accent-2">{hit.drugClass}</span>}
+                {hit.drugClass && !sameGroupAndClass && (
+                  <span className="badge badge-accent-2">{hit.drugClass}</span>
+                )}
                 {hit.state !== 'published' && (
                   <span className="badge badge-medium">{hit.state.replace(/_/g, ' ')}</span>
                 )}
@@ -53,21 +85,20 @@ export function ResultList({
               </span>
             </Link>
 
+            {/* A fixed-size column rather than the old checkbox-plus-word —
+                consistently placed whether the row above it is one line or
+                three, and the full meaning still reaches a screen reader
+                through the label. */}
             <div className="result-compare">
-              <label className="checkbox-row">
+              <label title={isSelected ? t.compareRemove : t.compareAdd}>
                 <input
                   type="checkbox"
                   checked={isSelected}
                   disabled={atLimit}
                   onChange={() => onToggleCompare(hit.slug)}
                 />
-                {/* The visible word "Compare" would repeat on every row, so the
-                    accessible name carries the medication it belongs to. */}
                 <span className="sr-only">
                   {isSelected ? t.compareRemove : t.compareAdd}: {name}
-                </span>
-                <span aria-hidden="true" className="small muted">
-                  {t.compare}
                 </span>
               </label>
             </div>

@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useI18n } from '../i18n.ts';
 import { useAuth } from '../lib/auth.tsx';
+import { useMediaQuery } from '../lib/useMediaQuery.ts';
 import { ApiError, api, qs } from '../lib/api.ts';
 import type { Facets, SearchResponse } from '../lib/types.ts';
 import { SearchBar } from '../components/SearchBar.tsx';
 import { FilterPanel, EMPTY_FILTERS, type FilterKey, type FilterState } from '../components/FilterPanel.tsx';
-import { ResultList } from '../components/ResultList.tsx';
+import { ResultList, ResultListSkeleton } from '../components/ResultList.tsx';
 import { CompareTray } from '../components/CompareTray.tsx';
 import { Notice } from '../components/Notice.tsx';
 import { Spinner } from '../components/Spinner.tsx';
@@ -17,6 +18,7 @@ const FILTER_KEYS: FilterKey[] = ['therapeuticGroup', 'drugClass', 'drugFamily',
 export function SearchPage() {
   const { t, locale } = useI18n();
   const { can } = useAuth();
+  const isDesktop = useMediaQuery('(min-width: 900px)');
   // The query lives in the URL so a search can be bookmarked, shared with a
   // colleague, and survives the back button.
   const [params, setParams] = useSearchParams();
@@ -104,6 +106,13 @@ export function SearchPage() {
     [params, setParams],
   );
 
+  const removeFilterValue = useCallback(
+    (key: FilterKey, value: string) => {
+      applyFilters({ ...filters, [key]: filters[key].filter((v) => v !== value) });
+    },
+    [filters, applyFilters],
+  );
+
   const toggleCompare = useCallback((slug: string) => {
     setSelected((current) =>
       current.includes(slug)
@@ -116,6 +125,14 @@ export function SearchPage() {
 
   const hits = results?.hits ?? [];
   const maxCompare = results?.maxCompare ?? 3;
+
+  const filterLabels: Record<FilterKey, string> = {
+    therapeuticGroup: t.filterTherapeuticGroup,
+    drugClass: t.filterDrugClass,
+    drugFamily: t.filterDrugFamily,
+    formulation: t.filterFormulation,
+  };
+  const activeChips = FILTER_KEYS.flatMap((key) => filters[key].map((value) => ({ key, value })));
 
   return (
     <>
@@ -145,7 +162,7 @@ export function SearchPage() {
       )}
 
       <div className="search-layout">
-        <FilterPanel facets={facets} filters={filters} onChange={applyFilters} />
+        {isDesktop && <FilterPanel variant="sidebar" facets={facets} filters={filters} onChange={applyFilters} />}
 
         <div>
           {error && <Notice tone="error">{error}</Notice>}
@@ -156,13 +173,45 @@ export function SearchPage() {
             </Notice>
           )}
 
-          {/* Announced politely so a screen-reader user hears the new count
-              without the focus being yanked away from the input. */}
-          <div className="results-meta" role="status" aria-live="polite">
-            {loading ? <Spinner /> : <span>{t.resultsCount(results?.total ?? 0)}</span>}
+          <div className="results-toolbar">
+            {!isDesktop && (
+              <FilterPanel variant="trigger" facets={facets} filters={filters} onChange={applyFilters} />
+            )}
+            {/* Announced politely so a screen-reader user hears the new count
+                without the focus being yanked away from the input. Only the
+                count itself is the live region — the buttons and chips
+                around it are not, or every filter toggle would re-announce
+                the whole toolbar. */}
+            <span role="status" aria-live="polite">
+              {loading ? <Spinner /> : <span className="results-count">{t.resultsCount(results?.total ?? 0)}</span>}
+            </span>
+            {activeChips.length > 0 && (
+              <div className="active-filter-chips">
+                {activeChips.map(({ key, value }) => (
+                  <span className="active-filter-chip" key={`${key}-${value}`}>
+                    <span>{value}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeFilterValue(key, value)}
+                      aria-label={t.removeFilterValue(`${filterLabels[key]}: ${value}`)}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <span className="spacer" />
+            {activeChips.length > 0 && (
+              <button type="button" className="btn btn-sm btn-secondary" onClick={() => applyFilters(EMPTY_FILTERS)}>
+                {t.clearFilters}
+              </button>
+            )}
           </div>
 
           <section aria-label={t.resultsRegion}>
+            {loading && hits.length === 0 && <ResultListSkeleton />}
+
             {!loading && hits.length === 0 && (
               <div className="empty-state">
                 <p>

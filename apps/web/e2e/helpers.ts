@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 export const PASSWORD = 'e2e-test-password-value-1';
 
@@ -105,15 +105,37 @@ export async function search(page: Page, query: string): Promise<void> {
 }
 
 /**
- * Expands the filter panel if it is collapsed.
+ * Makes the filter groups visible and interactable.
  *
- * The panel starts open where there is a sidebar and closed on a phone, so
- * the toggle's own state decides — clicking blindly would either collapse it
- * or wait for a button that is not there.
+ * On a wide viewport they sit in a persistent sidebar and are already
+ * visible — there is nothing to open. On a narrow viewport they live behind
+ * a "Filters" button that opens a modal sheet, so open that instead.
  */
 export async function openFilters(page: Page): Promise<void> {
-  const toggle = page.getByRole('button', { name: /show filters|hide filters|הצגת מסננים|הסתרת מסננים/i });
-  await expect(toggle).toBeVisible();
-  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  const trigger = page.getByRole('button', { name: /^filters|^מסננים/i });
+  if (await trigger.isVisible().catch(() => false)) {
+    await trigger.click();
+    await expect(page.locator('dialog.sheet')).toBeVisible();
+  } else {
+    await expect(page.locator('.filter-panel-desktop')).toBeVisible();
+  }
+}
+
+/**
+ * Reveals the account/language/sign-out controls and returns a locator
+ * scoped to whichever copy is currently interactable.
+ *
+ * They render twice — inline on a wide screen, inside a collapsed "user
+ * menu" disclosure on a phone — never both at once. A closed <details> hides
+ * its content from the accessibility tree, so the menu has to be opened
+ * first on a narrow viewport before its controls are reachable at all.
+ */
+export async function openUserActions(page: Page): Promise<Locator> {
+  const inline = page.locator('.header-end');
+  if (await inline.isVisible().catch(() => false)) return inline;
+
+  const menu = page.locator('.user-menu');
+  await menu.locator('summary').click();
+  await expect(menu.locator('.user-menu-panel')).toBeVisible();
+  return menu;
 }
