@@ -6,6 +6,7 @@ import { useAuth } from '../lib/auth.tsx';
 import { ApiError, api, qs } from '../lib/api.ts';
 import type { MedicationDetail } from '../lib/types.ts';
 import { FieldValueView } from '../components/FieldValue.tsx';
+import { SourceSuggestions } from '../components/SourceSuggestions.tsx';
 import { Notice } from '../components/Notice.tsx';
 import { Spinner } from '../components/Spinner.tsx';
 
@@ -24,6 +25,8 @@ export function MedicationPage() {
   const [detail, setDetail] = useState<MedicationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = () => setReloadKey((n) => n + 1);
 
   const wantsDraft = can('catalogue:read_unpublished') && params.get('draft') === '1';
 
@@ -47,7 +50,7 @@ export function MedicationPage() {
       .finally(() => setLoading(false));
 
     return () => controller.abort();
-  }, [slug, locale, wantsDraft, t]);
+  }, [slug, locale, wantsDraft, t, reloadKey]);
 
   if (loading) return <Spinner />;
   if (error) {
@@ -189,6 +192,17 @@ export function MedicationPage() {
           </p>
         )}
       </footer>
+
+      {/* Editorial tooling, below everything a reader needs. */}
+      {can('catalogue:edit_draft') && (
+        <section style={{ marginBlockStart: 32 }}>
+          <SourceSuggestions
+            slug={detail.slug}
+            versionId={detail.versionId}
+            onAttached={reload}
+          />
+        </section>
+      )}
     </article>
   );
 }

@@ -511,10 +511,17 @@ export async function transitionVersion(
 
 // --- Citations --------------------------------------------------------------
 
+export interface CitationProvenance {
+  /** Which external lookup the reviewer accepted this from, if any. */
+  sourceProvider?: string | null;
+  externalId?: string | null;
+}
+
 export async function addCitation(
   versionId: string,
   citation: Omit<Citation, 'id'>,
   actor: Actor,
+  provenance: CitationProvenance = {},
 ): Promise<Citation> {
   const version = await getVersion(versionId);
   if (!version) throw notFound('version_not_found', 'No such version.');
@@ -523,12 +530,14 @@ export async function addCitation(
   }
   const { rows } = await query<{ id: string }>(
     `INSERT INTO citations (version_id, field_key, title, document_ref, url, page,
-                            jurisdiction, approval_status, reviewed_at, reviewed_by, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10) RETURNING id`,
+                            jurisdiction, approval_status, reviewed_at, reviewed_by, created_by,
+                            source_provider, external_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10,$11,$12) RETURNING id`,
     [
       versionId, citation.fieldKey, citation.title, citation.documentRef ?? null,
       citation.url ?? null, citation.page ?? null, citation.jurisdiction ?? null,
       citation.approvalStatus, citation.reviewedAt ?? null, actor.id,
+      provenance.sourceProvider ?? null, provenance.externalId ?? null,
     ],
   );
   return { ...citation, id: rows[0].id };

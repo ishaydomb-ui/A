@@ -128,6 +128,24 @@ const EN = {
   unvalidatedRecordDetail:
     'This record was published for evaluation before clinical review was complete. It has not been checked against an authoritative source. Do not use it for clinical decisions.',
   outstandingChecks: 'Outstanding checks',
+  sourceLookupHeading: 'Find a source',
+  sourceLookupIntro:
+    'Where this medication is documented in external registries. Nothing is attached until you read the document and confirm it.',
+  sourceLookupNone: 'No documents found for this medication.',
+  sourceLookupUnavailable: (provider: string) => `${provider} could not be checked.`,
+  sourceLookupOpen: 'Read it',
+  sourceLookupUse: 'Use this',
+  sourceLookupAttach: 'Attach as a source',
+  sourceLookupField: 'Which claim does it support?',
+  sourceLookupSection: 'Section or page',
+  sourceLookupSectionHint: 'Where in the document the claim appears, for example 4.2.',
+  sourceLookupJurisdictionHint: 'The jurisdiction you are claiming this for — not the document\u2019s.',
+  sourceLookupStatusHint:
+    'Whether the use is approved in that jurisdiction. The document cannot answer this for you.',
+  sourceLookupJurisdictionWarning: (jurisdiction: string) =>
+    `This document governs ${jurisdiction}. It is evidence about the medicine, not about what is approved elsewhere. Confirm the status for your own jurisdiction before attaching it.`,
+  sourceLookupConfirm: 'Attach source',
+  sourceLookupResponsibility: 'This citation will be recorded against your account.',
   privacyPolicy: 'Privacy Policy',
   terms: 'Terms of Use',
   contact: 'Contact',
@@ -259,6 +277,24 @@ const HE = {
   unvalidatedRecordDetail:
     'רשומה זו פורסמה לצורכי הערכה לפני השלמת הבדיקה הקלינית. היא לא הושוותה למקור מוסמך. אין להסתמך עליה לקבלת החלטות קליניות.',
   outstandingChecks: 'בדיקות שטרם הושלמו',
+  sourceLookupHeading: 'איתור מקור',
+  sourceLookupIntro:
+    'היכן התרופה מתועדת במאגרים חיצוניים. שום דבר לא מצורף עד שתקרא את המסמך ותאשר.',
+  sourceLookupNone: 'לא נמצאו מסמכים עבור תרופה זו.',
+  sourceLookupUnavailable: (provider: string) => `לא ניתן היה לבדוק את ${provider}.`,
+  sourceLookupOpen: 'קריאה',
+  sourceLookupUse: 'בחירה',
+  sourceLookupAttach: 'צירוף כמקור',
+  sourceLookupField: 'לאיזו טענה המקור מתייחס?',
+  sourceLookupSection: 'סעיף או עמוד',
+  sourceLookupSectionHint: 'היכן במסמך מופיעה הטענה, למשל 4.2.',
+  sourceLookupJurisdictionHint: 'תחום השיפוט שעבורו אתה טוען זאת — לא זה של המסמך.',
+  sourceLookupStatusHint:
+    'האם השימוש מאושר באותו תחום שיפוט. המסמך אינו יכול לענות על כך עבורך.',
+  sourceLookupJurisdictionWarning: (jurisdiction: string) =>
+    `מסמך זה חל על ${jurisdiction}. הוא ראיה על התרופה, לא על מה שמאושר במקום אחר. ודא את הסטטוס בתחום השיפוט שלך לפני הצירוף.`,
+  sourceLookupConfirm: 'צירוף המקור',
+  sourceLookupResponsibility: 'הציטוט יירשם על שמך.',
   privacyPolicy: 'מדיניות פרטיות',
   terms: 'תנאי שימוש',
   contact: 'יצירת קשר',

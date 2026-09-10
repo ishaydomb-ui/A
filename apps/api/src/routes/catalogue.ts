@@ -10,6 +10,7 @@ import { assertCapability } from '../plugins/auth.js';
 import { audit, auditContext } from '../services/audit.js';
 import * as catalogue from '../services/catalogue.js';
 import * as limits from '../services/rateLimit.js';
+import { listProviders, lookupSources } from '../services/sources/index.js';
 
 const fieldValueSchema = z.object({
   state: z.enum(VALUE_STATES as unknown as [string, ...string[]]),
@@ -38,6 +39,10 @@ const citationSchema = z.object({
   jurisdiction: z.string().max(50).nullable().optional(),
   approvalStatus: z.enum(APPROVAL_STATUSES as unknown as [string, ...string[]]),
   reviewedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  // Set when the reviewer accepted an external suggestion rather than typing
+  // the citation themselves.
+  sourceProvider: z.string().max(50).nullable().optional(),
+  externalId: z.string().max(200).nullable().optional(),
 });
 
 function actorOf(req: { currentUser?: { id: string; email: string; role: never } }) {
@@ -255,7 +260,10 @@ export default async function catalogueRoutes(app: FastifyInstance): Promise<voi
   app.post('/versions/:versionId/citations', { onRequest: [editDraft] }, async (req) => {
     const { versionId } = z.object({ versionId: z.string().uuid() }).parse(req.params);
     const body = citationSchema.parse(req.body);
-    const citation = await catalogue.addCitation(versionId, body as never, actorOf(req as never));
+    const citation = await catalogue.addCitation(
+      versionId, body as never, actorOf(req as never),
+      { sourceProvider: body.sourceProvider, externalId: body.externalId },
+    );
     await audit({
       ...auditContext(req), action: 'catalogue.citation_added',
       entityType: 'medication_version', entityId: versionId,
@@ -275,6 +283,32 @@ export default async function catalogueRoutes(app: FastifyInstance): Promise<voi
       detail: { citationId: params.citationId },
     });
     return { status: 'ok' };
+  });
+
+  /**
+   * Where a claim about this medication might be documented.
+   *
+   * Suggestions only: nothing is attached, no field is filled in, and no
+   * approval status is decided. A reviewer reads the document and accepts it,
+   * or does not.
+   */
+  app.get('/:slug/source-suggestions', { onRequest: [editDraft] }, async (req) => {
+    const { slug } = z.object({ slug: z.string().min(1).max(200) }).parse(req.params);
+    const q = z.object({ limit: z.coerce.number().int().min(1).max(25).default(8) }).parse(req.query);
+    await limits.enforce('sourceLookup', req.currentUser!.id);
+
+    const version =
+      (await catalogue.getWorkingBySlug(slug)) ?? (await catalogue.getPublishedBySlug(slug));
+    if (!version) throw notFound('medication_not_found', 'No such medication.');
+
+    const nameField = version.data['generic_name'];
+    const genericName = nameField?.en?.text ?? nameField?.he?.text ?? '';
+    if (!genericName) {
+      return { genericName: null, providers: listProviders(), suggestions: [], unavailable: [] };
+    }
+
+    const result = await lookupSources(genericName, { limit: q.limit });
+    return { genericName, providers: listProviders(), ...result };
   });
 
   /** Aliases feed the search index; they are metadata, not clinical claims. */

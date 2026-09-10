@@ -11,3 +11,6 @@ process.env.LOG_LEVEL = 'silent';
 process.env.IMPORT_STORAGE_DIR ??= './var/test-imports';
 // Keep Argon2 at production strength but allow generous timeouts.
 process.env.LOGIN_MAX_ATTEMPTS ??= '8';
+// Source lookup is opt-in. The suite installs a stand-in provider and never
+// reaches the network; the off-by-default behaviour has its own test.
+process.env.SOURCE_LOOKUP_ENABLED ??= 'true';

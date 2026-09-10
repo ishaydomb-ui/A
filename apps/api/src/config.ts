@@ -71,6 +71,15 @@ const schema = z.object({
    * class of "it starts but every request fails" confusion.
    */
   RUN_MIGRATIONS_ON_START: booleanish.default(false),
+
+  /**
+   * Looking up where a clinical claim is documented, in external registries.
+   * Off by default: it makes outbound requests, which a deployment should opt
+   * into rather than discover.
+   */
+  SOURCE_LOOKUP_ENABLED: booleanish.default(false),
+  SOURCE_LOOKUP_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
+  DAILYMED_BASE_URL: z.string().default('https://dailymed.nlm.nih.gov/dailymed'),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -156,6 +165,12 @@ export const config = {
   logLevel: env.LOG_LEVEL,
   trustProxy: env.TRUST_PROXY,
   runMigrationsOnStart: env.RUN_MIGRATIONS_ON_START,
+
+  sources: {
+    enabled: env.SOURCE_LOOKUP_ENABLED,
+    timeoutMs: env.SOURCE_LOOKUP_TIMEOUT_MS,
+    dailymedBaseUrl: env.DAILYMED_BASE_URL,
+  },
   /** True when the app is served only on this machine, without TLS. */
   loopbackOnly,
 } as const;

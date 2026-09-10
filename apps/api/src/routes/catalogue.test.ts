@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { query } from '../db/pool.js';
 import {
@@ -353,6 +353,163 @@ describe('editing published content', () => {
       method: 'GET', url: `/api/medications/${version.slug}`, headers: { cookie: physicianCookie },
     });
     expect(live.json().versionId).toBe(v2);
+  });
+});
+
+describe('source suggestions', () => {
+  /** A provider that answers instantly, so no test touches the network. */
+  const fakeProvider = {
+    name: 'testsource',
+    label: 'Test registry',
+    describes: 'A stand-in for an external registry.',
+    jurisdiction: 'US',
+    async search(genericName: string) {
+      if (!/sertraline/i.test(genericName)) return [];
+      return [
+        {
+          provider: 'testsource',
+          externalId: 'abc-123',
+          title: 'SERTRALINE HYDROCHLORIDE',
+          url: 'https://example.org/label/abc-123',
+          description: 'tablet — Example Labs',
+          publishedAt: 'Mar 14, 2024',
+          jurisdiction: 'US',
+        },
+      ];
+    },
+  };
+
+  let restore: () => void;
+
+  beforeEach(async () => {
+    const sources = await import('../services/sources/index.js');
+    restore = sources.__setProvidersForTests([fakeProvider as never]);
+  });
+  afterEach(() => restore?.());
+
+  it('suggests where a claim might be documented', async () => {
+    const version = await createDraft();
+    const res = await app.inject({
+      method: 'GET', url: `/api/medications/${version.slug}/source-suggestions`,
+      headers: { cookie: editorCookie },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().genericName).toBe('Sertraline');
+    expect(res.json().suggestions[0]).toMatchObject({
+      provider: 'testsource',
+      externalId: 'abc-123',
+      jurisdiction: 'US',
+    });
+  });
+
+  it('attaches nothing on its own', async () => {
+    const version = await createDraft();
+    await app.inject({
+      method: 'GET', url: `/api/medications/${version.slug}/source-suggestions`,
+      headers: { cookie: editorCookie },
+    });
+
+    // Looking is not accepting: the record must be untouched.
+    const detail = await app.inject({
+      method: 'GET', url: `/api/medications/${version.slug}?draft=true`,
+      headers: { cookie: editorCookie },
+    });
+    expect(detail.json().citations).toEqual([]);
+  });
+
+  it('records which lookup a reviewer accepted', async () => {
+    const version = await createDraft();
+    const added = await app.inject({
+      method: 'POST', url: `/api/medications/versions/${version.id}/citations`,
+      headers: { cookie: editorCookie },
+      payload: {
+        fieldKey: 'maximum_dose',
+        title: 'SERTRALINE HYDROCHLORIDE',
+        url: 'https://example.org/label/abc-123',
+        jurisdiction: 'IL',
+        approvalStatus: 'unknown',
+        sourceProvider: 'testsource',
+        externalId: 'abc-123',
+      },
+    });
+    expect(added.statusCode).toBe(200);
+
+    const { rows } = await query<{ source_provider: string; external_id: string }>(
+      'SELECT source_provider, external_id FROM citations WHERE version_id = $1',
+      [version.id],
+    );
+    expect(rows[0]).toEqual({ source_provider: 'testsource', external_id: 'abc-123' });
+  });
+
+  it('never decides the approval status for the reviewer', async () => {
+    const version = await createDraft();
+    const res = await app.inject({
+      method: 'GET', url: `/api/medications/${version.slug}/source-suggestions`,
+      headers: { cookie: editorCookie },
+    });
+    // A suggestion carries the jurisdiction its document governs, and nothing
+    // resembling a decision about the catalogue's own jurisdiction.
+    const suggestion = res.json().suggestions[0];
+    expect(suggestion).not.toHaveProperty('approvalStatus');
+    expect(suggestion.jurisdiction).toBe('US');
+  });
+
+  it('returns nothing rather than a guess for an unknown medication', async () => {
+    const version = await createDraft(medication({ generic_name: 'Notadrug' }));
+    const res = await app.inject({
+      method: 'GET', url: `/api/medications/${version.slug}/source-suggestions`,
+      headers: { cookie: editorCookie },
+    });
+    expect(res.json().suggestions).toEqual([]);
+  });
+
+  it('reports a provider it could not reach instead of claiming there are none', async () => {
+    const failing = {
+      ...fakeProvider,
+      async search() {
+        const { SourceLookupError } = await import('../services/sources/types.js');
+        throw new SourceLookupError('testsource', 'Could not reach the registry.');
+      },
+    };
+    const sources = await import('../services/sources/index.js');
+    restore();
+    restore = sources.__setProvidersForTests([failing as never]);
+
+    const version = await createDraft();
+    const res = await app.inject({
+      method: 'GET', url: `/api/medications/${version.slug}/source-suggestions`,
+      headers: { cookie: editorCookie },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().suggestions).toEqual([]);
+    expect(res.json().unavailable[0]).toMatchObject({ provider: 'testsource' });
+  });
+
+  it('does nothing at all when the deployment has not opted in', async () => {
+    // Outbound requests should be a decision, not a surprise.
+    const { config } = await import('../config.js');
+    const original = config.sources.enabled;
+    (config.sources as { enabled: boolean }).enabled = false;
+    try {
+      const version = await createDraft();
+      const res = await app.inject({
+        method: 'GET', url: `/api/medications/${version.slug}/source-suggestions`,
+        headers: { cookie: editorCookie },
+      });
+      expect(res.json().suggestions).toEqual([]);
+      expect(res.json().unavailable[0].reason).toMatch(/switched off/i);
+    } finally {
+      (config.sources as { enabled: boolean }).enabled = original;
+    }
+  });
+
+  it('is not available to a physician', async () => {
+    const version = await createDraft();
+    const res = await app.inject({
+      method: 'GET', url: `/api/medications/${version.slug}/source-suggestions`,
+      headers: { cookie: physicianCookie },
+    });
+    expect(res.statusCode).toBe(403);
   });
 });
 

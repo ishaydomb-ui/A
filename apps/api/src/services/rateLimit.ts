@@ -27,6 +27,8 @@ export const LIMITS = {
   inviteAccept: { windowMs: 60 * 60_000, max: 20 },
   search: { windowMs: 60_000, max: config.rateLimits.searchPerMinute },
   import: { windowMs: 60 * 60_000, max: 20 },
+  // Outbound lookups hit someone else's public service; be a good citizen.
+  sourceLookup: { windowMs: 60_000, max: 30 },
   mutation: { windowMs: 60_000, max: 60 },
 } satisfies Record<string, LimitRule>;
 

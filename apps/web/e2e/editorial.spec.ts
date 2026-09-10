@@ -184,3 +184,32 @@ test.describe('editorial detail on a record', () => {
     }
   });
 });
+
+test.describe('finding a source', () => {
+  test.use({ storageState: STATE_FILES.editor });
+
+  test('is offered to an editor on a record', async ({ page }) => {
+    await page.goto('/medications/sertraline?draft=1');
+    await expect(page.getByRole('heading', { name: /find a source/i })).toBeVisible();
+    await expect(page.getByText(/nothing is attached until you read the document/i)).toBeVisible();
+  });
+
+  test('says plainly when a registry could not be checked', async ({ page }) => {
+    // Source lookup is off by default in the end-to-end stack, so this is the
+    // path a deployment that has not opted in actually takes.
+    await page.goto('/medications/sertraline?draft=1');
+    const section = page.getByRole('region', { name: /find a source/i });
+    await expect(
+      section.getByText(/could not be checked|no documents found/i).first(),
+    ).toBeVisible();
+  });
+});
+
+test.describe('finding a source — physician', () => {
+  test.use({ storageState: STATE_FILES.physician });
+
+  test('is not offered to a physician', async ({ page }) => {
+    await page.goto('/medications/sertraline');
+    await expect(page.getByRole('heading', { name: /find a source/i })).toHaveCount(0);
+  });
+});
