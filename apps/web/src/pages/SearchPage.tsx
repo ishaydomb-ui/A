@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useI18n } from '../i18n.ts';
 import { useAuth } from '../lib/auth.tsx';
+import { useCompareSelection } from '../lib/compareSelection.ts';
 import { useMediaQuery } from '../lib/useMediaQuery.ts';
 import { ApiError, api, qs } from '../lib/api.ts';
 import type { Facets, SearchResponse } from '../lib/types.ts';
 import { SearchBar } from '../components/SearchBar.tsx';
 import { FilterPanel, EMPTY_FILTERS, type FilterKey, type FilterState } from '../components/FilterPanel.tsx';
 import { ResultList, ResultListSkeleton } from '../components/ResultList.tsx';
-import { CompareTray } from '../components/CompareTray.tsx';
 import { Notice } from '../components/Notice.tsx';
 import { Spinner } from '../components/Spinner.tsx';
 
@@ -39,7 +39,7 @@ export function SearchPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [limit, setLimit] = useState(PAGE_SIZE);
-  const [selected, setSelected] = useState<string[]>([]);
+  const { selected, toggle: toggleCompare } = useCompareSelection();
 
   const canSeeDrafts = can('catalogue:read_unpublished');
   const includeUnpublished = canSeeDrafts && params.get('drafts') === '1';
@@ -113,16 +113,6 @@ export function SearchPage() {
     [filters, applyFilters],
   );
 
-  const toggleCompare = useCallback((slug: string) => {
-    setSelected((current) =>
-      current.includes(slug)
-        ? current.filter((s) => s !== slug)
-        : current.length >= (results?.maxCompare ?? 3)
-          ? current
-          : [...current, slug],
-    );
-  }, [results?.maxCompare]);
-
   const hits = results?.hits ?? [];
   const maxCompare = results?.maxCompare ?? 3;
 
@@ -136,7 +126,7 @@ export function SearchPage() {
 
   return (
     <>
-      <h1>{t.navSearch}</h1>
+      <h1>{t.navCatalogue}</h1>
 
       <SearchBar
         value={draft}
@@ -244,13 +234,6 @@ export function SearchPage() {
           )}
         </div>
       </div>
-
-      <CompareTray
-        selected={selected}
-        onRemove={(slug) => setSelected((s) => s.filter((x) => x !== slug))}
-        onClear={() => setSelected([])}
-        maxCompare={maxCompare}
-      />
     </>
   );
 }

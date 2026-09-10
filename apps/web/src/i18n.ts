@@ -23,7 +23,10 @@ const EN = {
   switchToLight: 'Light',
 
   // Navigation
-  navSearch: 'Catalogue',
+  navExplore: 'Explore',
+  navCatalogue: 'Catalogue',
+  navSaved: 'Saved',
+  navAdministration: 'Administration',
   navReview: 'Review',
   navImports: 'Imports',
   navUsers: 'Users',
@@ -31,6 +34,19 @@ const EN = {
   navSignOut: 'Sign out',
   navAccount: 'Account',
   mainNavigation: 'Main navigation',
+
+  // Explore (home)
+  exploreEyebrow: 'Medication reference',
+  exploreQuestion: 'What are you looking for?',
+  exploreByArea: 'Explore by clinical area',
+  viewAll: 'View all',
+  recentlyViewed: 'Recently viewed',
+  suggestedSearches: 'Try',
+  browseAll: 'Browse the full catalogue',
+  bookmarkAdd: 'Save',
+  bookmarkRemove: 'Remove from saved',
+  savedEmpty: 'Nothing saved yet.',
+  savedEmptyHint: 'Save a medication from its page to find it here quickly.',
 
   // Auth
   signIn: 'Sign in',
@@ -187,7 +203,10 @@ const HE = {
   switchToDark: 'כהה',
   switchToLight: 'בהיר',
 
-  navSearch: 'קטלוג',
+  navExplore: 'עיון',
+  navCatalogue: 'קטלוג',
+  navSaved: 'שמורים',
+  navAdministration: 'ניהול',
   navReview: 'בדיקה',
   navImports: 'ייבוא',
   navUsers: 'משתמשים',
@@ -195,6 +214,18 @@ const HE = {
   navSignOut: 'התנתקות',
   navAccount: 'החשבון שלי',
   mainNavigation: 'ניווט ראשי',
+
+  exploreEyebrow: 'מדריך תרופות',
+  exploreQuestion: 'מה מחפשים?',
+  exploreByArea: 'עיון לפי תחום קליני',
+  viewAll: 'הצג הכול',
+  recentlyViewed: 'נצפו לאחרונה',
+  suggestedSearches: 'נסו',
+  browseAll: 'עיון בקטלוג המלא',
+  bookmarkAdd: 'שמירה',
+  bookmarkRemove: 'הסרה מהשמורים',
+  savedEmpty: 'עדיין לא שמרת דבר.',
+  savedEmptyHint: 'שמרו תרופה מתוך העמוד שלה כדי למצוא אותה כאן במהירות.',
 
   signIn: 'כניסה',
   signInHeading: 'כניסה לקטלוג',

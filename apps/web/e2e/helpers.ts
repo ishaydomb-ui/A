@@ -56,9 +56,13 @@ export async function signIn(
   if (waitForShell) await expectSignedIn(page);
 }
 
-/** The sign-out control exists only once a session is established. */
+/**
+ * The user-menu avatar exists only once a session is established. Sign out
+ * itself lives inside that menu now, so it isn't visible without opening it
+ * first — the avatar is the stable, always-visible signal instead.
+ */
 export async function expectSignedIn(page: Page): Promise<void> {
-  await expect(page.getByRole('button', { name: /sign out|התנתקות/i })).toBeVisible();
+  await expect(page.locator('.user-menu summary')).toBeVisible();
 }
 
 /** Signs in as an administrator, completing the mandatory MFA enrolment. */
@@ -122,20 +126,31 @@ export async function openFilters(page: Page): Promise<void> {
 }
 
 /**
- * Reveals the account/language/sign-out controls and returns a locator
- * scoped to whichever copy is currently interactable.
- *
- * They render twice — inline on a wide screen, inside a collapsed "user
- * menu" disclosure on a phone — never both at once. A closed <details> hides
- * its content from the accessibility tree, so the menu has to be opened
- * first on a narrow viewport before its controls are reachable at all.
+ * Opens the user menu (administration, language, theme, account, sign out)
+ * and returns a locator scoped to its panel. A closed <details> hides its
+ * content from the accessibility tree, so the panel has to be opened before
+ * anything inside it is reachable — at any viewport, since it is the only
+ * way to reach these controls regardless of width.
  */
 export async function openUserActions(page: Page): Promise<Locator> {
-  const inline = page.locator('.header-end');
-  if (await inline.isVisible().catch(() => false)) return inline;
-
   const menu = page.locator('.user-menu');
   await menu.locator('summary').click();
   await expect(menu.locator('.user-menu-panel')).toBeVisible();
   return menu;
+}
+
+/**
+ * Opens the comparison for whatever is currently selected.
+ *
+ * On a wide viewport that is the floating compare tray's own "Compare
+ * selected" button; on a phone the tray is hidden in favour of the bottom
+ * nav's Compare tab, which carries the same selection in its own link.
+ */
+export async function openCompare(page: Page): Promise<void> {
+  const trayButton = page.getByRole('button', { name: /compare selected/i });
+  if (await trayButton.isVisible().catch(() => false)) {
+    await trayButton.click();
+  } else {
+    await page.locator('.bottom-nav-item', { hasText: /compare|השוואה/i }).click();
+  }
 }

@@ -31,7 +31,7 @@ export function RequireCapability({
           <p>{t.errorForbidden}</p>
         </Notice>
         <Link to="/" className="btn btn-secondary">
-          {t.navSearch}
+          {t.navExplore}
         </Link>
       </>
     );

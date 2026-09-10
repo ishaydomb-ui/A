@@ -1,19 +1,20 @@
 import { useNavigate } from 'react-router-dom';
+import { MAX_COMPARE } from '@med/shared';
 import { useI18n } from '../i18n.ts';
+import { useCompareSelection } from '../lib/compareSelection.ts';
 
-export function CompareTray({
-  selected,
-  onRemove,
-  onClear,
-  maxCompare,
-}: {
-  selected: string[];
-  onRemove(slug: string): void;
-  onClear(): void;
-  maxCompare: number;
-}) {
+/**
+ * Rendered once, globally (see Layout), so a selection made on the catalogue
+ * stays visible while browsing Explore or a medication's own page. Hidden on
+ * a phone below the BottomNav breakpoint — there, the bottom nav's own
+ * Compare tab and its badge are the equivalent affordance; showing both
+ * would just stack two bars.
+ */
+export function CompareTray() {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const { selected, remove: onRemove, clear: onClear } = useCompareSelection();
+  const maxCompare = MAX_COMPARE;
 
   if (selected.length === 0) return null;
 

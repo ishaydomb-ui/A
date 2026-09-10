@@ -1,13 +1,11 @@
 import { expect, test } from '@playwright/test';
-import { STATE_FILES, uniqueEmail } from './helpers.ts';
+import { STATE_FILES, expectSignedIn, uniqueEmail } from './helpers.ts';
 
 test.describe('review report — editor', () => {
   test.use({ storageState: STATE_FILES.editor });
 
   test('an editor sees the findings the import refused to fix', async ({ page }) => {
-    await page.goto('/');
-    await page.getByRole('link', { name: /review/i }).click();
-    await expect(page).toHaveURL(/\/review/);
+    await page.goto('/review');
     await expect(page.getByRole('heading', { name: /data quality findings/i })).toBeVisible();
     await expect(page.getByText(/nothing listed here has been corrected automatically/i)).toBeVisible();
     await expect(page.getByText(/Probable label inversion/).first()).toBeVisible();
@@ -51,8 +49,7 @@ test.describe('imports — editor', () => {
   test.use({ storageState: STATE_FILES.editor });
 
   test('the import screen states that uploading changes nothing live', async ({ page }) => {
-    await page.goto('/');
-    await page.getByRole('link', { name: /imports/i }).click();
+    await page.goto('/imports');
     await expect(page.getByText(/does not change the live catalogue/i)).toBeVisible();
     await expect(page.getByText(/committed as drafts/i)).toBeVisible();
   });
@@ -88,8 +85,7 @@ test.describe('user administration', () => {
   test.use({ storageState: STATE_FILES.admin });
 
   test('an administrator can invite a clinician and gets a single-use link', async ({ page }) => {
-    await page.goto('/');
-    await page.getByRole('link', { name: /users/i }).click();
+    await page.goto('/users');
 
     const invitee = uniqueEmail('new-doctor');
     // The name has to be unique too: every project runs against the same
@@ -143,7 +139,7 @@ test.describe('user administration', () => {
     await page.getByLabel('Confirm new password', { exact: true }).fill('a-fresh-strong-passphrase-9');
     await page.getByRole('button', { name: /set password/i }).click();
 
-    await expect(page.getByRole('heading', { level: 1, name: /catalogue/i })).toBeVisible();
+    await expectSignedIn(page);
   });
 
   test('an invitation link cannot be reused', async ({ page, context }) => {
@@ -161,7 +157,7 @@ test.describe('user administration', () => {
     await page.getByLabel('New password', { exact: true }).fill('another-strong-passphrase-7');
     await page.getByLabel('Confirm new password', { exact: true }).fill('another-strong-passphrase-7');
     await page.getByRole('button', { name: /set password/i }).click();
-    await expect(page.getByRole('heading', { level: 1, name: /catalogue/i })).toBeVisible();
+    await expectSignedIn(page);
 
     await context.clearCookies();
     await page.goto(url.pathname + url.search);

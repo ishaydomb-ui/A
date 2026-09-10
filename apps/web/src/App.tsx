@@ -5,6 +5,8 @@ import { I18nContext, STRINGS, readStoredLocale, storeLocale } from './i18n.ts';
 import { AuthProvider, useAuth } from './lib/auth.tsx';
 import { ThemeContext, readStoredTheme, storeTheme, type Theme } from './lib/theme.ts';
 import { Layout } from './components/Layout.tsx';
+import { CompareSelectionProvider } from './components/CompareSelectionProvider.tsx';
+import { SavedProvider } from './components/SavedProvider.tsx';
 import { RequireAuth } from './components/RequireAuth.tsx';
 import { RequireCapability } from './components/RequireCapability.tsx';
 import { Spinner } from './components/Spinner.tsx';
@@ -12,7 +14,9 @@ import { SignInPage } from './pages/SignInPage.tsx';
 import { AcceptInvitationPage } from './pages/AcceptInvitationPage.tsx';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage.tsx';
 import { ResetPasswordPage } from './pages/ResetPasswordPage.tsx';
+import { ExplorePage } from './pages/ExplorePage.tsx';
 import { SearchPage } from './pages/SearchPage.tsx';
+import { SavedPage } from './pages/SavedPage.tsx';
 import { MedicationPage } from './pages/MedicationPage.tsx';
 import { ComparePage } from './pages/ComparePage.tsx';
 import { ReviewPage } from './pages/ReviewPage.tsx';
@@ -62,7 +66,11 @@ export function App() {
     <I18nContext.Provider value={i18n}>
       <ThemeContext.Provider value={themeValue}>
         <AuthProvider>
-          <AppRoutes />
+          <CompareSelectionProvider>
+            <SavedProvider>
+              <AppRoutes />
+            </SavedProvider>
+          </CompareSelectionProvider>
         </AuthProvider>
       </ThemeContext.Provider>
     </I18nContext.Provider>
@@ -98,7 +106,9 @@ function AppRoutes() {
           </RequireAuth>
         }
       >
-        <Route path="/" element={<SearchPage />} />
+        <Route path="/" element={<ExplorePage />} />
+        <Route path="/catalogue" element={<SearchPage />} />
+        <Route path="/saved" element={<SavedPage />} />
         <Route path="/medications/:slug" element={<MedicationPage />} />
         <Route path="/compare" element={<ComparePage />} />
         <Route

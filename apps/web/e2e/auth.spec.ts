@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ACCOUNTS, PASSWORD, signIn, signInAsAdmin } from './helpers.ts';
+import { ACCOUNTS, PASSWORD, openUserActions, signIn, signInAsAdmin } from './helpers.ts';
 
 test.describe('access control', () => {
   test('the catalogue is behind a login wall', async ({ page }) => {
@@ -37,7 +37,8 @@ test.describe('access control', () => {
 
   test('signing out ends the session', async ({ page }) => {
     await signIn(page, 'physician');
-    await page.getByRole('button', { name: /sign out/i }).click();
+    const menu = await openUserActions(page);
+    await menu.getByRole('button', { name: /sign out/i }).click();
     await expect(page).toHaveURL(/\/sign-in/);
 
     await page.goto('/');
@@ -72,26 +73,35 @@ test.describe('multi-factor authentication', () => {
 
   test('completing enrolment signs the administrator in', async ({ page }) => {
     await signInAsAdmin(page, 'mfaAdmin');
-    await expect(page.getByRole('heading', { level: 1, name: /catalogue/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /users/i })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    const menu = await openUserActions(page);
+    await expect(menu.getByRole('link', { name: /users/i })).toBeVisible();
   });
 });
 
 test.describe('role visibility', () => {
   test('a physician sees no editorial navigation', async ({ page }) => {
     await signIn(page, 'physician');
+    // Explore / Catalogue / Compare / Saved are the same for everyone; the
+    // main nav itself carries no role-specific links any more.
     const nav = page.getByRole('navigation', { name: /main navigation/i });
     await expect(nav.getByRole('link', { name: /users/i })).toHaveCount(0);
     await expect(nav.getByRole('link', { name: /imports/i })).toHaveCount(0);
     await expect(nav.getByRole('link', { name: /review/i })).toHaveCount(0);
+
+    // Nor is there an Administration section to open — a physician has none
+    // of the capabilities that would put one in the user menu.
+    const menu = await openUserActions(page);
+    await expect(menu.getByText(/administration/i)).toHaveCount(0);
+    await expect(menu.getByRole('link', { name: /users/i })).toHaveCount(0);
   });
 
   test('an editor sees review and imports but not users', async ({ page }) => {
     await signIn(page, 'editor');
-    const nav = page.getByRole('navigation', { name: /main navigation/i });
-    await expect(nav.getByRole('link', { name: /review/i })).toBeVisible();
-    await expect(nav.getByRole('link', { name: /imports/i })).toBeVisible();
-    await expect(nav.getByRole('link', { name: /users/i })).toHaveCount(0);
+    const menu = await openUserActions(page);
+    await expect(menu.getByRole('link', { name: /review/i })).toBeVisible();
+    await expect(menu.getByRole('link', { name: /imports/i })).toBeVisible();
+    await expect(menu.getByRole('link', { name: /users/i })).toHaveCount(0);
   });
 
   test('the server refuses a physician who navigates to an admin screen directly', async ({ page }) => {

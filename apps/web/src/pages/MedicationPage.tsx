@@ -4,6 +4,8 @@ import { FIELD_GROUPS, FIELD_GROUP_LABELS, fieldsInGroup } from '@med/shared';
 import { useI18n } from '../i18n.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { ApiError, api, qs } from '../lib/api.ts';
+import { pushRecentlyViewed } from '../lib/recentlyViewed.ts';
+import { useSaved } from '../lib/saved.ts';
 import type { MedicationDetail } from '../lib/types.ts';
 import { FieldValueView } from '../components/FieldValue.tsx';
 import { SourceSuggestions } from '../components/SourceSuggestions.tsx';
@@ -21,6 +23,7 @@ export function MedicationPage() {
   const [params] = useSearchParams();
   const { t, locale } = useI18n();
   const { can } = useAuth();
+  const { isSaved, toggle: toggleSaved } = useSaved();
 
   const [detail, setDetail] = useState<MedicationDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,12 +55,23 @@ export function MedicationPage() {
     return () => controller.abort();
   }, [slug, locale, wantsDraft, t, reloadKey]);
 
+  // A medication reaches this page from Explore, the catalogue, a saved
+  // list or a shared link — recording it here, once, covers all of them.
+  useEffect(() => {
+    if (!detail) return;
+    pushRecentlyViewed({
+      slug: detail.slug,
+      genericName: detail.fields['generic_name']?.value.text ?? detail.slug,
+      tradeNames: detail.fields['trade_names']?.value.text ?? null,
+    });
+  }, [detail]);
+
   if (loading) return <Spinner />;
   if (error) {
     return (
       <>
         <Notice tone="error">{error}</Notice>
-        <Link to="/" className="btn btn-secondary">
+        <Link to="/catalogue" className="btn btn-secondary">
           {t.backToResults}
         </Link>
       </>
@@ -74,7 +88,7 @@ export function MedicationPage() {
   return (
     <article className="reading-width">
       <p>
-        <Link to="/">← {t.backToResults}</Link>
+        <Link to="/catalogue">← {t.backToResults}</Link>
       </p>
 
       <header className="detail-header">
@@ -84,6 +98,30 @@ export function MedicationPage() {
             <span className="badge badge-medium">{detail.state.replace(/_/g, ' ')}</span>
           )}
         </div>
+        <button
+          type="button"
+          className={`btn btn-sm btn-secondary bookmark-toggle${isSaved(detail.slug) ? ' is-saved' : ''}`}
+          aria-pressed={isSaved(detail.slug)}
+          onClick={() =>
+            toggleSaved({
+              slug: detail.slug,
+              genericName: name,
+              tradeNames: detail.fields['trade_names']?.value.text ?? null,
+              therapeuticGroup: detail.fields['therapeutic_group']?.value.text ?? null,
+            })
+          }
+        >
+          <svg viewBox="0 0 16 20" width="14" height="17" aria-hidden="true">
+            <path
+              d="M1.5 1.5h13v17l-6.5-4.5-6.5 4.5v-17Z"
+              fill={isSaved(detail.slug) ? 'currentColor' : 'none'}
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinejoin="round"
+            />
+          </svg>
+          {isSaved(detail.slug) ? t.bookmarkRemove : t.bookmarkAdd}
+        </button>
       </header>
 
       {FIELD_GROUPS.map((group) => {

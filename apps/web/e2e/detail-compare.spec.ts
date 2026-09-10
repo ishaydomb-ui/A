@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test';
-import { STATE_FILES, search } from './helpers.ts';
+import { STATE_FILES, openCompare, search } from './helpers.ts';
 
 test.use({ storageState: STATE_FILES.physician });
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/catalogue');
   await expect(page.locator('.result-row').first()).toBeVisible();
 });
 
@@ -83,7 +83,7 @@ test.describe('comparison', () => {
     await page.locator('.result-row').filter({ hasText: 'Fluoxetine' })
       .getByRole('checkbox').check();
 
-    await page.getByRole('button', { name: /compare selected/i }).click();
+    await openCompare(page);
     await expect(page).toHaveURL(/\/compare/);
 
     const table = page.getByRole('table');
@@ -100,14 +100,17 @@ test.describe('comparison', () => {
       if (await box.isDisabled()) break;
       await box.check();
     }
-    await expect(page.locator('.chip')).toHaveCount(3);
+    // Checked state rather than the (desktop-only) compare tray's chips, so
+    // this holds regardless of viewport.
+    await expect(page.locator('.result-compare input:checked')).toHaveCount(3);
     // Any remaining checkbox is now disabled.
     await expect(rows.nth(3).getByRole('checkbox')).toBeDisabled();
   });
 
   test('needs at least two selections before comparing', async ({ page }) => {
-    await page.locator('.result-row').first().getByRole('checkbox').check();
-    await expect(page.getByRole('button', { name: /compare selected/i })).toBeDisabled();
+    await page.goto('/compare?slugs=sertraline');
+    await expect(page.getByText(/select at least two/i)).toBeVisible();
+    await expect(page.getByRole('table')).toHaveCount(0);
   });
 
   test('shows only clinically comparable fields', async ({ page }) => {

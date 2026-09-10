@@ -7,7 +7,7 @@ export function NotFoundPage() {
     <>
       <h1>{t.errorNotFound}</h1>
       <p>
-        <Link to="/">{t.navSearch}</Link>
+        <Link to="/">{t.navExplore}</Link>
       </p>
     </>
   );

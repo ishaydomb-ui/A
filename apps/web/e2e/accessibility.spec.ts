@@ -34,8 +34,22 @@ test.describe('automated accessibility audit — signed out', () => {
 test.describe('automated accessibility audit — physician', () => {
   test.use({ storageState: STATE_FILES.physician });
 
-  test('search results', async ({ page }) => {
+  test('explore (home)', async ({ page }) => {
     await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    const results = await audit(page);
+    expect(results.violations).toEqual([]);
+  });
+
+  test('saved (empty)', async ({ page }) => {
+    await page.goto('/saved');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    const results = await audit(page);
+    expect(results.violations).toEqual([]);
+  });
+
+  test('search results', async ({ page }) => {
+    await page.goto('/catalogue');
     await expect(page.locator('.result-row').first()).toBeVisible();
     const results = await audit(page);
     expect(results.violations).toEqual([]);
@@ -57,7 +71,7 @@ test.describe('automated accessibility audit — physician', () => {
 
   test('Hebrew search results', async ({ page }) => {
     await setLocale(page, 'he');
-    await page.goto('/');
+    await page.goto('/catalogue');
     await expect(page.locator('.result-row').first()).toBeVisible();
     const results = await audit(page);
     expect(results.violations).toEqual([]);
@@ -79,7 +93,7 @@ test.describe('keyboard operation', () => {
   test.use({ storageState: STATE_FILES.physician });
 
   test('the skip link is the first stop and jumps to the content', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/catalogue');
     await expect(page.locator('.result-row').first()).toBeVisible();
 
     await page.keyboard.press('Tab');
@@ -91,7 +105,7 @@ test.describe('keyboard operation', () => {
   });
 
   test('the search box and results are reachable by keyboard alone', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/catalogue');
     await expect(page.locator('.result-row').first()).toBeVisible();
 
     await page.getByRole('combobox').focus();
@@ -101,7 +115,7 @@ test.describe('keyboard operation', () => {
   });
 
   test('autocomplete is operable with the arrow keys', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/catalogue');
     const box = page.getByRole('combobox');
     await box.focus();
     await page.keyboard.type('sertr');
@@ -114,7 +128,7 @@ test.describe('keyboard operation', () => {
   });
 
   test('Escape closes the suggestion list', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/catalogue');
     const box = page.getByRole('combobox');
     await box.focus();
     await page.keyboard.type('sertr');
@@ -143,13 +157,13 @@ test.describe('screen-reader semantics', () => {
   });
 
   test('the result count is announced in a live region', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/catalogue');
     const status = page.locator('[role="status"][aria-live="polite"]').first();
     await expect(status).toContainText(/medications?/i);
   });
 
   test('each compare control names the medication it belongs to', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/catalogue');
     const first = page.locator('.result-row').first();
     const name = await first.locator('.result-name').innerText();
     const label = await first.getByRole('checkbox').getAttribute('aria-label')
@@ -169,7 +183,7 @@ test.describe('mobile layout', () => {
 
   test('the page does not scroll sideways at phone width', async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 740 });
-    await page.goto('/');
+    await page.goto('/catalogue');
     await expect(page.locator('.result-row').first()).toBeVisible();
 
     const overflow = await page.evaluate(
@@ -191,7 +205,7 @@ test.describe('mobile layout', () => {
 
   test('touch targets are at least 44px', async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 740 });
-    await page.goto('/');
+    await page.goto('/catalogue');
     await expect(page.locator('.result-row').first()).toBeVisible();
 
     const small = await page.evaluate(() => {

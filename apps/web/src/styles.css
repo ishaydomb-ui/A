@@ -13,36 +13,44 @@
      stays light, per the forced-light default below. */
   color-scheme: light;
 
-  --bg:            #ffffff;
-  --bg-subtle:     #f4f6f8;
+  --bg:            #fcfbfe;
+  --bg-subtle:     #f8f6fb;
   --bg-raised:     #ffffff;
-  --bg-hover:      #eceff3;
-  --border:        #c9d1d9;
-  --border-strong: #8b949e;
+  --bg-hover:      #efeaf5;
+  --border:        #dddce5;
+  --border-strong: #948fab;
 
-  --text:          #14181d;  /* 16.1:1 on --bg */
-  --text-muted:    #55606d;  /* 6.4:1  on --bg */
-  --text-faint:    #6b7684;  /* 4.6:1  on --bg */
+  --text:          #26313a;  /* 12.9:1 on --bg */
+  --text-muted:    #68737d;  /* 4.7:1  on --bg */
+  --text-faint:    #656f79;  /* 5.0:1 on --bg */
 
-  --accent:        #0b5fa5;  /* 6.5:1 on --bg */
-  --accent-hover:  #084b83;
+  --accent:        #6a5e92;  /* 5.6:1 on --bg, 4.9:1 on --accent-subtle — muted lilac, the one true action colour */
+  --accent-hover:  #5c5180;
   --accent-text:   #ffffff;
-  --accent-subtle: #e8f1fa;
+  --accent-subtle: #eeeaf7;
 
   /* A second, gentler accent used only for classification (drug class) and
      the faint header wash — never for anything that must read as an action
      or a warning, so it stays purely decorative. */
-  --accent-2:        #9a4a61;  /* 6.0:1 on --bg */
-  --accent-2-hover:  #7e3c50;
+  --accent-2:        #456579;  /* blue-grey; 6.0:1 on --bg, 5.4:1 on --accent-2-subtle */
+  --accent-2-hover:  #3a5566;
   --accent-2-text:   #ffffff;
-  --accent-2-subtle: #fbeef1;
+  --accent-2-subtle: #e7f2f8;
+
+  /* The same three soft surfaces as tinted tiles rather than washes — used
+     for the clinical-area cards on the Explore page and similar grouped
+     surfaces, cycled rather than tied to any specific clinical meaning. */
+  --surface-lilac: #eeeaf7;
+  --surface-pink:  #f5e7ee;
+  --surface-blue:  #e7f2f8;
+
   /* Pre-blended, fully opaque — the header is `position: sticky`, and a
      translucent background there lets scrolled content show through and
      collide with the header's own text. These are the same two hues at the
      same low strength, blended onto --bg-raised ahead of time instead of at
      paint time, so the wash is solid at every pixel. */
-  --header-wash-1: #f0f5fa;
-  --header-wash-2: #f9f4f6;
+  --header-wash-1: #f5f2fa;
+  --header-wash-2: #faf3f7;
 
   --danger:        #a3212b;  /* 6.6:1 on --bg */
   --danger-subtle: #fdeced;
@@ -93,16 +101,17 @@
    phone is in system dark mode. */
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #10141a; --bg-subtle: #171d25; --bg-raised: #1b222b; --bg-hover: #232c37;
-  --border: #333e4b; --border-strong: #566475;
-  --text: #eef2f6; --text-muted: #aeb9c6; --text-faint: #8e9aa8;
-  --accent: #6cb2f5; --accent-hover: #8ac3f8; --accent-text: #08111c; --accent-subtle: #17293c;
-  --accent-2: #eeb0c2; --accent-2-hover: #f4c6d3; --accent-2-text: #2e1620; --accent-2-subtle: #2e1620;
-  --header-wash-1: #212c39; --header-wash-2: #282b34;
+  --bg: #14131b; --bg-subtle: #1b1a24; --bg-raised: #201f2b; --bg-hover: #272534;
+  --border: #3a3747; --border-strong: #65607a;
+  --text: #edebf3; --text-muted: #b4afc4; --text-faint: #948fab;
+  --accent: #b4a7da; --accent-hover: #c6bbe4; --accent-text: #1b1730; --accent-subtle: #2a2740;
+  --accent-2: #8fb7c9; --accent-2-hover: #a7c7d6; --accent-2-text: #0e2530; --accent-2-subtle: #1e2e36;
+  --surface-lilac: #241f35; --surface-pink: #2a2028; --surface-blue: #1b2830;
+  --header-wash-1: #201e2c; --header-wash-2: #241f28;
   --danger: #ff9a9f; --danger-subtle: #341a1d;
   --warning: #f0c07a; --warning-subtle: #33260f;
   --success: #7fd2a4; --success-subtle: #12291e;
-  --mark-bg: #5c4a00; --mark-text: #fff6cf; --focus: #6cb2f5;
+  --mark-bg: #5c4a00; --mark-text: #fff6cf; --focus: #b4a7da;
 }
 
 /* --------------------------------------------------------------------------- */
@@ -221,6 +230,10 @@ mark {
 }
 .brand:hover { color: var(--text); }
 
+/* The four universal destinations (Explore / Catalogue / Compare / Saved).
+   On a narrow screen BottomNav carries the same four instead — there is no
+   room for both a header row and a fixed bottom bar, so this one steps
+   aside rather than duplicating it. */
 .app-nav {
   display: flex;
   gap: var(--space-1);
@@ -245,13 +258,12 @@ mark {
   background: var(--accent-subtle);
   color: var(--accent);
 }
-.header-end { flex: none; display: flex; align-items: center; gap: var(--space-2); }
 
-/* The overflow menu bundling language / account / sign out. Both this and
-   .header-end exist in the DOM at once; only one is ever visible, decided by
-   width alone, so nothing needs a resize listener to stay correct. Hidden
-   with `display`, so the inactive copy is also out of the tab order. */
-.user-menu { display: none; position: relative; flex: none; }
+/* The overflow menu bundling administration, language, theme, account and
+   sign out — everything that isn't one of the four universal destinations.
+   Always present regardless of width; only its own open/closed state (native
+   <details>) decides whether the panel is in the tab order. */
+.user-menu { display: block; position: relative; flex: none; }
 .user-menu summary {
   list-style: none;
   display: inline-flex;
@@ -289,9 +301,24 @@ mark {
   box-shadow: var(--shadow-2);
 }
 .user-menu-panel > * { inline-size: 100%; justify-content: flex-start; }
+.user-menu-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-block: var(--space-1);
+}
+.user-menu-section + .user-menu-section { border-block-start: 1px solid var(--border); padding-block-start: var(--space-2); }
+.user-menu-section-label {
+  margin: 0 0 2px;
+  padding-inline: var(--space-2);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-faint);
+}
+
 @media (max-width: 640px) {
-  .header-end { display: none; }
-  .user-menu { display: block; }
+  .app-nav { display: none; }
 }
 
 .app-main {
@@ -309,6 +336,95 @@ mark {
 .reading-width {
   max-width: var(--content-reading-max);
   margin-inline: auto;
+}
+
+/* ---------------------------------------------------------------------------
+   Explore (home).
+--------------------------------------------------------------------------- */
+.explore-page { max-width: var(--content-reading-max); margin-inline: auto; }
+.explore-eyebrow {
+  margin: 0 0 var(--space-1);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+.explore-question { margin: 0 0 var(--space-4); }
+
+.explore-suggestions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-block-start: var(--space-3);
+}
+.chip-button {
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  color: var(--text);
+  border-radius: 999px;
+  padding: var(--space-1) var(--space-3);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.chip-button:hover { background: var(--bg-hover); }
+
+.area-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+}
+.area-tile {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  text-align: start;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 88px;
+  justify-content: flex-end;
+}
+.area-tile.surface-lilac { background: var(--surface-lilac); }
+.area-tile.surface-pink  { background: var(--surface-pink); }
+.area-tile.surface-blue  { background: var(--surface-blue); }
+.area-tile-name { font-weight: 650; color: var(--text); }
+/* var(--text), not --text-muted: the tinted tile backgrounds are lighter
+   than the page background, and --text-muted doesn't clear AA there. */
+.area-tile-count { font-size: 0.8125rem; color: var(--text); }
+
+.recent-list { list-style: none; margin: 0; padding: 0; }
+.recent-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  color: inherit;
+  text-decoration: none;
+  border-block-end: 1px solid var(--border);
+  min-height: 44px;
+}
+.recent-avatar {
+  flex: none;
+  inline-size: 32px;
+  block-size: 32px;
+  border-radius: var(--radius-s);
+  background: var(--surface-lilac);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 650;
+  font-size: 0.875rem;
+}
+.recent-text { flex: 1; min-inline-size: 0; display: flex; align-items: baseline; gap: var(--space-2); flex-wrap: wrap; }
+.recent-name { font-weight: 600; }
+.recent-trade { color: var(--text-muted); font-size: 0.8125rem; }
+.recent-chevron { color: var(--text-faint); flex: none; }
+
+@media (max-width: 480px) {
+  .area-tile-grid { grid-template-columns: 1fr 1fr; }
 }
 
 .app-footer {
@@ -738,6 +854,19 @@ dialog.sheet::backdrop { background: rgb(8 12 18 / 45%); }
   margin: 0;
   accent-color: var(--accent);
 }
+.result-compare-remove {
+  flex: 0 0 auto;
+  inline-size: 44px;
+  block-size: 44px;
+  border: 0;
+  background: none;
+  border-radius: var(--radius-s);
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.result-compare-remove:hover { background: var(--bg-hover); color: var(--text); }
 
 /* First-load placeholder, shaped like the rows it stands in for so nothing
    shifts once real results arrive. Mirrors .result-row's box model rather
@@ -767,20 +896,88 @@ dialog.sheet::backdrop { background: rgb(8 12 18 / 45%); }
   .skeleton-block { animation: none; background: var(--bg-subtle); }
 }
 
+/* Rendered once at the app root (Layout), not per-page, so a selection made
+   on the catalogue stays visible on Explore, Saved or a medication's own
+   page. Fixed to the viewport rather than sticky, since nothing below it in
+   the document establishes a scroll container to stick within any more. */
 .compare-tray {
-  position: sticky;
+  position: fixed;
+  inset-inline: 0;
   inset-block-end: 0;
   z-index: var(--z-compare-bar);
-  margin-block-start: var(--space-4);
+  max-width: var(--content-max);
+  margin-inline: auto;
   padding: var(--space-3) var(--space-4);
   background: var(--bg-raised);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
+  border-block-end: none;
+  border-start-start-radius: var(--radius);
+  border-start-end-radius: var(--radius);
   box-shadow: var(--shadow-2);
   display: flex;
   align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
+}
+/* Below this width the bottom nav's own Compare tab and badge are the
+   equivalent affordance — showing both would stack two bottom bars. */
+@media (max-width: 640px) {
+  .compare-tray { display: none; }
+}
+
+/* The primary mobile navigation. Hidden above the same breakpoint the
+   header's own .app-nav takes over at, so exactly one of the two exists on
+   screen at a time. */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 0;
+  z-index: var(--z-header);
+  background: var(--bg-raised);
+  border-block-start: 1px solid var(--border);
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  padding-block-end: max(var(--space-1), env(safe-area-inset-bottom));
+}
+@media (max-width: 640px) {
+  .bottom-nav { display: flex; align-items: stretch; }
+  /* Room at the foot of the page so the last row of content is never hidden
+     behind the fixed bar. */
+  .app-main { padding-block-end: calc(64px + var(--space-4)); }
+}
+.bottom-nav-item {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding-block: var(--space-1);
+  min-height: 48px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.6875rem;
+  font-weight: 550;
+  border-radius: var(--radius-s);
+}
+.bottom-nav-item[aria-current='page'] { color: var(--accent); }
+.bottom-nav-item:hover { background: var(--bg-hover); }
+.bottom-nav-icon-wrap { position: relative; display: inline-flex; }
+.bottom-nav-badge {
+  position: absolute;
+  inset-block-start: -4px;
+  inset-inline-end: -8px;
+  min-inline-size: 16px;
+  block-size: 16px;
+  padding-inline: 3px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.625rem;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
 }
 .compare-tray-count { font-weight: 650; font-size: 0.9375rem; }
 .compare-chips { display: flex; gap: var(--space-2); flex-wrap: wrap; flex: 1 1 100%; order: 3; }
@@ -809,8 +1006,17 @@ dialog.sheet::backdrop { background: rgb(8 12 18 / 45%); }
 
 /* --- Detail ---------------------------------------------------------------- */
 
-.detail-header { margin-block-end: var(--space-4); }
+.detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-block-end: var(--space-4);
+}
 .detail-title { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
+.bookmark-toggle { display: inline-flex; align-items: center; gap: var(--space-1); flex: none; }
+.bookmark-toggle.is-saved { color: var(--accent); border-color: var(--accent); }
 .detail-badges { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-block-start: var(--space-2); }
 
 .field-group { margin-block-end: var(--space-5); }
@@ -927,7 +1133,7 @@ dialog {
 dialog::backdrop { background: rgb(8 12 18 / 55%); }
 
 @media print {
-  .app-header, .app-footer, .compare-tray, .filter-panel, .btn { display: none !important; }
+  .app-header, .app-footer, .compare-tray, .bottom-nav, .filter-panel, .btn { display: none !important; }
 }
 
 /* ---------------------------------------------------------------------------
@@ -940,8 +1146,8 @@ dialog::backdrop { background: rgb(8 12 18 / 55%); }
    never disappears entirely.
 --------------------------------------------------------------------------- */
 .evaluation-banner {
-  background: var(--warning-subtle);
-  border-block-end: 1px solid var(--warning);
+  background: var(--surface-pink);
+  border-block-end: 1px solid var(--border);
   color: var(--text);
 }
 .evaluation-banner-inner {

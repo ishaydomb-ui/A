@@ -2,34 +2,66 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useI18n } from '../i18n.ts';
 import { useAuth } from '../lib/auth.tsx';
+import { useCompareSelection } from '../lib/compareSelection.ts';
 import { api } from '../lib/api.ts';
 import type { PublicSettings } from '../lib/types.ts';
+import { BottomNav } from './BottomNav.tsx';
+import { CompareTray } from './CompareTray.tsx';
 import { LanguageToggle } from './LanguageToggle.tsx';
 import { ThemeToggle } from './ThemeToggle.tsx';
 
-/** Account / language / sign-out. Rendered twice — inline on a wide screen,
-    inside the overflow menu on a narrow one — never both at once; see the
-    `.header-end` / `.user-menu` media query in styles.css. */
+/**
+ * Everything that isn't one of the four universal destinations: the
+ * administrative screens (only for a role that has them), language, theme,
+ * account and sign-out. Lives entirely inside the user menu — see Layout —
+ * rather than crowding the top of every screen the way a flat nav bar did.
+ */
 function UserActions({ onNavigate }: { onNavigate?: () => void }) {
-  const { session, signOut } = useAuth();
+  const { session, signOut, can } = useAuth();
   const { t } = useI18n();
+  const hasAdminSection = can('review:read') || can('import:create') || can('users:manage');
+
   return (
     <>
-      <LanguageToggle />
-      <ThemeToggle />
-      <Link to="/account" className="btn btn-sm btn-secondary" onClick={onNavigate}>
-        {session?.user.displayName ?? t.navAccount}
-      </Link>
-      <button type="button" className="btn btn-sm" onClick={() => void signOut()}>
-        {t.navSignOut}
-      </button>
+      {hasAdminSection && (
+        <div className="user-menu-section">
+          <p className="user-menu-section-label">{t.navAdministration}</p>
+          {can('review:read') && (
+            <Link to="/review" className="btn btn-sm btn-secondary" onClick={onNavigate}>
+              {t.navReview}
+            </Link>
+          )}
+          {can('import:create') && (
+            <Link to="/imports" className="btn btn-sm btn-secondary" onClick={onNavigate}>
+              {t.navImports}
+            </Link>
+          )}
+          {can('users:manage') && (
+            <Link to="/users" className="btn btn-sm btn-secondary" onClick={onNavigate}>
+              {t.navUsers}
+            </Link>
+          )}
+        </div>
+      )}
+      <div className="user-menu-section">
+        <LanguageToggle />
+        <ThemeToggle />
+        <Link to="/account" className="btn btn-sm btn-secondary" onClick={onNavigate}>
+          {session?.user.displayName ?? t.navAccount}
+        </Link>
+        <button type="button" className="btn btn-sm" onClick={() => void signOut()}>
+          {t.navSignOut}
+        </button>
+      </div>
     </>
   );
 }
 
 export function Layout() {
   const { t } = useI18n();
-  const { session, can } = useAuth();
+  const { session } = useAuth();
+  const { selected } = useCompareSelection();
+  const compareHref = selected.length > 0 ? `/compare?slugs=${selected.map(encodeURIComponent).join(',')}` : '/compare';
   const location = useLocation();
   const [settings, setSettings] = useState<PublicSettings | null>(null);
   const [noticeOpen, setNoticeOpen] = useState(false);
@@ -89,20 +121,19 @@ export function Layout() {
             {t.appName}
           </Link>
 
+          {/* The four destinations everyone has, regardless of role —
+              visible on a wide screen; BottomNav carries the same four on a
+              phone, where there is no room for a header row of this many. */}
           <nav className="app-nav" aria-label={t.mainNavigation} ref={navRef}>
             <NavLink to="/" end>
-              {t.navSearch}
+              {t.navExplore}
             </NavLink>
-            {can('review:read') && <NavLink to="/review">{t.navReview}</NavLink>}
-            {can('import:create') && <NavLink to="/imports">{t.navImports}</NavLink>}
-            {can('users:manage') && <NavLink to="/users">{t.navUsers}</NavLink>}
+            <NavLink to="/catalogue">{t.navCatalogue}</NavLink>
+            <NavLink to={compareHref}>{t.compare}</NavLink>
+            <NavLink to="/saved">{t.navSaved}</NavLink>
           </nav>
 
-          {/* Visible on a wide screen; the overflow menu below takes over on
-              a phone, where there is no room for three separate controls. */}
-          <div className="header-end">
-            <UserActions />
-          </div>
+          <span className="spacer" />
 
           <details className="user-menu" ref={menuRef}>
             <summary aria-label={`${t.menu} — ${session?.user.displayName ?? t.navAccount}`}>
@@ -177,6 +208,9 @@ export function Layout() {
           )}
         </div>
       </footer>
+
+      <CompareTray />
+      <BottomNav />
     </div>
   );
 }

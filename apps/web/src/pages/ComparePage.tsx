@@ -52,7 +52,7 @@ export function ComparePage() {
       <>
         <h1>{t.compareHeading}</h1>
         <Notice tone="info">{t.compareEmpty}</Notice>
-        <Link to="/" className="btn btn-secondary">
+        <Link to="/catalogue" className="btn btn-secondary">
           {t.backToResults}
         </Link>
       </>
@@ -71,7 +71,7 @@ export function ComparePage() {
   return (
     <>
       <p>
-        <Link to="/">← {t.backToResults}</Link>
+        <Link to="/catalogue">← {t.backToResults}</Link>
       </p>
       <h1>{t.compareHeading}</h1>
 

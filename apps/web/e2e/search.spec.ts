@@ -5,7 +5,7 @@ import { STATE_FILES, openFilters, openUserActions, search, setLocale } from './
 test.use({ storageState: STATE_FILES.physician });
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/catalogue');
   await expect(page.locator('.result-row').first()).toBeVisible();
 });
 
@@ -91,7 +91,7 @@ test.describe('drafts are invisible to physicians', () => {
 test.describe('Hebrew interface', () => {
   test('switches language and direction', async ({ page }) => {
     await setLocale(page, 'he');
-    await page.goto('/');
+    await page.goto('/catalogue');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.locator('html')).toHaveAttribute('lang', 'he');
     await expect(page.getByRole('heading', { level: 1, name: 'קטלוג' })).toBeVisible();
@@ -99,7 +99,7 @@ test.describe('Hebrew interface', () => {
 
   test('finds English-named records while the interface is in Hebrew', async ({ page }) => {
     await setLocale(page, 'he');
-    await page.goto('/');
+    await page.goto('/catalogue');
     await expect(page.locator('.result-row').first()).toBeVisible();
     await search(page, 'sertraline');
     await expect(page.getByText('Sertraline').first()).toBeVisible();
