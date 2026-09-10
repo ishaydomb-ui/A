@@ -88,8 +88,38 @@ Adding a mall means reading its real address forms out of the harvest
 first — every term in the file was observed, none invented. 28 tests,
 including 35 real phrasings.
 
+## 2c. Understanding: the loop and the phrasebook (2026-09-09/10)
+
+**Hybrid loop** (`grocery_bot/loop.py`), approved by Ishay: runs only
+when the classifier returns `unclear`, returns the same ParsedMessage,
+so handlers and gates are untouched. `sanitise` refuses `start_order`,
+`add_to_cart` and `shopped` whatever the model returns — `shopped` is
+guarded because it refills both real carts. The barrier is in code, not
+in the prompt, deliberately. Capped at 30s after the sweep found one
+message averaging 62.7s where its peers were 15.6s.
+
+**Phrasebook**, two tiers. `tests/test_phrasebook.py` is free and runs
+with the suite (mall/merchant/product resolution — table lookups).
+`scripts/check_understanding.py` is opt-in and costs a model call per
+phrasing; it repeats each one and reports a *rate*, because
+classification is not deterministic. Last full sweep 2026-09-10:
+**84/84 at --repeat 3, no instability.**
+
+`--export` writes the corpus as JSON for Miri, who routes messages
+before they reach this project. Intent labels are deliberately excluded
+from the export: her question is routing, mine is resolution.
+
+**Not to be re-derived:** קסטרו and רנואר carry no behatsdaa benefit at
+all (zero occurrences in the raw catalogue, 2026-09-10). "אין הטבה" is
+the truthful answer, not "לא מצאתי".
+
 ## 3. Blocked, and on what
 
+- **The running bot is older than the code.** `grocery-bot.service`
+  started 2026-09-09 17:15; every commit since — the loop, the 30s cap,
+  and `safesend` — is on disk and not live. One command fixes it:
+  `systemctl --user restart grocery-bot.service`. Flagged to Ishay
+  2026-09-10; his call, not done here.
 - **The Israeli exit runs through Ishay's iPhone, not the TV box.** The
   Xiaomi Android TV box has been unreachable since ~2026-09-01 ("offline,
   last seen 6d ago", `tailscale ping` times out). The phone works but is
