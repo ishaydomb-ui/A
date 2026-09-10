@@ -219,6 +219,49 @@ describe('login', () => {
 });
 
 describe('multi-factor authentication', () => {
+  async function requireAdminMfa(required: boolean) {
+    await query(
+      `UPDATE settings SET value = $1::jsonb WHERE key = 'security.mfa_required_for_admin'`,
+      [JSON.stringify(required)],
+    );
+  }
+
+  it('signs an administrator straight in once the requirement is switched off', async () => {
+    await requireAdminMfa(false);
+    await seedUser({ email: 'admin@example.org', role: 'admin' });
+    const res = await app.inject({
+      method: 'POST', url: '/api/auth/login',
+      payload: { email: 'admin@example.org', password: TEST_PASSWORD },
+    });
+    expect(res.json().status).toBe('ok');
+    expect(sessionCookie(res)).toMatch(/^medcat_session=/);
+  });
+
+  it('still asks an already-enrolled administrator for a code once the requirement is off', async () => {
+    await seedUser({ email: 'admin@example.org', role: 'admin' });
+    const login = await app.inject({
+      method: 'POST', url: '/api/auth/login',
+      payload: { email: 'admin@example.org', password: TEST_PASSWORD },
+    });
+    const start = await app.inject({
+      method: 'POST', url: '/api/auth/mfa/enroll/start',
+      payload: { challengeToken: login.json().challengeToken },
+    });
+    await app.inject({
+      method: 'POST', url: '/api/auth/mfa/enroll/complete',
+      payload: { challengeToken: login.json().challengeToken, code: authenticator.generate(start.json().secret) },
+    });
+
+    // Switching the requirement off does not retroactively remove an
+    // authenticator someone already set up.
+    await requireAdminMfa(false);
+    const second = await app.inject({
+      method: 'POST', url: '/api/auth/login',
+      payload: { email: 'admin@example.org', password: TEST_PASSWORD },
+    });
+    expect(second.json().status).toBe('mfa_required');
+  });
+
   it('forces enrolment for an administrator before issuing a session', async () => {
     await seedUser({ email: 'admin@example.org', role: 'admin' });
     const res = await app.inject({

@@ -117,3 +117,10 @@ export interface PublicSettings {
   evaluationMode: boolean;
   evaluationNotice: string | null;
 }
+
+export interface AdminSetting {
+  key: string;
+  value: unknown;
+  needs_approval: boolean;
+  updated_at: string;
+}

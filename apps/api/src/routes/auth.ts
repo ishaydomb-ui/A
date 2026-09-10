@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { mfaRequiredForRole, ROLE_CAPABILITIES } from '@med/shared';
+import { ROLE_CAPABILITIES } from '@med/shared';
 import { config } from '../config.js';
 import { badRequest, unauthorized } from '../lib/errors.js';
 import { clearSessionCookie, setSessionCookie } from '../plugins/auth.js';
@@ -46,7 +46,7 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
     return {
       status: outcome.status,
       challengeToken: outcome.challengeToken,
-      mfaRequiredByPolicy: mfaRequiredForRole(outcome.user.role),
+      mfaRequiredByPolicy: await auth.mfaMandatoryForRole(outcome.user.role),
     };
   });
 

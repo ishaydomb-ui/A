@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ROLES } from '@med/shared';
 import { useI18n } from '../i18n.ts';
 import { ApiError, api } from '../lib/api.ts';
-import type { PublicUser } from '../lib/types.ts';
+import type { AdminSetting, PublicUser } from '../lib/types.ts';
 import { Notice } from '../components/Notice.tsx';
 import { Spinner } from '../components/Spinner.tsx';
 
@@ -32,6 +32,11 @@ export function UsersPage() {
   // readers hear it announced; bring it into view for everyone else.
   const invitationRef = useRef<HTMLDivElement>(null);
 
+  // null while the current value hasn't loaded yet, so the toggle doesn't
+  // flash a wrong state before the setting is known.
+  const [mfaRequired, setMfaRequired] = useState<boolean | null>(null);
+  const [mfaBusy, setMfaBusy] = useState(false);
+
   const load = useCallback(() => {
     api
       .get<{ users: PublicUser[] }>('/api/users')
@@ -40,6 +45,36 @@ export function UsersPage() {
   }, [t]);
 
   useEffect(load, [load]);
+
+  useEffect(() => {
+    api
+      .get<{ settings: AdminSetting[] }>('/api/settings')
+      .then((res) => {
+        const setting = res.settings.find((s) => s.key === 'security.mfa_required_for_admin');
+        setMfaRequired(setting ? Boolean(setting.value) : true);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  async function toggleMfaRequired() {
+    if (mfaRequired === null) return;
+    const next = !mfaRequired;
+    setMfaBusy(true);
+    setError(null);
+    try {
+      await api.put('/api/settings/security.mfa_required_for_admin', { value: next });
+      setMfaRequired(next);
+      setDone(
+        next
+          ? 'Administrators will be asked to set up two-factor authentication again from their next sign-in.'
+          : 'Two-factor authentication is no longer required for administrators. Anyone already enrolled is still asked for a code — remove theirs below if you want to stop that too.',
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.errorGeneric);
+    } finally {
+      setMfaBusy(false);
+    }
+  }
 
   useEffect(() => {
     if (invitationLink) invitationRef.current?.scrollIntoView({ block: 'center' });
@@ -206,7 +241,9 @@ export function UsersPage() {
                 </option>
               ))}
             </select>
-            <p className="hint">Administrators must set up two-factor authentication before they can sign in.</p>
+            {mfaRequired !== false && (
+              <p className="hint">Administrators must set up two-factor authentication before they can sign in.</p>
+            )}
             <p className="hint">
               If the person is already listed and has not accepted yet, sending again simply
               replaces their invitation and updates the name and role you enter here.
@@ -245,6 +282,25 @@ export function UsersPage() {
             </Notice>
           )}
         </div>
+      </section>
+
+      <section className="card" aria-labelledby="security-heading" style={{ marginBlockEnd: 24 }}>
+        <h2 id="security-heading">Security</h2>
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={mfaRequired ?? true}
+            disabled={mfaRequired === null || mfaBusy}
+            onChange={toggleMfaRequired}
+          />
+          <span>Require two-factor authentication for administrators</span>
+        </label>
+        <p className="hint">
+          Turning this off does not remove two-factor authentication from an account that already
+          set it up — it only stops requiring it from an administrator who has not enrolled yet.
+          To stop asking an already-enrolled administrator for a code, remove their authenticator
+          in the table below.
+        </p>
       </section>
 
       <section aria-labelledby="users-heading">

@@ -38,6 +38,12 @@ export const DEFAULT_SETTINGS: ReadonlyArray<{
       'clinician. Do not use it for clinical decisions.',
     needsApproval: false,
   },
+  // Mandatory admin MFA is a policy, not a fixed constant, so it can be
+  // turned off for a while and back on later without a code change — see
+  // mfaRequiredForAdmin() below. Defaults to on: a fresh install, or the
+  // test suite's own database, gets the strict behaviour unless someone
+  // explicitly switches it off.
+  { key: 'security.mfa_required_for_admin', value: true, needsApproval: false },
 ];
 
 /** Restores any missing default. Never overwrites a value already set. */
@@ -89,4 +95,13 @@ export async function listSettings(): Promise<SettingRow[]> {
 /** Whether records may be published before clinical review has happened. */
 export async function unvalidatedPublicationAllowed(client?: Queryable): Promise<boolean> {
   return getSetting<boolean>('publication.allow_unvalidated', false, client);
+}
+
+/**
+ * Whether the "admin" role's mandatory MFA enrolment is currently switched
+ * on. An administrator who already enrolled keeps being asked for a code
+ * regardless of this flag — it only governs whether enrolment is *forced*.
+ */
+export async function mfaRequiredForAdmin(client?: Queryable): Promise<boolean> {
+  return getSetting<boolean>('security.mfa_required_for_admin', true, client);
 }

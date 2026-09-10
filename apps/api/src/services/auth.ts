@@ -14,7 +14,18 @@ import {
 } from '../lib/crypto.js';
 import { badRequest, conflict, forbidden, unauthorized } from '../lib/errors.js';
 import { audit } from './audit.js';
+import { mfaRequiredForAdmin } from './settings.js';
 import { findByEmail, findById, normalizeEmail, type UserRow } from './users.js';
+
+/**
+ * Whether the given role's MFA is currently mandatory: the role has to be
+ * one MFA can be required for at all, and the switch that governs it has to
+ * be on. The switch (settings.ts) lets an administrator turn this off for a
+ * while and back on later without a code change.
+ */
+export async function mfaMandatoryForRole(role: Role): Promise<boolean> {
+  return mfaRequiredForRole(role) && (await mfaRequiredForAdmin());
+}
 
 /** TOTP: 30-second step, one step of clock drift tolerated in each direction. */
 authenticator.options = { step: 30, window: 1 };
@@ -167,7 +178,7 @@ export async function acceptInvitation(token: string, password: string): Promise
       db,
     );
 
-    return { user: updated[0], mfaRequired: mfaRequiredForRole(updated[0].role) };
+    return { user: updated[0], mfaRequired: await mfaMandatoryForRole(updated[0].role) };
   });
 }
 
@@ -335,7 +346,7 @@ export async function login(
   if (user.mfa_enabled_at && user.mfa_secret) {
     return { status: 'mfa_required', user, challengeToken: await issueMfaChallenge(user.id) };
   }
-  if (mfaRequiredForRole(user.role)) {
+  if (await mfaMandatoryForRole(user.role)) {
     // Policy requires MFA for this role but it is not set up yet: no session
     // is issued until enrolment completes.
     return { status: 'mfa_enrollment_required', user, challengeToken: await issueMfaChallenge(user.id) };
