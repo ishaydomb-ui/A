@@ -1,13 +1,13 @@
 # Tests
 
-287 automated tests. All pass.
+335 automated tests. All pass.
 
 | Suite | Count | What it runs against |
 | --- | --- | --- |
 | Domain unit tests | 17 | Pure functions, no I/O |
-| Detector unit tests | 10 | The import quality detectors |
-| API integration | 124 | A real PostgreSQL database |
-| End-to-end | 136 | The real stack, in a real browser |
+| Unit tests | 19 | The import quality detectors and the source lookup |
+| API integration | 142 | A real PostgreSQL database |
+| End-to-end | 157 | The real stack, in a real browser |
 
 ## Running them
 
@@ -28,7 +28,7 @@ a fixture cannot drift from real behaviour.
 
 ## What is covered
 
-### Authentication and accounts — 31 tests
+### Authentication and accounts — 41 tests
 
 That no registration endpoint exists; that a non-administrator cannot create
 accounts; the full invitation lifecycle including expiry, reuse and weak
@@ -40,6 +40,15 @@ on logout, password change and suspension; password reset including
 single-use tokens and session invalidation; rate limiting per account, and
 that exhausting one account's budget does **not** lock out colleagues sharing
 an IP.
+
+Account administration: that a display name can be corrected and both the old
+and the new one reach the audit log; that a rename changes neither the role
+nor the session; that an invitation can be reissued and the earlier link stops
+working; that an enrolled authenticator can be removed so the account signs in
+with a password alone, that removing it signs the person out everywhere, and
+that it is not a way around the policy — a role that requires a second factor
+enrols again at its next sign-in. Each of these is refused without the
+`users:manage` capability.
 
 ### Editorial workflow — 22 tests
 

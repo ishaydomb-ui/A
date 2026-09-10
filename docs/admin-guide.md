@@ -36,12 +36,21 @@ Mandatory for administrators. An administrator gets **no session at all**
 until enrolment is complete — signing in with the correct password only
 produces a challenge.
 
-Other roles may enable it voluntarily from their account page.
+No other role is asked for it. There is no way for them to turn it on either:
+enrolment is offered only where the policy demands it, so a physician or a
+clinical reviewer signs in with a password alone.
 
-Ten single-use recovery codes are issued at enrolment and shown once. If a
-user loses both their authenticator and their codes, reset their second
-factor from the Users screen; this also signs them out everywhere, and they
-will enrol again at their next sign-in.
+Ten single-use recovery codes are issued at enrolment and shown once.
+
+**Remove**, beside the MFA column in the accounts table, clears an enrolled
+authenticator. Use it when someone has lost both their authenticator and their
+recovery codes, or when an account that no longer needs a second factor is
+still being challenged for one — enrolment challenges an account at every
+sign-in whatever its role, so an account enrolled while it was an
+administrator keeps being challenged after it is moved to another role.
+Removing it signs the person out everywhere. It is not a way around the
+policy: a role that requires a second factor simply enrols again at its next
+sign-in.
 
 ## Adding people
 

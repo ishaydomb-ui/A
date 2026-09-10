@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test';
-import { STATE_FILES, uniqueEmail } from './helpers.ts';
+import { expect, request as apiRequest, test } from '@playwright/test';
+import { STATE_FILES, totp, uniqueEmail } from './helpers.ts';
 
 test.describe('account administration', () => {
   test.use({ storageState: STATE_FILES.admin });
@@ -63,6 +63,53 @@ test.describe('account administration', () => {
         return shown === first ? null : shown;
       })
       .toMatch(/accept-invitation\?token=/);
+  });
+
+  test('an administrator removes a second factor that is no longer wanted', async ({ page }) => {
+    // Enrolment challenges an account at every sign-in whatever its role, so
+    // someone who enrolled as an administrator and then moved to a role that
+    // does not require it stays behind their authenticator until this is
+    // cleared.
+    const email = uniqueEmail('enrolled');
+    const name = `Enrolled ${email.split('@')[0].slice(-6)}`;
+    await page.goto('/users');
+    await page.getByLabel(/email address/i).fill(email);
+    await page.getByLabel(/full name/i).fill(name);
+    await page.getByLabel(/role/i).first().selectOption('admin');
+    await page.getByRole('button', { name: /send invitation/i }).click();
+
+    const shown = await page.locator('.mono').filter({ hasText: 'accept-invitation' }).innerText();
+    const token = new URL(shown.trim()).searchParams.get('token')!;
+
+    // The invitee's own enrolment runs through an isolated request context:
+    // it must not touch the administrator's session, and driving a second
+    // browser window adds nothing this screen is being tested for.
+    const theirs = await apiRequest.newContext({ baseURL: new URL(page.url()).origin });
+    const accepted = await theirs.post('/api/auth/invitations/accept', {
+      data: { token, password: 'a-second-factor-passphrase-3' },
+    });
+    const { status, challengeToken } = await accepted.json();
+    expect(status).toBe('mfa_enrollment_required');
+
+    const started = await theirs.post('/api/auth/mfa/enroll/start', { data: { challengeToken } });
+    const { secret } = await started.json();
+    const finished = await theirs.post('/api/auth/mfa/enroll/complete', {
+      data: { challengeToken, code: await totp(secret) },
+    });
+    expect(finished.ok()).toBe(true);
+    await theirs.dispose();
+
+    await page.reload();
+    const row = page.getByRole('row').filter({ hasText: email });
+    await expect(row.getByText('on', { exact: true })).toBeVisible();
+
+    await row
+      .getByRole('button', { name: new RegExp(`remove two-factor authentication for ${name}`, 'i') })
+      .click();
+
+    await expect(page.getByText(/two-factor authentication removed/i)).toBeVisible();
+    await expect(row.getByText('off', { exact: true })).toBeVisible();
+    await expect(row.getByRole('button', { name: /remove two-factor/i })).toHaveCount(0);
   });
 
   test('the rename field is reachable and labelled for a screen reader', async ({ page }) => {

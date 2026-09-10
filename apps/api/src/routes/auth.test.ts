@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { authenticator } from 'otplib';
 import { query } from '../db/pool.js';
-import { decryptSecret } from '../lib/crypto.js';
+import { decryptSecret, encryptSecret } from '../lib/crypto.js';
 import {
   TEST_PASSWORD, closeTestApp, createTestApp, loginAs, loginAsAdmin, mailbox,
   resetDatabase, seedUser, sessionCookie, shutdown,
@@ -505,6 +505,98 @@ describe('account administration', () => {
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().error.code).toBe('already_active');
+  });
+
+  /** Puts an account into the state a completed enrolment leaves behind. */
+  async function enrol(userId: string): Promise<string> {
+    const secret = authenticator.generateSecret();
+    await query(
+      `UPDATE users SET mfa_secret = $2, mfa_enabled_at = now() WHERE id = $1`,
+      [userId, encryptSecret(secret)],
+    );
+    return secret;
+  }
+
+  it('removes an authenticator so the account signs in with a password alone', async () => {
+    await seedUser({ email: 'admin@example.org', role: 'admin' });
+    const target = await seedUser({ email: 'liri@example.org', role: 'clinical_reviewer' });
+    const secret = await enrol(target.id);
+
+    // Enrolled means challenged, whatever the role: that is what has to be
+    // undone for someone who should not be carrying a second factor.
+    const challenged = await app.inject({
+      method: 'POST', url: '/api/auth/login',
+      payload: { email: 'liri@example.org', password: TEST_PASSWORD },
+    });
+    expect(challenged.json().status).toBe('mfa_required');
+    expect(authenticator.generate(secret)).toMatch(/^\d{6}$/);
+
+    const cookie = await loginAsAdmin(app, 'admin@example.org');
+    const reset = await app.inject({
+      method: 'POST', url: `/api/users/${target.id}/mfa/reset`, headers: { cookie },
+    });
+    expect(reset.statusCode).toBe(200);
+
+    const after = await app.inject({
+      method: 'POST', url: '/api/auth/login',
+      payload: { email: 'liri@example.org', password: TEST_PASSWORD },
+    });
+    expect(after.json().status).toBe('ok');
+
+    const { rows } = await query(
+      `SELECT mfa_secret, mfa_enabled_at, mfa_recovery_codes FROM users WHERE id = $1`,
+      [target.id],
+    );
+    expect(rows[0]).toMatchObject({
+      mfa_secret: null, mfa_enabled_at: null, mfa_recovery_codes: null,
+    });
+  });
+
+  it('signs the account out of every device when its authenticator is removed', async () => {
+    await seedUser({ email: 'admin@example.org', role: 'admin' });
+    const target = await seedUser({ email: 'liri@example.org', role: 'clinical_reviewer' });
+    const theirCookie = await loginAs(app, 'liri@example.org');
+    await enrol(target.id);
+
+    const cookie = await loginAsAdmin(app, 'admin@example.org');
+    await app.inject({
+      method: 'POST', url: `/api/users/${target.id}/mfa/reset`, headers: { cookie },
+    });
+
+    const me = await app.inject({
+      method: 'GET', url: '/api/auth/me', headers: { cookie: theirCookie },
+    });
+    expect(me.statusCode).toBe(401);
+  });
+
+  it('still forces an administrator to enrol again after a reset', async () => {
+    await seedUser({ email: 'admin@example.org', role: 'admin' });
+    const other = await seedUser({ email: 'admin3@example.org', role: 'admin' });
+    await enrol(other.id);
+
+    const cookie = await loginAsAdmin(app, 'admin@example.org');
+    await app.inject({
+      method: 'POST', url: `/api/users/${other.id}/mfa/reset`, headers: { cookie },
+    });
+
+    // Removing the authenticator must not become a way around the policy.
+    const login = await app.inject({
+      method: 'POST', url: '/api/auth/login',
+      payload: { email: 'admin3@example.org', password: TEST_PASSWORD },
+    });
+    expect(login.json().status).toBe('mfa_enrollment_required');
+  });
+
+  it('refuses to remove an authenticator without the users:manage capability', async () => {
+    const target = await seedUser({ email: 'liri@example.org', role: 'clinical_reviewer' });
+    await enrol(target.id);
+    await seedUser({ email: 'editor@example.org', role: 'editor' });
+    const cookie = await loginAs(app, 'editor@example.org');
+
+    const res = await app.inject({
+      method: 'POST', url: `/api/users/${target.id}/mfa/reset`, headers: { cookie },
+    });
+    expect(res.statusCode).toBe(403);
   });
 
   it('refuses a rename from anyone without the users:manage capability', async () => {

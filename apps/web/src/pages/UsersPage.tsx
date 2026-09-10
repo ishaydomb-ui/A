@@ -10,6 +10,7 @@ export function UsersPage() {
   const { t } = useI18n();
   const [users, setUsers] = useState<PublicUser[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
   const [invitationLink, setInvitationLink] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -83,6 +84,28 @@ export function UsersPage() {
     }
   }
 
+  /**
+   * Clears an enrolled authenticator. Two-factor authentication is demanded of
+   * an account once it is enrolled, whatever the role, so an account that no
+   * longer needs it — or whose phone is gone — can only be let back in from
+   * here. Roles that require it by policy simply enrol again at their next
+   * sign-in.
+   */
+  async function resetMfa(user: PublicUser) {
+    setError(null);
+    setDone(null);
+    try {
+      await api.post(`/api/users/${user.id}/mfa/reset`, {});
+      setDone(
+        `Two-factor authentication removed for ${user.displayName}. They have been signed out of ` +
+          'every device, and will set it up again at their next sign-in if their role requires it.',
+      );
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.errorGeneric);
+    }
+  }
+
   async function update(id: string, patch: Record<string, string>) {
     setError(null);
     try {
@@ -104,6 +127,7 @@ export function UsersPage() {
       </Notice>
 
       {error && <Notice tone="error">{error}</Notice>}
+      {done && <Notice tone="success">{done}</Notice>}
 
       <section className="card" aria-labelledby="invite-heading" style={{ marginBlockEnd: 24 }}>
         <h2 id="invite-heading">Invite a clinician</h2>
@@ -255,7 +279,17 @@ export function UsersPage() {
                     </td>
                     <td>
                       {user.mfaEnabled ? (
-                        <span className="badge badge-success">on</span>
+                        <div className="row">
+                          <span className="badge badge-success">on</span>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-secondary"
+                            aria-label={`Remove two-factor authentication for ${user.displayName}`}
+                            onClick={() => void resetMfa(user)}
+                          >
+                            Remove
+                          </button>
+                        </div>
                       ) : (
                         <span className="badge">off</span>
                       )}
