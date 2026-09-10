@@ -215,8 +215,29 @@ docker compose up -d --build
 ```
 
 Caddy obtains and renews the certificate automatically. A free subdomain from
-a dynamic-DNS provider works fine if you do not want to buy a domain. See
-[deployment.md](deployment.md).
+a dynamic-DNS provider (DuckDNS, for instance) works fine if you do not want
+to buy a domain. See [deployment.md](deployment.md).
+
+**Already have data in the local stack you don't want to lose?** The full
+stack above uses its own database — moving to it is a migration (`docker
+compose up -d --build`, then restore a dump into it), not an upgrade in
+place, and is the right move eventually. For a permanent address today
+without moving anything, add `docker-compose.permanent.yml` on top of the
+local stack instead — it puts the same Caddy/TLS layer in front of the
+containers you already have, data untouched:
+
+```bash
+# .env
+SITE_HOSTNAME=catalogue.example.org
+ACME_EMAIL=you@example.org
+PUBLIC_URL=https://catalogue.example.org
+COOKIE_SECURE=true
+
+docker compose -f docker-compose.local.yml -f docker-compose.permanent.yml up -d
+```
+
+Point the hostname's DNS at the server first, and make sure ports 80 and 443
+are reachable from the internet.
 
 ### What will not work
 

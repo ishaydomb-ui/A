@@ -1,0 +1,39 @@
+# ---------------------------------------------------------------------------
+# Adds a permanent, public HTTPS address in front of the local stack, without
+# touching its data — it is the same db/api/web containers, reached through a
+# real hostname instead of a loopback port or a temporary tunnel.
+#
+# Requires:
+#   1. SITE_HOSTNAME's DNS already pointing at this server's public IP.
+#   2. SITE_HOSTNAME and ACME_EMAIL set in .env.
+#   3. PUBLIC_URL and COOKIE_SECURE in .env updated to match (see
+#      docs/deployment.md).
+#
+# Bring up both files together:
+#
+#   docker compose -f docker-compose.local.yml -f docker-compose.permanent.yml up -d
+#
+# Ports 80 and 443 must be reachable from the internet on this server.
+# ---------------------------------------------------------------------------
+services:
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [api, web]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_HOSTNAME: ${SITE_HOSTNAME:?set SITE_HOSTNAME in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+    volumes:
+      - ./ops/Caddyfile:/etc/caddy/Caddyfile:ro
+      - permanent-caddy-data:/data
+      - permanent-caddy-config:/config
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  permanent-caddy-data:
+  permanent-caddy-config:
