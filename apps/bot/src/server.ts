@@ -84,13 +84,20 @@ bot.catch((err) => {
   logger.error({ err: String(err.error) }, 'unhandled error in bot update');
 });
 
-for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(signal, () => {
-    logger.info({ signal }, 'shutting down');
-    bot.stop();
-    process.exit(0);
-  });
+// bot.stop() must be awaited before the process exits: it is what tells
+// Telegram to cleanly cancel the in-flight long-poll request. Exiting
+// without waiting for it (the previous bug here) leaves that request
+// dangling from Telegram's side, so the next container start conflicts with
+// it — a 409 "terminated by other getUpdates request" that can persist for
+// a long time, since Telegram has no clean disconnect to notice.
+async function shutdown(signal: NodeJS.Signals): Promise<void> {
+  logger.info({ signal }, 'shutting down');
+  await bot.stop();
+  process.exit(0);
 }
 
+process.once('SIGINT', () => void shutdown('SIGINT'));
+process.once('SIGTERM', () => void shutdown('SIGTERM'));
+
 logger.info({ allowedChatIds: [...config.allowedChatIds] }, 'starting bot (long polling)');
-bot.start();
+await bot.start();
