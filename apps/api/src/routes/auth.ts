@@ -27,13 +27,13 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
 
     // Limit by address and by source IP: neither a single account nor a
     // single client can be used to grind through passwords.
-    await limits.enforce('login', body.email.toLowerCase());
-    await limits.enforce('login', `ip:${ip ?? 'unknown'}`);
+    await limits.enforce('loginAccount', body.email.toLowerCase());
+    await limits.enforce('loginIp', `ip:${ip ?? 'unknown'}`);
 
     const outcome = await auth.login(body.email, body.password, info);
 
     if (outcome.status === 'ok') {
-      await limits.reset('login', body.email.toLowerCase());
+      await limits.reset('loginAccount', body.email.toLowerCase());
       setSessionCookie(reply, outcome.session.token, outcome.session.expiresAt);
       return {
         status: 'ok',
@@ -144,8 +144,8 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/password/forgot', async (req) => {
     const body = z.object({ email: emailSchema }).parse(req.body);
-    await limits.enforce('passwordReset', body.email.toLowerCase());
-    await limits.enforce('passwordReset', `ip:${clientIp(req) ?? 'unknown'}`);
+    await limits.enforce('passwordResetAccount', body.email.toLowerCase());
+    await limits.enforce('passwordResetIp', `ip:${clientIp(req) ?? 'unknown'}`);
 
     const created = await auth.createPasswordReset(body.email);
     if (created) {
@@ -166,7 +166,7 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
     const body = z
       .object({ token: z.string().min(10), password: passwordSchema })
       .parse(req.body);
-    await limits.enforce('passwordReset', `ip:${clientIp(req) ?? 'unknown'}`);
+    await limits.enforce('passwordResetIp', `ip:${clientIp(req) ?? 'unknown'}`);
     await auth.resetPassword(body.token, body.password);
     return { status: 'ok', message: 'Your password has been changed. Please sign in.' };
   });

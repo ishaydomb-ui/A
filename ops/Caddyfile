@@ -1,0 +1,55 @@
+# ---------------------------------------------------------------------------
+# Reverse proxy and TLS termination.
+#
+# Caddy obtains and renews Let's Encrypt certificates automatically, so there
+# is no certificate cron job to forget. Point the hostname's DNS at this
+# server before the first start.
+# ---------------------------------------------------------------------------
+{
+	email {$ACME_EMAIL}
+	# Uncomment to use the staging CA while testing, to avoid rate limits:
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+{$SITE_HOSTNAME} {
+	encode zstd gzip
+
+	header {
+		# HTTPS only, for a year, including subdomains.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		# The catalogue is private and must never be indexed.
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+
+	# The client is same-origin with the API, so the session cookie needs no
+	# cross-site relaxation.
+	handle /api/* {
+		reverse_proxy api:4000
+	}
+	handle /healthz {
+		reverse_proxy api:4000
+	}
+	handle /readyz {
+		reverse_proxy api:4000
+	}
+
+	handle {
+		reverse_proxy web:8080
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+# Anything arriving on another hostname is refused rather than served.
+:80 {
+	respond "Not found" 404
+}

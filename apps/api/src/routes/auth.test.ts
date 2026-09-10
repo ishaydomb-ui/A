@@ -271,6 +271,32 @@ describe('multi-factor authentication', () => {
     expect(sessionCookie(verify)).toMatch(/^medcat_session=/);
   });
 
+  it('returns the same secret when enrolment is started twice', async () => {
+    await seedUser({ email: 'admin@example.org', role: 'admin' });
+    const login = await app.inject({
+      method: 'POST', url: '/api/auth/login',
+      payload: { email: 'admin@example.org', password: TEST_PASSWORD },
+    });
+    const challengeToken = login.json().challengeToken;
+
+    // A reload or a retry must not replace the secret behind a QR code the
+    // user has already scanned.
+    const first = await app.inject({
+      method: 'POST', url: '/api/auth/mfa/enroll/start', payload: { challengeToken },
+    });
+    const second = await app.inject({
+      method: 'POST', url: '/api/auth/mfa/enroll/start', payload: { challengeToken },
+    });
+    expect(second.json().secret).toBe(first.json().secret);
+
+    // A code from the originally displayed secret still works.
+    const complete = await app.inject({
+      method: 'POST', url: '/api/auth/mfa/enroll/complete',
+      payload: { challengeToken, code: authenticator.generate(first.json().secret) },
+    });
+    expect(complete.statusCode).toBe(200);
+  });
+
   it('rejects an incorrect authenticator code', async () => {
     await seedUser({ email: 'admin@example.org', role: 'admin' });
     const login = await app.inject({
@@ -482,7 +508,7 @@ describe('audit log', () => {
 });
 
 describe('rate limiting', () => {
-  it('blocks repeated login attempts from one address', async () => {
+  it('blocks repeated login attempts against one account', async () => {
     await seedUser({ email: 'rl@example.org', role: 'physician' });
     let sawRateLimit = false;
     for (let i = 0; i < 14; i++) {
@@ -497,5 +523,26 @@ describe('rate limiting', () => {
       }
     }
     expect(sawRateLimit).toBe(true);
+  });
+
+  it('does not lock out other accounts sharing the same address', async () => {
+    // A hospital site behind one NAT gateway presents a single IP for every
+    // clinician on it, so exhausting one account's budget must not stop
+    // everyone else signing in.
+    await seedUser({ email: 'victim@example.org', role: 'physician' });
+    await seedUser({ email: 'colleague@example.org', role: 'physician' });
+
+    for (let i = 0; i < 14; i++) {
+      await app.inject({
+        method: 'POST', url: '/api/auth/login',
+        payload: { email: 'victim@example.org', password: `bad-password-${i}` },
+      });
+    }
+    const colleague = await app.inject({
+      method: 'POST', url: '/api/auth/login',
+      payload: { email: 'colleague@example.org', password: TEST_PASSWORD },
+    });
+    expect(colleague.statusCode).toBe(200);
+    expect(colleague.json().status).toBe('ok');
   });
 });

@@ -5,6 +5,7 @@ import { I18nContext, STRINGS, readStoredLocale, storeLocale } from './i18n.ts';
 import { AuthProvider, useAuth } from './lib/auth.tsx';
 import { Layout } from './components/Layout.tsx';
 import { RequireAuth } from './components/RequireAuth.tsx';
+import { RequireCapability } from './components/RequireCapability.tsx';
 import { Spinner } from './components/Spinner.tsx';
 import { SignInPage } from './pages/SignInPage.tsx';
 import { AcceptInvitationPage } from './pages/AcceptInvitationPage.tsx';
@@ -83,9 +84,30 @@ function AppRoutes() {
         <Route path="/" element={<SearchPage />} />
         <Route path="/medications/:slug" element={<MedicationPage />} />
         <Route path="/compare" element={<ComparePage />} />
-        <Route path="/review" element={<ReviewPage />} />
-        <Route path="/imports" element={<ImportsPage />} />
-        <Route path="/users" element={<UsersPage />} />
+        <Route
+          path="/review"
+          element={
+            <RequireCapability capability="review:read">
+              <ReviewPage />
+            </RequireCapability>
+          }
+        />
+        <Route
+          path="/imports"
+          element={
+            <RequireCapability capability="import:create">
+              <ImportsPage />
+            </RequireCapability>
+          }
+        />
+        <Route
+          path="/users"
+          element={
+            <RequireCapability capability="users:manage">
+              <UsersPage />
+            </RequireCapability>
+          }
+        />
         <Route path="/account" element={<AccountPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

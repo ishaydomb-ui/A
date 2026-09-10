@@ -282,6 +282,10 @@ mark {
 .btn-danger { background: transparent; border-color: var(--danger); color: var(--danger); }
 .btn-danger:hover:not(:disabled) { background: var(--danger-subtle); }
 .btn-sm { min-height: 36px; padding: var(--space-1) var(--space-3); font-size: 0.875rem; }
+/* A small button is still a touch target on a phone or any coarse pointer. */
+@media (pointer: coarse), (max-width: 700px) {
+  .btn-sm { min-height: 44px; }
+}
 .btn-block { width: 100%; }
 
 .field { margin-block-end: var(--space-4); }
@@ -354,7 +358,14 @@ textarea { min-height: 90px; resize: vertical; }
   border: 1px solid var(--border);
   background: var(--bg-subtle);
   color: var(--text-muted);
+  /* Short badges stay on one line, but a long one (a validation status, say)
+     wraps rather than pushing the page wider than the viewport. */
   white-space: nowrap;
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .badge { white-space: normal; }
 }
 .badge-high    { border-color: var(--danger);  background: var(--danger-subtle);  color: var(--danger); }
 .badge-medium  { border-color: var(--warning); background: var(--warning-subtle); color: var(--warning); }

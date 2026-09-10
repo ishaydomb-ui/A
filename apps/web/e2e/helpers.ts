@@ -1,0 +1,111 @@
+import { expect, type Page } from '@playwright/test';
+
+export const PASSWORD = 'e2e-test-password-value-1';
+
+/** Saved session files, one per role, produced by the setup project. */
+export const STATE_FILES = {
+  physician: '.auth/physician.json',
+  editor: '.auth/editor.json',
+  reviewer: '.auth/reviewer.json',
+  admin: '.auth/admin.json',
+} as const;
+
+export const ACCOUNTS = {
+  physician: 'physician@example.org',
+  editor: 'editor@example.org',
+  reviewer: 'reviewer@example.org',
+  admin: 'admin@example.org',
+  /** Reserved for the enrolment journey; never signed in by the setup project. */
+  mfaAdmin: 'mfa-admin@example.org',
+} as const;
+
+/**
+ * A unique address per call, so tests that create accounts can run in every
+ * project against the same database without colliding.
+ */
+export function uniqueEmail(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}@example.org`;
+}
+
+export async function setLocale(page: Page, locale: 'en' | 'he'): Promise<void> {
+  await page.addInitScript((value) => {
+    window.localStorage.setItem('medcat.locale', value);
+  }, locale);
+}
+
+/**
+ * Signs in and, by default, waits until the authenticated shell is actually
+ * rendered. Without that wait a following navigation can race the login
+ * request — and the sign-in page has its own level-1 heading, so simply
+ * waiting for a heading proves nothing.
+ *
+ * Pass `waitForShell: false` when the sign-in is expected to stop at a
+ * second factor or to fail.
+ */
+export async function signIn(
+  page: Page,
+  who: keyof typeof ACCOUNTS = 'physician',
+  password = PASSWORD,
+  { waitForShell = true }: { waitForShell?: boolean } = {},
+): Promise<void> {
+  await page.goto('/sign-in');
+  await page.getByLabel(/email|אימייל/i).fill(ACCOUNTS[who]);
+  await page.getByLabel(/^password$|^סיסמה$/i).fill(password);
+  await page.getByRole('button', { name: /^sign in$|^כניסה$/i }).click();
+
+  if (waitForShell) await expectSignedIn(page);
+}
+
+/** The sign-out control exists only once a session is established. */
+export async function expectSignedIn(page: Page): Promise<void> {
+  await expect(page.getByRole('button', { name: /sign out|התנתקות/i })).toBeVisible();
+}
+
+/** Signs in as an administrator, completing the mandatory MFA enrolment. */
+export async function signInAsAdmin(
+  page: Page,
+  who: 'admin' | 'mfaAdmin' = 'admin',
+): Promise<void> {
+  await signIn(page, who, PASSWORD, { waitForShell: false });
+  await expect(page.getByRole('heading', { name: /two-factor|דו-שלבי/i })).toBeVisible();
+
+  const secret = await page.locator('.mono').first().innerText();
+  await page.getByLabel(/authentication code|קוד אימות/i).fill(await totp(secret.trim()));
+  await page.getByRole('button', { name: /verify|אימות/i }).click();
+
+  // On first enrolment the recovery codes are shown once and the session is
+  // withheld until they are acknowledged. On later sign-ins this step is
+  // absent, so wait for whichever screen actually appears.
+  const acknowledge = page.getByRole('button', { name: /saved these codes|שמרתי/i });
+  const signOut = page.getByRole('button', { name: /sign out|התנתקות/i });
+  await expect(acknowledge.or(signOut)).toBeVisible();
+  if (await acknowledge.count()) await acknowledge.click();
+
+  await expectSignedIn(page);
+}
+
+/** Generates a TOTP code, so the MFA flow can be driven for real. */
+export async function totp(secret: string): Promise<string> {
+  const { authenticator } = await import('otplib');
+  return authenticator.generate(secret);
+}
+
+export async function search(page: Page, query: string): Promise<void> {
+  const box = page.getByRole('combobox');
+  await box.fill(query);
+  await box.press('Enter');
+}
+
+/**
+ * Expands the filter panel if it is collapsed.
+ *
+ * The panel starts open where there is a sidebar and closed on a phone, so
+ * the toggle's own state decides — clicking blindly would either collapse it
+ * or wait for a button that is not there.
+ */
+export async function openFilters(page: Page): Promise<void> {
+  const toggle = page.getByRole('button', { name: /show filters|hide filters|הצגת מסננים|הסתרת מסננים/i });
+  await expect(toggle).toBeVisible();
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+}

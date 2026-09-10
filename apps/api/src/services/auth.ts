@@ -409,14 +409,32 @@ export interface MfaEnrollment {
   otpauthUrl: string;
 }
 
+/**
+ * Starts (or resumes) TOTP enrolment.
+ *
+ * Idempotent while an enrolment is pending: if the user already has a secret
+ * that has not been confirmed, the same one is returned. Generating a fresh
+ * secret on every call would mean a second call — a reload, a retry, a
+ * double-invoked effect — silently replacing the secret behind a QR code the
+ * user has already scanned, so their first correct code would be rejected.
+ *
+ * Once MFA is enabled, calling this again does start a genuine re-enrolment
+ * with a new secret.
+ */
 export async function beginMfaEnrollment(userId: string, email: string): Promise<MfaEnrollment> {
-  const secret = authenticator.generateSecret();
+  const existing = await findById(userId);
+  const pending = existing?.mfa_secret && !existing.mfa_enabled_at;
+
+  const secret = pending ? decryptSecret(existing!.mfa_secret!) : authenticator.generateSecret();
   const otpauthUrl = authenticator.keyuri(email, 'Medication Catalogue', secret);
-  // Held encrypted but not yet enabled; confirming a code activates it.
-  await query('UPDATE users SET mfa_secret = $2, updated_at = now() WHERE id = $1', [
-    userId,
-    encryptSecret(secret),
-  ]);
+
+  if (!pending) {
+    // Held encrypted but not yet enabled; confirming a code activates it.
+    await query('UPDATE users SET mfa_secret = $2, updated_at = now() WHERE id = $1', [
+      userId,
+      encryptSecret(secret),
+    ]);
+  }
   return { secret, otpauthUrl };
 }
 

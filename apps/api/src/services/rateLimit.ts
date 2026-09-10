@@ -1,3 +1,4 @@
+import { config } from '../config.js';
 import { query } from '../db/pool.js';
 import { tooManyRequests } from '../lib/errors.js';
 
@@ -12,15 +13,22 @@ export interface LimitRule {
   max: number;
 }
 
+/**
+ * Per-account limits are the ones that stop an attack on a single account and
+ * stay strict. Per-IP limits are a blunt backstop and are deliberately far
+ * more generous, because many legitimate clinicians share one egress address.
+ */
 export const LIMITS = {
-  login: { windowMs: 15 * 60_000, max: 10 },
-  passwordReset: { windowMs: 60 * 60_000, max: 5 },
-  mfa: { windowMs: 15 * 60_000, max: 10 },
-  inviteAccept: { windowMs: 60 * 60_000, max: 10 },
-  search: { windowMs: 60_000, max: 120 },
+  loginAccount: { windowMs: 15 * 60_000, max: config.rateLimits.loginPerAccount },
+  loginIp: { windowMs: 15 * 60_000, max: config.rateLimits.loginPerIp },
+  passwordResetAccount: { windowMs: 60 * 60_000, max: config.rateLimits.resetPerAccount },
+  passwordResetIp: { windowMs: 60 * 60_000, max: config.rateLimits.resetPerIp },
+  mfa: { windowMs: 15 * 60_000, max: config.rateLimits.mfaPerIp },
+  inviteAccept: { windowMs: 60 * 60_000, max: 20 },
+  search: { windowMs: 60_000, max: config.rateLimits.searchPerMinute },
   import: { windowMs: 60 * 60_000, max: 20 },
   mutation: { windowMs: 60_000, max: 60 },
-} as const satisfies Record<string, LimitRule>;
+} satisfies Record<string, LimitRule>;
 
 export type LimitName = keyof typeof LIMITS;
 

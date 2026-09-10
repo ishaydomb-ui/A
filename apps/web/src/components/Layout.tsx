@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useI18n } from '../i18n.ts';
 import { useAuth } from '../lib/auth.tsx';
@@ -16,11 +16,19 @@ export function Layout() {
     api.get<PublicSettings>('/api/settings/public').then(setSettings).catch(() => undefined);
   }, []);
 
-  // Moving focus to the main heading on navigation is what lets a keyboard or
+  // Moving focus to the main region on navigation is what lets a keyboard or
   // screen-reader user notice the page changed in a single-page app.
+  //
+  // Focus moves only when the route actually changes. On a fresh page load the
+  // browser's own tab order must apply, so the first Tab reaches the skip link
+  // rather than starting past it. Comparing the pathname rather than counting
+  // renders is what makes this correct under StrictMode, which deliberately
+  // invokes effects twice in development.
+  const lastPath = useRef(location.pathname);
   useEffect(() => {
-    const main = document.getElementById('main-content');
-    main?.focus({ preventScroll: true });
+    if (lastPath.current === location.pathname) return;
+    lastPath.current = location.pathname;
+    document.getElementById('main-content')?.focus({ preventScroll: true });
   }, [location.pathname]);
 
   const institution = settings?.settings['institution_name'];

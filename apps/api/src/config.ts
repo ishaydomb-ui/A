@@ -34,6 +34,21 @@ const schema = z.object({
   LOGIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(8),
   LOGIN_LOCKOUT_MINUTES: z.coerce.number().int().positive().default(15),
 
+  /**
+   * Login rate limits, per 15-minute window.
+   *
+   * The per-account limit is the one that stops password guessing and is
+   * deliberately strict. The per-IP limit has to be far more generous: a
+   * hospital site behind a single NAT gateway presents one address for every
+   * clinician on it, so a low per-IP limit locks out the whole building.
+   */
+  RATE_LIMIT_LOGIN_PER_ACCOUNT: z.coerce.number().int().positive().default(10),
+  RATE_LIMIT_LOGIN_PER_IP: z.coerce.number().int().positive().default(200),
+  RATE_LIMIT_MFA_PER_IP: z.coerce.number().int().positive().default(200),
+  RATE_LIMIT_RESET_PER_ACCOUNT: z.coerce.number().int().positive().default(5),
+  RATE_LIMIT_RESET_PER_IP: z.coerce.number().int().positive().default(50),
+  RATE_LIMIT_SEARCH_PER_MINUTE: z.coerce.number().int().positive().default(120),
+
   IMPORT_STORAGE_DIR: z.string().default('./var/imports'),
   MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(25 * 1024 * 1024),
 
@@ -92,6 +107,15 @@ export const config = {
 
   loginMaxAttempts: env.LOGIN_MAX_ATTEMPTS,
   loginLockoutMs: env.LOGIN_LOCKOUT_MINUTES * 60_000,
+
+  rateLimits: {
+    loginPerAccount: env.RATE_LIMIT_LOGIN_PER_ACCOUNT,
+    loginPerIp: env.RATE_LIMIT_LOGIN_PER_IP,
+    mfaPerIp: env.RATE_LIMIT_MFA_PER_IP,
+    resetPerAccount: env.RATE_LIMIT_RESET_PER_ACCOUNT,
+    resetPerIp: env.RATE_LIMIT_RESET_PER_IP,
+    searchPerMinute: env.RATE_LIMIT_SEARCH_PER_MINUTE,
+  },
 
   importStorageDir: env.IMPORT_STORAGE_DIR,
   maxUploadBytes: env.MAX_UPLOAD_BYTES,
