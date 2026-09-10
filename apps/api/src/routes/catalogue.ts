@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
   APPROVAL_STATUSES, FIELD_KEYS, LOCALES, VALUE_STATES, WORKFLOW_STATES,
-  allowedTransitions, resolveField, type MedicationData, type WorkflowState,
+  allowedTransitions, resolveField, roleHasCapability,
+  type MedicationData, type WorkflowState,
 } from '@med/shared';
 import { query } from '../db/pool.js';
 import { notFound } from '../lib/errors.js';
@@ -98,6 +99,33 @@ export default async function catalogueRoutes(app: FastifyInstance): Promise<voi
       raw: version.data,
       citations,
     };
+  });
+
+  /** The catalogue as a workbook, for review outside the application. */
+  app.get('/export.xlsx', { onRequest: [readPublished] }, async (req, reply) => {
+    const q = z
+      .object({
+        locale: z.enum(LOCALES).default('en'),
+        publishedOnly: z.coerce.boolean().default(true),
+      })
+      .parse(req.query);
+
+    const { buildCatalogueWorkbook } = await import('../services/catalogueExport.js');
+    const workbook = await buildCatalogueWorkbook({
+      locale: q.locale,
+      // Only a role that may read drafts can export them.
+      publishedOnly:
+        q.publishedOnly || !roleHasCapability(req.currentUser!.role, 'catalogue:read_unpublished'),
+    });
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    await audit({ ...auditContext(req), action: 'catalogue.exported', detail: { locale: q.locale } });
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    return reply
+      .header('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      .header('content-disposition', `attachment; filename="medication-catalogue-${stamp}.xlsx"`)
+      .send(Buffer.from(buffer));
   });
 
   /** Everything a physician may read, for the compare view. */

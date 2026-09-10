@@ -1,16 +1,23 @@
 /**
- * Creates or repairs the first administrator account.
+ * Creates or repairs an account directly, without an invitation.
  *
- * Used once when bootstrapping a deployment: without it there is no way in,
- * because there is no public registration. The password is read from stdin or
- * the BOOTSTRAP_PASSWORD environment variable, never from a command-line
- * argument, so it does not land in shell history or the process list.
+ * Needed once when bootstrapping a deployment: there is no public
+ * registration, so without this there is no way in at all. It also serves as a
+ * fallback for adding someone when no mail server is configured.
+ *
+ * Prefer the invitation flow for everyone after the first administrator: it
+ * lets the person choose their own password, which this cannot, and it proves
+ * they control the address.
+ *
+ * The password is read from stdin or BOOTSTRAP_PASSWORD, never from a
+ * command-line argument, so it does not land in shell history or the process
+ * list.
  */
 import { createInterface } from 'node:readline/promises';
 import { pool, query } from '../db/pool.js';
 import { hashPassword } from '../lib/crypto.js';
 import { validatePassword } from '../services/auth.js';
-import type { Role } from '@med/shared';
+import { ROLES, type Role } from '@med/shared';
 
 async function prompt(question: string, silent = false): Promise<string> {
   const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
@@ -31,7 +38,12 @@ async function main(): Promise<void> {
   const email = process.env.BOOTSTRAP_EMAIL ?? (await prompt('Administrator email: '));
   const name = process.env.BOOTSTRAP_NAME ?? (await prompt('Full name: '));
   const password = process.env.BOOTSTRAP_PASSWORD ?? (await prompt('Password: ', true));
-  const role: Role = 'admin';
+
+  const requested = process.env.BOOTSTRAP_ROLE ?? 'admin';
+  if (!(ROLES as readonly string[]).includes(requested)) {
+    throw new Error(`Unknown role "${requested}". One of: ${ROLES.join(', ')}`);
+  }
+  const role = requested as Role;
 
   validatePassword(password, email);
   const hash = await hashPassword(password);
@@ -49,13 +61,17 @@ async function main(): Promise<void> {
 
   await query(
     `INSERT INTO audit_log (actor_id, actor_email, action, entity_type, entity_id, detail)
-     VALUES ($1::uuid, $2, 'users.bootstrap_admin', 'user', $1::text,
-             '{"via":"create-admin script"}'::jsonb)`,
-    [rows[0].id, email],
+     VALUES ($1::uuid, $2, 'users.bootstrap_account', 'user', $1::text,
+             $3::jsonb)`,
+    [rows[0].id, email, JSON.stringify({ via: 'create-admin script', role })],
   );
 
-  console.log(`Administrator ready: ${email}`);
-  console.log('Two-factor authentication must be set up at first sign-in before a session is issued.');
+  console.log(`Account ready: ${email} (${role})`);
+  if (role === 'admin') {
+    console.log('Two-factor authentication must be set up at first sign-in before a session is issued.');
+  } else {
+    console.log('Two-factor authentication is optional for this role and can be enabled from the account page.');
+  }
 }
 
 main().then(() => pool.end()).then(() => process.exit(0)).catch((err) => {
