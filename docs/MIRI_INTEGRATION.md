@@ -145,6 +145,7 @@ the budget bot.
 | `benefits-catalog [query] [--json]` | Harvested benefit-club stores: wallets, discount ceilings, cities |
 | `benefits-branches [query] [--json]` | Street addresses + phone for those stores (937 of 972 chains, 2026-09-09) |
 | `benefits-mall <mall> [--json]` | Benefit chains in a named mall, named however the household says it |
+| `benefits-merchant <chain> [--json]` | Does this chain carry a benefit anywhere? `found` true/false, never a bare `[]` |
 | `benefits-remember "<term>" "<merchant>"` | Record that a term resolves to one merchant. `--forget "<term>"` drops it |
 
 **Ask-when-unsure (disambiguation).** When `benefits-catalog "פוקס"`
@@ -191,6 +192,33 @@ Real output, run 2026-09-03:
     *סניפים* — ... תוצאות עבור "כפר סבא"
     • רשת מקסיקנה (מקסיקנה - כפר סבא)
        התעש 24 כפר סבא · 1700500993
+
+### `benefits-merchant` — "do I have a discount at X?" (2026-09-10)
+
+The **chain-scoped** question, which had no verb until now. Use it when
+the household names a shop without naming a place —
+"יש לי הטבה בקסטרו?". `benefits-mall` needs a mall and cannot answer it.
+
+    $ benefits-merchant "קסטרו" --json
+    {"query": "קסטרו", "found": false, "merchants": [],
+     "searched_clubs": ["בהצדעה", "מקס"],
+     "unsearched_clubs": ["כאל", "הר\"י", "לאומי בונוס", "הייטקזון"],
+     "freshness": {...},
+     "note": "אין הטבה ברשת הזאת במועדונים שנסרקו"}
+
+Exit 0 when found, 1 when not, 2 with no argument.
+
+**Why it exists rather than `benefits-catalog "קסטרו" --json`:** that
+returns a bare `[]`, byte-identical for קסטרו — a real chain with no
+benefit — and for gibberish. Two different answers leading to two
+different actions, collapsed into one shape.
+
+**What absence means, exactly.** The catalogue holds only chains that
+*have* a benefit, so `found: false` means "no benefit in the clubs we
+hold", never "this shop does not exist". Four of the household's six
+clubs are unharvested and are listed in `unsearched_clubs` for that
+reason — rendering absence as a flat "אין לך שום הטבה שם" overstates
+what we know. The `note` field carries the sentence that is safe to say.
 
 ### `benefits-mall` — "which shops here have a discount" (2026-09-09)
 

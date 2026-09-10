@@ -34,6 +34,9 @@ Run with: python -m grocery_bot.cli <command>
     benefits-remember "<term>" "<merchant>"  resolve a term to one merchant
     benefits-branches [query] [--json]  street addresses for those stores
                           (937 of 972 chains as of 2026-09-09)
+    benefits-merchant <chain> [--json]  does this chain carry a benefit
+                          anywhere? distinguishes "no benefit" from
+                          "lookup failed" — see benefits_catalog.py
     benefits-mall <mall> [--json]      benefit chains in a named mall,
                           named however you'd say it ("רמת אביב",
                           "בקניון רמת אביב", "ramat aviv")
@@ -54,6 +57,7 @@ wrong prices rather than failing loudly.
 `_DB_ONLY_COMMANDS` needs nothing but `GROCERY_BOT_DB_PATH`: add-item,
 remove-item, list-items, price, deals, recipe, recipe-text, meal-plan,
 nudge, confirm-card, benefits-catalog, benefits-branches, benefits-mall,
+benefits-merchant,
 price-compare, basket,
 coffee-catalog, coffee-nearby, coffee-terms, coffee-by-term.
 No Telegram token, no store session, no exit node — that project has no use for this
@@ -789,6 +793,80 @@ def _benefits_branches(storage: Storage, args: list[str]) -> int:
     return 0 if rows else 1
 
 
+def _benefits_merchant(storage: Storage, args: list[str]) -> int:
+    """Does this chain carry a benefit anywhere? — see benefits_catalog.py.
+
+    The chain-scoped question, which had no verb until 2026-09-10. The
+    catalogue could always answer it; what was missing was a shape that
+    distinguishes the two "empty" cases, and `benefits-catalog --json`
+    returns a bare `[]` for both — byte-identical for קסטרו, a real chain
+    with no benefit, and for gibberish. Miri hit exactly this: asked
+    "יש לי הטבה בקסטרו?", she had no chain-scoped tool and reached for
+    the nearest one that shared a shape.
+
+    **What this can and cannot say.** The catalogue holds only chains
+    that *have* a benefit, so an absence means "no benefit in the clubs
+    we hold", never "this shop does not exist" — and the reply says so,
+    naming which clubs were searched and how stale they are. Four of the
+    household's six clubs are not harvested at all, and a caller that
+    renders absence as a flat "no" would be overstating what we know.
+    """
+    import json
+
+    from .benefits_catalog import freshness, known_clubs, search_catalog
+
+    as_json = "--json" in args
+    query = " ".join(a for a in args if not a.startswith("--")).strip()
+    if not query:
+        print("usage: benefits-merchant <chain name>")
+        return 2
+
+    rows = search_catalog(query)
+    searched = [c["name"] for c in known_clubs() if c.get("harvested")]
+    unsearched = [c["name"] for c in known_clubs() if not c.get("harvested")]
+
+    merchants = []
+    for row in rows:
+        name = (row.get("חנות") or "").strip()
+        if not name:
+            continue
+        merchants.append({
+            "name": name,
+            "club": row.get("club", ""),
+            "category": row.get("קטגוריה") or row.get("תת-קטגוריה", ""),
+            "wallets": row.get("ארנקים", ""),
+            "max_rate": row.get("אחוז מקס", ""),
+        })
+
+    if as_json:
+        print(json.dumps({
+            "query": query,
+            "found": bool(merchants),
+            "merchants": merchants,
+            "searched_clubs": searched,
+            "unsearched_clubs": unsearched,
+            "freshness": freshness(),
+            # The sentence a caller should render, so the distinction is
+            # not left to be re-derived downstream.
+            "note": ("אין הטבה ברשת הזאת במועדונים שנסרקו" if not merchants
+                     else "נמצאה הטבה"),
+        }, ensure_ascii=False))
+        return 0 if merchants else 1
+
+    if not merchants:
+        print(f'אין הטבה ל-"{query}" במועדונים שיש לי: {", ".join(searched)}.')
+        if unsearched:
+            print(f'לא נסרקו (אין גישה): {", ".join(unsearched)} — '
+                  "אז זו לא תשובה מלאה על כל ההטבות של משק הבית.")
+        return 1
+
+    print(f'{len(merchants)} תוצאות עבור "{query}":')
+    for merchant in merchants:
+        rate = f"{merchant['max_rate']}%" if merchant["max_rate"] else "—"
+        print(f"  {rate:>5}  {merchant['name'][:28]:30} {merchant['wallets'][:40]}")
+    return 0
+
+
 def _benefits_mall(storage: Storage, args: list[str]) -> int:
     """Which benefit chains sit in a named mall — see malls.py.
 
@@ -1176,6 +1254,7 @@ _DB_ONLY_COMMANDS = {
     "benefits-catalog": _benefits_catalog,
     "benefits-branches": _benefits_branches,
     "benefits-mall": _benefits_mall,
+    "benefits-merchant": _benefits_merchant,
     "benefits-remember": _benefits_remember,
     # Reads flat JSON under data/coffeetrail/ (gitignored, external
     # public data), not the sqlite database. No token, no store session.
