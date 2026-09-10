@@ -32,6 +32,49 @@ export default async function metaRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /**
+   * Operational status for monitoring and for the administrator's own view.
+   *
+   * Deliberately behind the audit capability: the counts describe editorial
+   * workload and would tell an anonymous caller how much unpublished content
+   * exists. Liveness and readiness stay open for the orchestrator.
+   */
+  app.get('/api/admin/status', { onRequest: [app.requireCapability('audit:read')] }, async () => {
+    const [workflow, findings, sessions, imports, users] = await Promise.all([
+      query<{ state: string; count: number }>(
+        `SELECT state::text AS state, count(*)::int AS count
+           FROM medication_versions GROUP BY state ORDER BY state`,
+      ),
+      query<{ severity: string; count: number }>(
+        `SELECT severity::text AS severity, count(*)::int AS count
+           FROM review_findings WHERE status IN ('open','acknowledged')
+          GROUP BY severity ORDER BY severity`,
+      ),
+      query<{ active: number }>(
+        `SELECT count(*)::int AS active FROM sessions
+          WHERE revoked_at IS NULL AND absolute_expires_at > now() AND idle_expires_at > now()`,
+      ),
+      query<{ id: string; original_filename: string; status: string; committed_at: Date | null }>(
+        `SELECT id, original_filename, status::text AS status, committed_at
+           FROM import_batches ORDER BY uploaded_at DESC LIMIT 1`,
+      ),
+      query<{ role: string; status: string; count: number }>(
+        `SELECT role::text AS role, status::text AS status, count(*)::int AS count
+           FROM users GROUP BY role, status`,
+      ),
+    ]);
+
+    return {
+      uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
+      environment: config.env,
+      catalogue: Object.fromEntries(workflow.rows.map((r) => [r.state, r.count])),
+      openFindings: Object.fromEntries(findings.rows.map((r) => [r.severity, r.count])),
+      activeSessions: sessions.rows[0]?.active ?? 0,
+      lastImport: imports.rows[0] ?? null,
+      users: users.rows,
+    };
+  });
+
+  /**
    * Public site settings. Values still awaiting the owner's approval are
    * reported as such rather than being quietly rendered as if approved.
    */
