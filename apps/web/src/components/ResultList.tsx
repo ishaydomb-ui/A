@@ -42,8 +42,10 @@ export function ResultList({
                 )}
               </span>
               <span className="result-meta">
-                {hit.therapeuticGroup && <span>{hit.therapeuticGroup}</span>}
-                {hit.drugClass && <span>· {hit.drugClass}</span>}
+                {hit.therapeuticGroup && (
+                  <span className="badge badge-accent">{hit.therapeuticGroup}</span>
+                )}
+                {hit.drugClass && <span className="badge badge-accent-2">{hit.drugClass}</span>}
                 {hit.state !== 'published' && (
                   <span className="badge badge-medium">{hit.state.replace(/_/g, ' ')}</span>
                 )}

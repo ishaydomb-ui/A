@@ -23,6 +23,16 @@
   --accent-text:   #ffffff;
   --accent-subtle: #e8f1fa;
 
+  /* A second, gentler accent used only for classification (drug class) and
+     the faint header wash — never for anything that must read as an action
+     or a warning, so it stays purely decorative. */
+  --accent-2:        #9a4a61;  /* 6.0:1 on --bg */
+  --accent-2-hover:  #7e3c50;
+  --accent-2-text:   #ffffff;
+  --accent-2-subtle: #fbeef1;
+  --header-wash-1: rgb(11 95 165 / 6%);
+  --header-wash-2: rgb(154 74 97 / 6%);
+
   --danger:        #a3212b;  /* 6.6:1 on --bg */
   --danger-subtle: #fdeced;
   --warning:       #7a4b00;  /* 6.9:1 on --bg */
@@ -76,6 +86,13 @@
     --accent-text:   #08111c;
     --accent-subtle: #17293c;
 
+    --accent-2:        #eeb0c2;  /* 10.2:1 on --bg */
+    --accent-2-hover:  #f4c6d3;
+    --accent-2-text:   #2e1620;
+    --accent-2-subtle: #2e1620;
+    --header-wash-1: rgb(108 178 245 / 7%);
+    --header-wash-2: rgb(238 176 194 / 6%);
+
     --danger:        #ff9a9f;
     --danger-subtle: #341a1d;
     --warning:       #f0c07a;
@@ -97,6 +114,8 @@
   --border: #333e4b; --border-strong: #566475;
   --text: #eef2f6; --text-muted: #aeb9c6; --text-faint: #8e9aa8;
   --accent: #6cb2f5; --accent-hover: #8ac3f8; --accent-text: #08111c; --accent-subtle: #17293c;
+  --accent-2: #eeb0c2; --accent-2-hover: #f4c6d3; --accent-2-text: #2e1620; --accent-2-subtle: #2e1620;
+  --header-wash-1: rgb(108 178 245 / 7%); --header-wash-2: rgb(238 176 194 / 6%);
   --danger: #ff9a9f; --danger-subtle: #341a1d;
   --warning: #f0c07a; --warning-subtle: #33260f;
   --success: #7fd2a4; --success-subtle: #12291e;
@@ -189,7 +208,9 @@ mark {
   position: sticky;
   inset-block-start: 0;
   z-index: 20;
-  background: var(--bg-raised);
+  /* A barely-there wash rather than a plain fill — the two accents meeting
+     at low opacity over the raised surface, not a redesign of it. */
+  background: linear-gradient(135deg, var(--header-wash-1) 0%, var(--bg-raised) 45%, var(--header-wash-2) 100%);
   border-block-end: 1px solid var(--border);
 }
 .app-header-inner {
@@ -372,6 +393,7 @@ textarea { min-height: 90px; resize: vertical; }
 .badge-low     { border-color: var(--border-strong); }
 .badge-success { border-color: var(--success); background: var(--success-subtle); color: var(--success); }
 .badge-accent  { border-color: var(--accent);  background: var(--accent-subtle);  color: var(--accent); }
+.badge-accent-2 { border-color: var(--accent-2); background: var(--accent-2-subtle); color: var(--accent-2); }
 
 /* Value states: unknown / not supplied / not applicable. */
 .value-state {
