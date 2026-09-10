@@ -469,6 +469,56 @@ describe('account administration', () => {
     });
   });
 
+  it('re-inviting someone who never accepted updates their details in place', async () => {
+    await seedUser({ email: 'admin@example.org', role: 'admin' });
+    const cookie = await loginAsAdmin(app, 'admin@example.org');
+
+    const first = await app.inject({
+      method: 'POST', url: '/api/users/invitations', headers: { cookie },
+      payload: { email: 'liri@example.org', displayName: 'Liri', role: 'physician' },
+    });
+    const firstToken = new URL(first.json().invitationLink).searchParams.get('token')!;
+
+    // Sending again is how a name entered in a hurry gets corrected, and how a
+    // link built from an unreachable address gets replaced.
+    const second = await app.inject({
+      method: 'POST', url: '/api/users/invitations', headers: { cookie },
+      payload: {
+        email: 'liri@example.org',
+        displayName: 'Liran Korotkin Barzelay',
+        role: 'clinical_reviewer',
+      },
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json().userId).toBe(first.json().userId);
+
+    const { rows } = await query(
+      `SELECT display_name, role, status FROM users WHERE email_normalized = 'liri@example.org'`,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      display_name: 'Liran Korotkin Barzelay', role: 'clinical_reviewer', status: 'invited',
+    });
+
+    const stale = await app.inject({ method: 'GET', url: `/api/auth/invitations/${firstToken}` });
+    expect(stale.statusCode).toBe(400);
+  });
+
+  it('refuses to re-invite over an account that has already been accepted', async () => {
+    await seedUser({ email: 'admin@example.org', role: 'admin' });
+    await seedUser({ email: 'liri@example.org', role: 'clinical_reviewer' });
+    const cookie = await loginAsAdmin(app, 'admin@example.org');
+
+    // Otherwise inviting a colleague twice would quietly reset a working
+    // account and change what it can do.
+    const res = await app.inject({
+      method: 'POST', url: '/api/users/invitations', headers: { cookie },
+      payload: { email: 'liri@example.org', displayName: 'Someone Else', role: 'admin' },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe('user_exists');
+  });
+
   it('reissues an invitation and revokes the earlier link', async () => {
     await seedUser({ email: 'admin@example.org', role: 'admin' });
     const cookie = await loginAsAdmin(app, 'admin@example.org');

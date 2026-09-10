@@ -112,6 +112,48 @@ test.describe('account administration', () => {
     await expect(row.getByRole('button', { name: /remove two-factor/i })).toHaveCount(0);
   });
 
+  test('the invitation is handed over in one tap rather than by hand', async ({
+    page,
+    context,
+  }) => {
+    // The link is long, and the person creating it is usually on a phone. It
+    // has to leave this screen without being selected character by character.
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    const { email } = await invite(page, 'One Tap');
+
+    await page.getByRole('button', { name: /copy link/i }).click();
+    await expect(page.getByText(/copied/i)).toBeVisible();
+
+    const clipboard = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipboard).toContain('accept-invitation?token=');
+    // The recipient sees this with no other context, so the link travels with
+    // an explanation of what it is.
+    expect(clipboard).toMatch(/expires in 72 hours/i);
+    expect(email).toBeTruthy();
+  });
+
+  test('offers the phone share sheet where the browser has one', async ({ page }) => {
+    // Desktop Chromium has no navigator.share, and the button is offered only
+    // where it exists — so the capability is stubbed to prove the wiring.
+    await page.addInitScript(() => {
+      (window as unknown as { __shared?: unknown }).__shared = undefined;
+      Object.defineProperty(navigator, 'share', {
+        configurable: true,
+        value: (data: unknown) => {
+          (window as unknown as { __shared?: unknown }).__shared = data;
+          return Promise.resolve();
+        },
+      });
+    });
+
+    await invite(page, 'Share Sheet');
+    await page.getByRole('button', { name: /^share$/i }).click();
+    await expect(page.getByText(/shared/i)).toBeVisible();
+
+    const shared = await page.evaluate(() => (window as unknown as { __shared?: { url?: string } }).__shared);
+    expect(shared?.url).toContain('accept-invitation?token=');
+  });
+
   test('the rename field is reachable and labelled for a screen reader', async ({ page }) => {
     const { email, row } = await invite(page, 'Keyboard Reachable');
 

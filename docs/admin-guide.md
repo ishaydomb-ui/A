@@ -61,15 +61,23 @@ because an administrator created them.
 2. The system creates the account in an `invited` state — it has no password
    and nothing can sign in as it.
 3. An invitation email is sent if SMTP is configured. If it is not, the screen
-   shows a single-use link to pass on yourself. Nothing is silently lost
-   either way.
+   shows a single-use link to pass on yourself — **Share** hands it to a
+   messaging app through the phone's own share sheet, **Copy link** puts it on
+   the clipboard together with a sentence explaining what it is. Nothing is
+   silently lost either way.
 4. The person opens the link, sets a password, and the account becomes
    `active`. Opening that link proves control of the mailbox, so it also
    verifies the address.
 
 Invitation links expire (72 hours by default) and work once. **Re-invite**, in
 the accounts table beside anyone still `invited`, issues a fresh one and
-revokes the earlier link.
+revokes the earlier link. Filling in the invitation form again for the same
+address does the same thing, and also updates the name and role you enter — so
+a name typed in a hurry can be corrected on the second attempt.
+
+An account that has already been accepted is not re-invitable: inviting a
+colleague twice would otherwise reset a working account and silently change
+what it can do. Use the role control, or **Rename**, on the account itself.
 
 A link also carries the address the system is configured with, so one created
 before the site had an address a colleague can open points at `localhost` and

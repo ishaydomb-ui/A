@@ -1,13 +1,13 @@
 # Tests
 
-335 automated tests. All pass.
+341 automated tests. All pass.
 
 | Suite | Count | What it runs against |
 | --- | --- | --- |
 | Domain unit tests | 17 | Pure functions, no I/O |
 | Unit tests | 19 | The import quality detectors and the source lookup |
-| API integration | 142 | A real PostgreSQL database |
-| End-to-end | 157 | The real stack, in a real browser |
+| API integration | 144 | A real PostgreSQL database |
+| End-to-end | 161 | The real stack, in a real browser |
 
 ## Running them
 
@@ -28,7 +28,7 @@ a fixture cannot drift from real behaviour.
 
 ## What is covered
 
-### Authentication and accounts — 41 tests
+### Authentication and accounts — 43 tests
 
 That no registration endpoint exists; that a non-administrator cannot create
 accounts; the full invitation lifecycle including expiry, reuse and weak
@@ -49,6 +49,11 @@ with a password alone, that removing it signs the person out everywhere, and
 that it is not a way around the policy — a role that requires a second factor
 enrols again at its next sign-in. Each of these is refused without the
 `users:manage` capability.
+
+Re-inviting: that sending the form again for someone who never accepted keeps
+the same account, updates their name and role, and kills the earlier link; and
+that an account which *has* been accepted is refused, so inviting a colleague
+twice cannot quietly reset a working account.
 
 ### Editorial workflow — 22 tests
 

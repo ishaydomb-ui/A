@@ -22,6 +22,10 @@ export function UsersPage() {
   // is editable at a time, so a half-finished edit cannot be left behind on a
   // row that has scrolled out of sight.
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
+  const [handedOver, setHandedOver] = useState<string | null>(null);
+  // Sharing is a phone capability; on a desktop browser the button would
+  // simply not work, so it is only offered where it exists.
+  const [canShare, setCanShare] = useState(false);
 
   // Re-inviting is done from a row that can be well below the fold, while the
   // link it produces is shown with the invitation form at the top. Screen
@@ -41,6 +45,10 @@ export function UsersPage() {
     if (invitationLink) invitationRef.current?.scrollIntoView({ block: 'center' });
   }, [invitationLink]);
 
+  useEffect(() => {
+    setCanShare(typeof navigator !== 'undefined' && typeof navigator.share === 'function');
+  }, []);
+
   async function invite(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -53,6 +61,7 @@ export function UsersPage() {
         role,
       });
       setInvitationLink(result.invitationLink);
+      setHandedOver(null);
       setEmail('');
       setDisplayName('');
       load();
@@ -103,6 +112,42 @@ export function UsersPage() {
       load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.errorGeneric);
+    }
+  }
+
+  /**
+   * The text that goes with the link when it is shared. It has to stand on its
+   * own: the recipient sees it in a messaging app with no other context.
+   */
+  function invitationMessage(): string {
+    return (
+      'You have been given access to the Medication Catalogue. ' +
+      'Open this link to choose a password. It works once, and expires in 72 hours.'
+    );
+  }
+
+  async function shareInvitation() {
+    if (!invitationLink) return;
+    try {
+      await navigator.share({
+        title: 'Medication Catalogue',
+        text: invitationMessage(),
+        url: invitationLink,
+      });
+      setHandedOver('Shared.');
+    } catch {
+      // Dismissing the share sheet rejects, which is not a failure worth
+      // reporting; the link is still on screen either way.
+    }
+  }
+
+  async function copyInvitation() {
+    if (!invitationLink) return;
+    try {
+      await navigator.clipboard.writeText(`${invitationMessage()}\n\n${invitationLink}`);
+      setHandedOver('Copied. Paste it into a message to them.');
+    } catch {
+      setHandedOver('Could not copy automatically — select the link above and copy it by hand.');
     }
   }
 
@@ -162,6 +207,10 @@ export function UsersPage() {
               ))}
             </select>
             <p className="hint">Administrators must set up two-factor authentication before they can sign in.</p>
+            <p className="hint">
+              If the person is already listed and has not accepted yet, sending again simply
+              replaces their invitation and updates the name and role you enter here.
+            </p>
           </div>
           <button type="submit" className="btn btn-primary" disabled={busy}>
             {busy ? t.loading : 'Send invitation'}
@@ -178,6 +227,21 @@ export function UsersPage() {
               <p className="mono" style={{ wordBreak: 'break-all' }}>
                 {invitationLink}
               </p>
+              <div className="row">
+                {canShare && (
+                  <button type="button" className="btn btn-primary" onClick={() => void shareInvitation()}>
+                    Share
+                  </button>
+                )}
+                <button type="button" className="btn btn-secondary" onClick={() => void copyInvitation()}>
+                  Copy link
+                </button>
+              </div>
+              {handedOver && (
+                <p className="hint" role="status">
+                  {handedOver}
+                </p>
+              )}
             </Notice>
           )}
         </div>
