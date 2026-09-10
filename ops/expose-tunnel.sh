@@ -47,7 +47,7 @@ if [ "${1:-}" = "--stop" ]; then
 fi
 
 # --- Preconditions ---------------------------------------------------------
-say "1/4  Checking the stack"
+say "1/5  Checking the stack"
 curl -fsS -m 5 "$LOCAL_URL/readyz" >/dev/null 2>&1 \
     || die "The catalogue is not answering on $LOCAL_URL. Start it first with ./ops/local-up.sh"
 ok "stack is up"
@@ -57,7 +57,7 @@ if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
 fi
 
 # --- cloudflared -----------------------------------------------------------
-say "2/4  Cloudflare tunnel client"
+say "2/5  Cloudflare tunnel client"
 if [ -x "$BIN" ]; then
     ok "already downloaded"
 else
@@ -73,14 +73,19 @@ else
 fi
 
 # --- Start -----------------------------------------------------------------
-say "3/4  Opening the tunnel"
+say "3/5  Opening the tunnel"
 : > "$LOG"
 nohup "$BIN" tunnel --no-autoupdate --url "$LOCAL_URL" >>"$LOG" 2>&1 &
 echo $! > "$PIDFILE"
 
+# The log also mentions https://api.trycloudflare.com, which is the endpoint
+# cloudflared asks for a tunnel - not the tunnel itself. Excluding it matters:
+# opening that address returns a JSON "Method Not Allowed" and looks for all
+# the world like the tunnel is broken. The real hostname is the last match.
 PUBLIC=""
 for _ in $(seq 1 45); do
-    PUBLIC="$(grep -oE 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' "$LOG" 2>/dev/null | head -1 || true)"
+    PUBLIC="$(grep -oE 'https://[a-zA-Z0-9][a-zA-Z0-9-]*\.trycloudflare\.com' "$LOG" 2>/dev/null \
+                | grep -v '^https://api\.' | tail -1 || true)"
     [ -n "$PUBLIC" ] && break
     sleep 2
 done
@@ -95,7 +100,7 @@ fi
 ok "address: $PUBLIC"
 
 # --- Point the app at it ---------------------------------------------------
-say "4/4  Reconfiguring the app for that address"
+say "4/5  Reconfiguring the app for that address"
 # The session cookie is marked Secure now that the app is served over HTTPS,
 # so it is never sent over a plain connection.
 grep -v -E '^(PUBLIC_URL|COOKIE_SECURE)=' .env > .env.tmp 2>/dev/null || true
@@ -112,6 +117,24 @@ for _ in $(seq 1 30); do
     sleep 2
 done
 ok "app restarted"
+
+# Prove the public address really reaches the catalogue, rather than trusting
+# that it does.
+say "5/5  Checking the public address"
+reachable=""
+for _ in $(seq 1 20); do
+    if curl -fsS -m 8 "$PUBLIC/readyz" 2>/dev/null | grep -q '"status":"ready"'; then
+        reachable=yes
+        break
+    fi
+    sleep 3
+done
+if [ -n "$reachable" ]; then
+    ok "$PUBLIC serves the catalogue"
+else
+    warn "The tunnel is open but $PUBLIC did not answer yet."
+    warn "Quick tunnels can take a minute to propagate - try it in the browser."
+fi
 
 rule() { printf '%s\n' "------------------------------------------------------------"; }
 printf '\n'
