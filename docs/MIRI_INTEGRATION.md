@@ -146,6 +146,7 @@ the budget bot.
 | `benefits-branches [query] [--json]` | Street addresses + phone for those stores (937 of 972 chains, 2026-09-09) |
 | `benefits-mall <mall> [--json]` | Benefit chains in a named mall, named however the household says it |
 | `benefits-merchant <chain> [--json]` | Does this chain carry a benefit anywhere? `found` true/false, never a bare `[]` |
+| `benefits-area <שכונה> \| <lat> <lon> [--radius KM] [--json]` | Benefit chains in a neighbourhood, or near a point — the "outside the mall" question |
 | `benefits-remember "<term>" "<merchant>"` | Record that a term resolves to one merchant. `--forget "<term>"` drops it |
 
 **Ask-when-unsure (disambiguation).** When `benefits-catalog "פוקס"`
@@ -192,6 +193,48 @@ Real output, run 2026-09-03:
     *סניפים* — ... תוצאות עבור "כפר סבא"
     • רשת מקסיקנה (מקסיקנה - כפר סבא)
        התעש 24 כפר סבא · 1700500993
+
+### `benefits-area` — "and outside the mall?" (2026-09-10)
+
+Built after Ishay asked you *"ומחוץ לקניון, באזור הכללי של שכונת רמת
+אביב?"* and you correctly answered that you could only check a named
+mall or a named chain. That was true: of 6,136 harvested addresses, four
+contain the string "רמת אביב" and three are the mall itself. Addresses
+carry street + number + city and no neighbourhood, so text search could
+never have answered it. The branch addresses are now geocoded.
+
+    $ benefits-area "ומחוץ לקניון, באזור הכללי של שכונת רמת אביב?"
+    רמת-אביב — 37 רשתות עם הטבה
+    מחוץ לקניון (5):
+        30%  ריקושט        איינשטיין 68 תל אביב - יפו
+        20%  סואי סושי     ברזיל 17 תל אביב - יפו
+        ...
+    בתוך קניון רמת אביב, תל אביב (32): ...
+
+Also takes a point: `benefits-area 32.11 34.79 --radius 1`. That is the
+form for "I am here, what is around me" — no neighbourhood name needed.
+
+Exit 0 found, 1 unknown area, 2 no argument. JSON carries `recognized`,
+`areas` (plural — see below), `coverage`, and per chain a `mall` field.
+
+**Four behaviours to rely on:**
+
+1. **Mall and street are separated.** His question was "outside the
+   mall", and in רמת אביב the split is 5 street shops against 32 in the
+   mall. Merging them answers a different question. Each chain in JSON
+   carries `mall`: the mall name, or "" for a street shop.
+2. **A broad area name returns every part it covers.** OSM splits
+   הצפון הישן into "החלק הדרומי" and "החלק הצפוני"; someone asking about
+   the neighbourhood means both. Hence `areas` is a list.
+3. **Coverage is declared with every answer.** `coverage.missing` is how
+   many addresses in the city could not be geocoded — currently **52 of
+   419 in Tel Aviv**, from dirty source addresses like "חבר הלאוומים 1"
+   (a typo for הלאומים). Those shops are invisible here, so an answer is
+   "what I can place", never "everything that exists". Please render
+   that rather than dropping it.
+4. **Tel Aviv only, for now.** Ishay scoped it ("לא נתחיל מכל הארץ.
+   נתחיל מתל אביב"). An area outside Tel Aviv is simply unknown, exit 1
+   with `known_areas` — not an empty result.
 
 ### `benefits-merchant` — "do I have a discount at X?" (2026-09-10)
 
