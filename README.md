@@ -23,6 +23,9 @@ keeps unverified clinical content away from the people who would act on it.
 | [docs/architecture.md](docs/architecture.md) | How the system is built and why |
 | [docs/testing.md](docs/testing.md) | Test suites, what they cover, how to run them |
 | [docs/decisions.md](docs/decisions.md) | Design decisions taken, and what still needs your approval |
+| [docs/technical-capabilities.md](docs/technical-capabilities.md) | Code-verified capabilities report, for external/clinical-safety review |
+| [docs/roadmap-proposals.md](docs/roadmap-proposals.md) | Unified list of proposed future capabilities, staged and prioritised |
+| [docs/telegram-bot.md](docs/telegram-bot.md) | Optional Telegram bot for project discussion with Claude |
 
 ## What it does
 
@@ -47,6 +50,8 @@ every content change is recorded in an append-only log.
 ```
 apps/api          Fastify + TypeScript API, SQL migrations, ops scripts entry points
 apps/web          React + Vite client, Playwright end-to-end tests
+apps/bot          Optional Telegram bot for project discussion (see
+                  docs/telegram-bot.md) — not part of the main stack
 packages/shared   Domain model shared by both: roles, field registry,
                   workflow, value states, text normalisation
 ops               Reverse proxy config, backup and restore scripts

@@ -125,8 +125,38 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  # Telegram bot for project discussion — see docs/telegram-bot.md. Behind a
+  # profile so a plain `docker compose up` never touches it or demands its
+  # secrets: it only starts with `--profile bot` (or `up bot` by name).
+  bot:
+    profiles: ["bot"]
+    build:
+      context: .
+      dockerfile: apps/bot/Dockerfile
+    restart: unless-stopped
+    environment:
+      # Deliberately NOT required (:?), unlike the rest of this file: Compose
+      # interpolates every service's environment before applying --profile,
+      # so a :? here would break `docker compose up` for everyone, bot or
+      # not. The bot process itself refuses to start without these two — see
+      # apps/bot/src/config.ts — so a missing value fails loudly in
+      # `docker compose logs bot` instead.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5}
+      BOT_ALLOWED_CHAT_IDS: ${BOT_ALLOWED_CHAT_IDS:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - bot-data:/data
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
 volumes:
   db-data:
   import-data:
+  bot-data:
   caddy-data:
   caddy-config:
