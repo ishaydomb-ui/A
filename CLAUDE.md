@@ -84,6 +84,23 @@ Set by the user 2026-09-01. Do all of this, then stop:
 2. Commit everything outstanding, in focused commits.
 3. Push. If a bundle mechanism exists, build it too.
 4. Record the conversation id in `HANDOFF.md`.
+5. Run `scripts/refresh_bot.sh`, so the bot the user talks to is running
+   the code that was just saved.
+
+Why step 5 exists: on 2026-09-10 the service had been up since the
+previous afternoon, so the thinking loop, its timeout cap and the send
+fallback were committed, pushed, tested — and absent from the live bot.
+Nothing announced it; `git push` saves code, it does not replace running
+software. Set by the user the same day: *"עדיף שישאר מעודכן גם על מצב של
+אי זמינות רגעית."*
+
+The script keeps that moment as small as the decision allows. It does
+nothing when no loaded code is newer than the process, so an anchor that
+only touches HANDOFF.md never drops the bot; and it **refuses** while a
+cart cycle is in flight, because a cycle drives a real browser against a
+real account and killing it half-way leaves the cart part-filled with no
+report — worse than being one commit behind. It exits 3 in that case,
+which is to be reported, not worked around.
 
 **Report back in one line: what was saved, and what was already clean.**
 Do not summarise the session and do not open a new conversation. The
