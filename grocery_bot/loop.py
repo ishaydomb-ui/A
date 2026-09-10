@@ -59,7 +59,17 @@ from .nlu import INTENTS, ParsedItem, ParsedMessage, _claude_cli
 
 logger = logging.getLogger(__name__)
 
-LOOP_TIMEOUT_SECONDS = 90
+# Measured 2026-09-10: the second pass normally takes 12-17s, but the
+# 28-phrasing sweep found "נגמר" averaging 62.7s over three runs, which
+# means at least one run ran to or near the old 90s ceiling. On top of
+# the classifier's ~7s that is a minute and a half of silence on a phone,
+# for a message whose best possible outcome is a one-line question.
+#
+# The asymmetry decides it: giving up early costs a clarifying question
+# and falls back to a bare `unclear`, which is what the bot did before
+# this module existed. Waiting costs the household staring at a typing
+# indicator. So the ceiling is set just past the normal range.
+LOOP_TIMEOUT_SECONDS = 30
 
 # Intents this pass may never produce, whatever the model says. Each one
 # reaches the household's real cart: start_order and add_to_cart write to

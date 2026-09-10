@@ -155,5 +155,35 @@ class OnlyUnclearReachesTheLoop(unittest.TestCase):
         self.assertEqual(parsed.intent, "deals")
 
 
+
+class TheSecondPassHasABudget(unittest.TestCase):
+    """A clarifying question is worth ~15s. It is not worth 90.
+
+    Measured 2026-09-10 across the 28-phrasing sweep: the loop normally
+    runs 12-17s, but one message averaged 62.7s over three runs, so at
+    least one approached the old ceiling. On a phone that reads as the
+    bot having died.
+    """
+
+    def test_the_ceiling_is_just_past_the_measured_range(self):
+        self.assertLessEqual(loop.LOOP_TIMEOUT_SECONDS, 35)
+        self.assertGreaterEqual(loop.LOOP_TIMEOUT_SECONDS, 20)
+
+    def test_a_timeout_degrades_to_the_classifier_result_not_an_error(self):
+        import subprocess
+
+        with mock.patch.object(
+            loop, "_ask",
+            side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=30),
+        ):
+            self.assertIsNone(loop.reconsider("נגמר", None))
+
+    def test_the_timeout_is_actually_passed_to_the_subprocess(self):
+        """A constant nobody passes is a constant nobody honours."""
+        import inspect
+
+        source = inspect.getsource(loop._ask)
+        self.assertIn("LOOP_TIMEOUT_SECONDS", source)
+
 if __name__ == "__main__":
     unittest.main()
