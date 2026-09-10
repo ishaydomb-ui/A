@@ -708,3 +708,45 @@ dialog::backdrop { background: rgb(8 12 18 / 55%); }
   line-height: 1.45;
 }
 .evaluation-banner strong { color: var(--warning); }
+
+/* ---------------------------------------------------------------------------
+   Record footer.
+
+   Provenance, validation status and the disclaimer, placed after the clinical
+   content. Quiet by design: the warning that matters is the banner at the top
+   of every screen, and repeating it loudly on each record only teaches people
+   to skip past it.
+--------------------------------------------------------------------------- */
+.record-footer {
+  margin-block-start: var(--space-6);
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.record-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0 0 var(--space-3);
+}
+.record-meta > div { display: flex; gap: var(--space-1); align-items: baseline; }
+.record-meta dt { font-weight: 600; }
+.record-meta dt::after { content: ':'; }
+.record-meta dd { margin: 0; }
+
+.record-disclaimer {
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--bg-subtle);
+  border-inline-start: 3px solid var(--warning);
+  border-radius: var(--radius-s);
+  line-height: 1.5;
+}
+.record-disclaimer strong { color: var(--warning); }
+
+/* Editorial detail, shown only to the roles that can act on it. */
+.record-internal { margin-block-start: var(--space-3); }
+.record-internal summary { cursor: pointer; font-weight: 600; }
+.record-internal ul { margin: var(--space-2) 0 0; padding-inline-start: var(--space-5); }

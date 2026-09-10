@@ -81,48 +81,7 @@ export function MedicationPage() {
             <span className="badge badge-medium">{detail.state.replace(/_/g, ' ')}</span>
           )}
         </div>
-
-        <div className="detail-badges">
-          <span className={`badge ${unvalidated ? 'badge-high' : 'badge-success'}`}>
-            {t.validationStatus}: {detail.validationStatus}
-          </span>
-          {detail.publishedUnvalidated && (
-            <span className="badge badge-high">{t.unvalidatedRecord}</span>
-          )}
-          <span className="badge">
-            {t.versionLabel} {detail.versionNumber}
-          </span>
-          {detail.reviewedAt && (
-            <span className="badge">
-              {t.reviewDate}: {detail.reviewedAt}
-            </span>
-          )}
-          {detail.publishedAt && (
-            <span className="badge">
-              {t.lastPublished}: {detail.publishedAt.slice(0, 10)}
-            </span>
-          )}
-        </div>
       </header>
-
-      {/* An unvalidated record must say so plainly, right above the content. */}
-      {unvalidated && (
-        <Notice tone="warning" title={t.disclaimerHeading}>
-          <p>{t.unvalidatedRecordDetail}</p>
-          {detail.overriddenBlockers.length > 0 && (
-            <>
-              <p style={{ marginBlockEnd: 4 }}>
-                <strong>{t.outstandingChecks}:</strong>
-              </p>
-              <ul style={{ margin: 0, paddingInlineStart: 20 }}>
-                {detail.overriddenBlockers.map((blocker, i) => (
-                  <li key={i}>{blocker.message}</li>
-                ))}
-              </ul>
-            </>
-          )}
-        </Notice>
-      )}
 
       {FIELD_GROUPS.map((group) => {
         const fields = fieldsInGroup(group);
@@ -169,13 +128,67 @@ export function MedicationPage() {
         )}
       </section>
 
-      {can('catalogue:read_unpublished') && (
-        <p>
-          <Link to={`/review?slug=${encodeURIComponent(detail.slug)}`} className="btn btn-secondary">
-            {t.navReview}
-          </Link>
-        </p>
-      )}
+      {/*
+        Provenance and the disclaimer sit below the content rather than above
+        it. The banner across every screen already carries the warning, and
+        stacking a second one over each record buys nothing: warnings that
+        always appear stop being read, which is the opposite of the point.
+      */}
+      <footer className="record-footer">
+        <dl className="record-meta">
+          <div>
+            <dt>{t.versionLabel}</dt>
+            <dd>{detail.versionNumber}</dd>
+          </div>
+          {detail.reviewedAt && (
+            <div>
+              <dt>{t.reviewDate}</dt>
+              <dd>{detail.reviewedAt}</dd>
+            </div>
+          )}
+          {detail.publishedAt && (
+            <div>
+              <dt>{t.lastPublished}</dt>
+              <dd>{detail.publishedAt.slice(0, 10)}</dd>
+            </div>
+          )}
+          <div>
+            <dt>{t.validationStatus}</dt>
+            <dd>{detail.validationStatus}</dd>
+          </div>
+        </dl>
+
+        {unvalidated && (
+          <p className="record-disclaimer">
+            <strong>{t.disclaimerHeading}:</strong> {t.unvalidatedRecordDetail}
+          </p>
+        )}
+
+        {/*
+          Which checks are outstanding is editorial detail — missing citations,
+          no review date. It is what an editor needs in order to act, and noise
+          to a clinician reading the record, so it is shown only to the roles
+          that can do something about it.
+        */}
+        {can('catalogue:read_unpublished') && detail.overriddenBlockers.length > 0 && (
+          <details className="record-internal">
+            <summary>{t.outstandingChecks}</summary>
+            <ul>
+              {detail.overriddenBlockers.map((blocker, i) => (
+                <li key={i}>{blocker.message}</li>
+              ))}
+            </ul>
+          </details>
+        )}
+
+        {can('catalogue:read_unpublished') && (
+          <p style={{ marginBlockStart: 16 }}>
+            <Link to={`/review?slug=${encodeURIComponent(detail.slug)}`} className="btn btn-sm btn-secondary">
+              {t.navReview}
+            </Link>
+          </p>
+        )}
+      </footer>
     </article>
   );
 }

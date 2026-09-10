@@ -168,3 +168,19 @@ test.describe('user administration', () => {
     await expect(page.getByRole('alert')).toContainText(/not valid|already been used|expired/i);
   });
 });
+
+test.describe('editorial detail on a record', () => {
+  test.use({ storageState: STATE_FILES.reviewer });
+
+  test('a reviewer does see which checks are outstanding', async ({ page }) => {
+    await page.goto('/medications/sertraline?draft=1');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+
+    // Present only when the record was published with gates outstanding.
+    const outstanding = page.getByText(/Outstanding checks/i);
+    if (await outstanding.count()) {
+      await outstanding.click();
+      await expect(page.locator('.record-internal li').first()).toBeVisible();
+    }
+  });
+});

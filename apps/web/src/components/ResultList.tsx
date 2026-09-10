@@ -47,9 +47,6 @@ export function ResultList({
                 {hit.state !== 'published' && (
                   <span className="badge badge-medium">{hit.state.replace(/_/g, ' ')}</span>
                 )}
-                {hit.publishedUnvalidated && (
-                  <span className="badge badge-high">{t.unvalidatedRecord}</span>
-                )}
                 {hit.matchKind === 'fuzzy' && <span className="badge">≈</span>}
               </span>
             </Link>

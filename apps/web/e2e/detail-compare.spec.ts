@@ -44,9 +44,22 @@ test.describe('medication detail', () => {
     await expect(page.getByText(/Jurisdiction: IL/).first()).toBeVisible();
   });
 
-  test('states the validation status of the record', async ({ page }) => {
+  test('states the validation status in the record footer, not over the content', async ({ page }) => {
     await page.goto('/medications/sertraline');
-    await expect(page.getByText(/Validation status:/)).toBeVisible();
+
+    const footer = page.locator('.record-footer');
+    await expect(footer).toContainText(/Validation status/i);
+    await expect(footer).toContainText(/Version/i);
+
+    // The heading area carries the medication, not its governance state.
+    await expect(page.locator('.detail-header')).not.toContainText(/Validation status/i);
+  });
+
+  test('does not show editorial detail to a physician', async ({ page }) => {
+    await page.goto('/medications/sertraline');
+    // Which checks are outstanding is for the people who can act on them.
+    await expect(page.getByText(/Outstanding checks/i)).toHaveCount(0);
+    await expect(page.getByText(/carries a clinical claim with no source/i)).toHaveCount(0);
   });
 
   test('is deep-linkable and survives a reload', async ({ page }) => {
