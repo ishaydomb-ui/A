@@ -1,6 +1,7 @@
 import { buildApp } from './app.js';
 import { config } from './config.js';
 import { closePool } from './db/pool.js';
+import { up } from './db/migrate.js';
 import { logger } from './lib/logger.js';
 import { initMail } from './services/mail.js';
 import { purgeExpiredSessions } from './services/auth.js';
@@ -8,6 +9,12 @@ import { ensureDefaultSettings } from './services/settings.js';
 import { purgeExpired as purgeRateLimits } from './services/rateLimit.js';
 
 async function main(): Promise<void> {
+  if (config.runMigrationsOnStart) {
+    logger.info('applying pending migrations');
+    const applied = await up((msg) => logger.info(msg));
+    logger.info({ applied: applied.length }, 'migrations up to date');
+  }
+
   await initMail();
   // A setting added by a later migration must exist even where the database
   // was created some other way.

@@ -55,8 +55,14 @@ services:
       TRUST_PROXY: "true"
       IMPORT_STORAGE_DIR: /data/imports
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Single instance, so the schema is applied on start-up rather than as a
+      # separate step that is easy to forget.
+      RUN_MIGRATIONS_ON_START: "true"
     volumes:
       - local-import-data:/data
+      # The website-snapshot workbook, for seeding. Mounted rather than baked
+      # into the image: unvalidated clinical data does not belong in a release.
+      - ./apps/api/src/test/data:/seed:ro
     expose:
       - "4000"
 
@@ -66,7 +72,11 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
     restart: unless-stopped
-    depends_on: [api]
+    depends_on:
+      # Waits for the API to answer its health check, so the first page load
+      # does not arrive before the schema has been applied.
+      api:
+        condition: service_healthy
     ports:
       - "127.0.0.1:8080:8080"
     volumes:

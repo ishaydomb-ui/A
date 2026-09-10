@@ -53,7 +53,19 @@ ops               Reverse proxy config, backup and restore scripts
 docs              The documentation listed above
 ```
 
-## Running it locally
+## Running it
+
+The fastest path, needing only Docker:
+
+```bash
+ADMIN_EMAIL='you@example.org' ./ops/local-up.sh
+```
+
+It generates the secrets, builds and starts everything, applies the schema,
+creates your account, loads the catalogue and prints the URL. See
+[docs/quickstart-local.md](docs/quickstart-local.md).
+
+## Running it from source
 
 Requires Node 22, pnpm and PostgreSQL 16.
 

@@ -62,6 +62,15 @@ const schema = z.object({
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   TRUST_PROXY: booleanish.default(false),
+
+  /**
+   * Apply pending migrations at start-up.
+   *
+   * Off by default: with several API replicas, migrations belong in the deploy
+   * step so they run once. For a single-instance deployment it removes a whole
+   * class of "it starts but every request fails" confusion.
+   */
+  RUN_MIGRATIONS_ON_START: booleanish.default(false),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -146,6 +155,7 @@ export const config = {
 
   logLevel: env.LOG_LEVEL,
   trustProxy: env.TRUST_PROXY,
+  runMigrationsOnStart: env.RUN_MIGRATIONS_ON_START,
   /** True when the app is served only on this machine, without TLS. */
   loopbackOnly,
 } as const;
