@@ -7,6 +7,20 @@ built and started only when you explicitly opt in.
 
 ## What it is, and what it is not
 
+- **Its primary role, unless told otherwise in the chat itself, is bug
+  triage** — not open-ended product discussion. When Liran describes
+  something that looks wrong, it pins down where (page, record, field),
+  what's shown versus expected, and why, checking that against the known
+  limitations and design decisions in the docs first so it doesn't reopen
+  something already decided. It distinguishes an app bug from a data-quality
+  problem in the imported content from a deliberate design choice, and closes
+  each report out with a short Where / What's wrong / Expected / Why summary
+  meant to be handed to Claude Code as-is. It still answers roadmap and
+  general product questions when asked (see `docs/roadmap-proposals.md`), but
+  doesn't drift there on its own. To change this focus, just say so in the
+  chat — the instruction lives in `apps/bot/src/claude.ts`'s system prompt,
+  not in a separate config, so redeploying after an edit is what changes it
+  going forward.
 - It runs as its own container, long-polling Telegram (no inbound port, no
   reverse-proxy route needed).
 - On every message it makes a fresh call to the Anthropic API, with a system
