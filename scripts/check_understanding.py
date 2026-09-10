@@ -125,6 +125,40 @@ def check_loop_barrier(repeat: int) -> int:
     return 0
 
 
+def export(path: str) -> int:
+    """Write the corpus as JSON, for a consumer that is not this project.
+
+    Miri routes the household's messages before they ever reach this
+    project's CLI, so a phrasing Ishay types is tested here only after
+    her side has already recognised and routed it. Sharing the corpus
+    lets both sides run the same phrasings; sharing my *expectations*
+    would not, because hers are about routing and mine are about
+    resolution. So this exports the phrasings and the mall answers —
+    which are facts about the data — and no intent labels, which are
+    facts about this bot's own taxonomy.
+    """
+    import json
+
+    payload = {
+        "source": "grocery-automation tests/phrasebook.py",
+        "note": ("Phrasings the household actually uses. `malls` answers are "
+                 "this project's canonical names, verifiable via "
+                 "`benefits-mall <phrase> --json`. An empty answer means the "
+                 "phrase must NOT resolve — six of them are deliberate "
+                 "refusals, including a right-brand-wrong-city case."),
+        "malls": [{"phrase": p, "expect": e} for p, e in phrasebook.MALLS],
+        "merchants": [p for p, _ in phrasebook.MERCHANTS],
+        "merchants_absent": phrasebook.MERCHANTS_ABSENT,
+        "food": phrasebook.FOOD,
+        "unparseable": phrasebook.LOOP_MUST_NOT_ACT,
+    }
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=1)
+    counts = {k: len(v) for k, v in payload.items() if isinstance(v, list)}
+    print(f"wrote {path}: {counts}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repeat", type=int, default=1,
@@ -132,7 +166,11 @@ def main() -> int:
     parser.add_argument("--only", default="", help="substring filter on the phrase")
     parser.add_argument("--loop", action="store_true",
                         help="check the loop's cart barrier instead of intents")
+    parser.add_argument("--export", metavar="PATH",
+                        help="write the corpus as JSON for another project")
     args = parser.parse_args()
+    if args.export:
+        return export(args.export)
     if args.loop:
         return check_loop_barrier(args.repeat)
     return check_intents(args.repeat, args.only)
