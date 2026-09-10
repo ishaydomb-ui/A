@@ -14,6 +14,14 @@
 #   docker compose -f docker-compose.local.yml -f docker-compose.permanent.yml up -d
 #
 # Ports 80 and 443 must be reachable from the internet on this server.
+#
+# If something else on the machine already holds port 443 on a specific
+# address (Tailscale Serve/Funnel, another reverse proxy) rather than on
+# every address, a plain "443:443" publish fails with "address already in
+# use" even though the ports don't actually overlap - Docker's wildcard bind
+# collides with the other process's specific one. Set PUBLIC_BIND_IP in .env
+# to the server's public IP to bind only that address instead; leave it
+# unset for the normal, no-conflict case.
 # ---------------------------------------------------------------------------
 services:
   proxy:
@@ -21,9 +29,9 @@ services:
     restart: unless-stopped
     depends_on: [api, web]
     ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
+      - "${PUBLIC_BIND_IP:-0.0.0.0}:80:80"
+      - "${PUBLIC_BIND_IP:-0.0.0.0}:443:443"
+      - "${PUBLIC_BIND_IP:-0.0.0.0}:443:443/udp"
     environment:
       SITE_HOSTNAME: ${SITE_HOSTNAME:?set SITE_HOSTNAME in .env}
       ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
