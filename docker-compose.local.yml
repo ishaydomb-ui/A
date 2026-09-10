@@ -50,8 +50,11 @@ services:
       # Loopback is a secure context and is not reachable off this machine, so
       # the cookie does not need the Secure flag here. The API refuses this
       # combination for any non-loopback address.
-      PUBLIC_URL: http://localhost:8080
-      COOKIE_SECURE: "false"
+      #
+      # Overridable from .env, which is how ops/expose-tunnel.sh points the app
+      # at a public HTTPS address and turns the Secure flag back on.
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
+      COOKIE_SECURE: "${COOKIE_SECURE:-false}"
       TRUST_PROXY: "true"
       IMPORT_STORAGE_DIR: /data/imports
       LOG_LEVEL: ${LOG_LEVEL:-info}

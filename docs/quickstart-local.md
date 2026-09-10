@@ -142,21 +142,65 @@ docker compose -f docker-compose.local.yml down -v        # stop and DELETE data
 
 ## Reaching it from another device
 
-The local stack is deliberately unreachable from the network. Two ways to
-change that, without paying for a server:
+The stack binds to `127.0.0.1`, which means **the machine it runs on**. If that
+machine is a server you reach over SSH, then `http://localhost:8080` in your
+own browser points at your own computer or phone, not at the server, and
+nothing will answer. That is the binding doing its job, not a fault.
 
-**Cloudflare Tunnel (free tier).** Gives a public HTTPS hostname pointing at
-the machine, with no inbound port opened and no fixed IP needed. Suitable for
-letting a colleague try it; it does mean the catalogue is reachable from the
-internet, so do not do it before you are content with the access controls.
+Three ways to change it, in order of how exposed they leave you.
 
-**On the same network.** Change the port bindings in
-`docker-compose.local.yml` from `127.0.0.1:8080` to `8080`, and set
-`PUBLIC_URL` to the machine's LAN address. Note the trade-off: the API refuses
-to run without TLS on anything other than a loopback address, so you would
-need `COOKIE_SECURE` handling and a certificate. For anything beyond one
-machine, the full stack in [deployment.md](deployment.md) is the honest
-answer.
+### 1. SSH tunnel — nothing is exposed
+
+From your own machine, not from inside the SSH session:
+
+```bash
+ssh -L 8080:127.0.0.1:8080 user@your-server
+```
+
+Leave that open and use `http://localhost:8080` locally. The traffic goes
+through SSH; nothing is opened to the internet. Phone SSH clients such as
+Termius offer the same thing under **Port Forwarding**.
+
+### 2. A temporary public address — for a phone
+
+```bash
+./ops/expose-tunnel.sh
+```
+
+Downloads the Cloudflare tunnel client, opens a quick tunnel, points the app
+at the resulting HTTPS address, turns the session cookie's Secure flag back
+on, and prints the address. Stop it with `./ops/expose-tunnel.sh --stop`.
+
+The address is temporary and changes whenever the tunnel restarts.
+
+**While it is running the catalogue is reachable from the internet.** It is
+behind a login wall and administrators need two-factor authentication, but do
+not leave it open unattended, and do not use it for anything but evaluation.
+
+### 3. Your own hostname with real certificates
+
+The proper answer for a server. Use the full stack rather than the local one:
+
+```bash
+# .env
+SITE_HOSTNAME=catalogue.example.org
+ACME_EMAIL=you@example.org
+PUBLIC_URL=https://catalogue.example.org
+COOKIE_SECURE=true
+
+docker compose up -d --build
+```
+
+Caddy obtains and renews the certificate automatically. A free subdomain from
+a dynamic-DNS provider works fine if you do not want to buy a domain. See
+[deployment.md](deployment.md).
+
+### What will not work
+
+Binding the port to `0.0.0.0` and browsing to `http://server-ip:8080`. The API
+refuses to run with a non-secure cookie on anything but a loopback address,
+because that would put the session cookie on the open internet in clear. Use
+one of the three above instead.
 
 ## When to move to a server
 
