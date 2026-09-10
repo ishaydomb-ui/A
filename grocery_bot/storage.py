@@ -256,6 +256,32 @@ CREATE TABLE IF NOT EXISTS waste_reports (
 
 CREATE INDEX IF NOT EXISTS idx_waste_item ON waste_reports(item_name);
 
+-- Every cart-add that did not reach the cart. Added 2026-09-10 after
+-- Ishay asked whether the daily runs retry what failed before. They do:
+-- an ad-hoc request stays pending until it is bought, and the standing
+-- list is rebuilt each cycle so a failed term is simply on it again.
+-- What was missing is *memory* — only `report.added` was persisted, so
+-- an item that fails on every single run was retried forever and nobody
+-- could see the pattern. The household got a "לא נמצא (N)" count in each
+-- report and nothing that survived it.
+--
+-- One row per attempt, not a counter: a count cannot answer "since
+-- when", "on which chain", or "did it start failing after the feed
+-- changed" — and those are the questions that decide whether a term is
+-- wrong or a product is delisted.
+CREATE TABLE IF NOT EXISTS cart_failures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_name TEXT NOT NULL,
+    store TEXT NOT NULL,
+    status TEXT NOT NULL,          -- "not_found" | "error"
+    detail TEXT NOT NULL DEFAULT '',
+    failed_at TEXT NOT NULL        -- ISO8601 UTC
+);
+
+CREATE INDEX IF NOT EXISTS idx_cart_failures_item
+    ON cart_failures(store, item_name);
+CREATE INDEX IF NOT EXISTS idx_cart_failures_at ON cart_failures(failed_at);
+
 -- When each product was last actually bought. Separate from stock_items
 -- because that table is rebuilt wholesale on every nightly sync, and a
 -- purchase date stored there would be thrown away with it.
@@ -742,6 +768,88 @@ class Storage:
                 (kind, month),
             ).fetchone()
         return row is not None
+
+    def record_cart_failures(self, results, when=None) -> int:
+        """Remember the items a cycle could not put in the cart.
+
+        Successes were always persisted; failures were reported once and
+        discarded, so a term that fails on every run looked identical to
+        one failing for the first time. Recording an attempt per row —
+        rather than bumping a counter — is what lets a later question be
+        "since when, and on which chain", which is the difference between
+        a wrong search term and a delisted product.
+        """
+        from datetime import datetime, timezone
+
+        stamp = when or datetime.now(timezone.utc).isoformat(timespec="seconds")
+        rows = [
+            (r.item_name, r.store, r.status, (r.detail or "")[:200], stamp)
+            for r in (results or [])
+            if getattr(r, "status", "") in ("not_found", "error") and r.item_name
+        ]
+        if not rows:
+            return 0
+        with closing(self._connect()) as conn:
+            conn.executemany(
+                "INSERT INTO cart_failures "
+                "(item_name, store, status, detail, failed_at) VALUES (?,?,?,?,?)",
+                rows,
+            )
+            conn.commit()
+        return len(rows)
+
+    def repeat_failures(self, min_runs: int = 3, days: int = 60) -> list[dict]:
+        """Items that have failed on `min_runs` distinct runs recently.
+
+        Distinct *runs*, counted by timestamp, not distinct rows: one
+        cycle writes many rows at the same instant, and counting rows
+        would let a single bad run masquerade as a persistent problem.
+
+        Returns newest-first by last failure, because a term that stopped
+        failing last week is a different matter from one that failed this
+        morning.
+        """
+        from datetime import datetime, timedelta, timezone
+
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(
+            timespec="seconds"
+        )
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                """
+                SELECT item_name, store,
+                       COUNT(DISTINCT failed_at) AS runs,
+                       MIN(failed_at) AS first_failed,
+                       MAX(failed_at) AS last_failed,
+                       MAX(detail) AS detail
+                  FROM cart_failures
+                 WHERE failed_at >= ?
+              GROUP BY store, item_name
+                HAVING runs >= ?
+              ORDER BY last_failed DESC, runs DESC
+                """,
+                (since, min_runs),
+            ).fetchall()
+        return [
+            {"item_name": r[0], "store": r[1], "runs": r[2],
+             "first_failed": r[3], "last_failed": r[4], "detail": r[5] or ""}
+            for r in rows
+        ]
+
+    def clear_cart_failures(self, item_name: str, store: str = "") -> int:
+        """Forget an item's failures — after a term is fixed or it is dropped."""
+        with closing(self._connect()) as conn:
+            if store:
+                cur = conn.execute(
+                    "DELETE FROM cart_failures WHERE item_name = ? AND store = ?",
+                    (item_name, store),
+                )
+            else:
+                cur = conn.execute(
+                    "DELETE FROM cart_failures WHERE item_name = ?", (item_name,)
+                )
+            conn.commit()
+            return cur.rowcount
 
     def record_waste(self, rows: list[tuple]) -> int:
         """Store waste reports: (item_name, fraction, reported_on, by)."""

@@ -54,6 +54,7 @@ from .nlu import ParsedItem, build_meal_plan, expand_recipe, parse_message
 from .orchestrator import (
     add_terms_to_cart,
     format_report_summary,
+    format_repeat_failures,
     record_deals,
     run_order_cycle,
 )
@@ -1509,6 +1510,9 @@ class GroceryBot:
             return
 
         summary = format_report_summary(reports)
+        repeats = format_repeat_failures(self.storage)
+        if repeats:
+            summary = f"{summary}\n\n{repeats}" if summary else repeats
         # Through _send_markdown, never reply_text: this send failed on a
         # real order (2026-09-07, "can't find end of the entity") and the
         # household got no summary at all for a cart that had actually
@@ -1913,6 +1917,9 @@ class GroceryBot:
 
         self.storage.mark_deferred_cycle_done(pending["id"])
         summary = format_report_summary(reports)
+        repeats = format_repeat_failures(self.storage)
+        if repeats:
+            summary = f"{summary}\n\n{repeats}" if summary else repeats
         await _send_html(context, chat_id, summary or "לא היה מה להוסיף.")
         await self._send_alternatives(chat_id, context, reports)
         await self._ask_ambiguities(chat_id, context)

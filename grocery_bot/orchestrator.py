@@ -80,6 +80,7 @@ def run_order_cycle(
                         detail="Session expired and could not be renewed automatically.",
                     )
                 )
+                _remember_failures(storage, report)
                 reports[store] = report
                 continue
 
@@ -147,6 +148,7 @@ def run_order_cycle(
                 done += 1
                 _progress(done, total_items, result)
 
+        _remember_failures(storage, report)
         reports[store] = report
 
     for adhoc_id in resolved_adhoc:
@@ -184,6 +186,25 @@ def record_deals(storage: Storage, reports: dict[str, OrderCycleReport]) -> None
         logger.exception("Could not record this cycle's deal picks")
 
 
+def _remember_failures(storage: Storage, report) -> None:
+    """Persist what this run could not add, so a pattern can be seen.
+
+    Both cycles already retried failures — an ad-hoc request stays
+    pending until it is bought, and the standing list is rebuilt each
+    run so a failed term is simply on it again. What neither did was
+    *remember*, so an item failing on every single run was
+    indistinguishable from one failing for the first time, and the only
+    trace was a "לא נמצא (N)" count in a message that scrolled away.
+
+    Never fatal: a cycle that filled a cart must not be reported as
+    failed because a bookkeeping insert did not land.
+    """
+    try:
+        storage.record_cart_failures(list(report.not_found) + list(report.errors))
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not record cart failures; the cycle itself is unaffected")
+
+
 def add_terms_to_cart(
     storage: Storage,
     adapter_factories: dict[str, AdapterFactory],
@@ -211,6 +232,7 @@ def add_terms_to_cart(
                         detail="Session expired and could not be renewed automatically.",
                     )
                 )
+                _remember_failures(storage, report)
                 reports[store] = report
                 continue
 
@@ -223,6 +245,7 @@ def add_terms_to_cart(
                         on_progress(index, len(terms), result)
                     except Exception:
                         logger.exception("Progress callback failed; continuing")
+        _remember_failures(storage, report)
         reports[store] = report
     return reports
 
@@ -392,6 +415,37 @@ def _known_products(storage: Storage, store: str) -> dict:
         "names": {p["product_name"] for p in preferences if p.get("product_name")},
         "codes": {p["product_code"] for p in preferences if p.get("product_code")},
     }
+
+
+def format_repeat_failures(storage: Storage, min_runs: int = 3) -> str:
+    """The line that turns recurring noise into something actionable.
+
+    "לא נמצא (4)" in a single report is normal — a store's search misses
+    things. The same four items missing for five runs running is not
+    noise, it is a delisted product or a search term that never matched,
+    and only one of those is worth the household's attention.
+
+    Deliberately not shown below `min_runs`: a first or second miss is
+    usually the store, and reporting it would train everyone to ignore
+    this line, which is how the old "לא נמצא" count came to mean nothing.
+    """
+    try:
+        rows = storage.repeat_failures(min_runs=min_runs)
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not read repeat failures")
+        return ""
+    if not rows:
+        return ""
+    lines = [f"🔁 נכשלים שוב ושוב ({len(rows)}) — כנראה ירדו מהמדף או שהמונח לא מדויק:"]
+    for row in rows[:10]:
+        since = (row["first_failed"] or "")[:10]
+        lines.append(
+            f"   • {row['item_name']} ({row['store']}) — {row['runs']} מחזורים, מאז {since}"
+        )
+    if len(rows) > 10:
+        lines.append(f"   ...ועוד {len(rows) - 10}")
+    lines.append("   <i>אפשר לתקן את המונח, או להוריד מהרשימה.</i>")
+    return "\n".join(lines)
 
 
 def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
