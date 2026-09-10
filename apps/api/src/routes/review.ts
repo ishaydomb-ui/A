@@ -4,6 +4,7 @@ import { FINDING_STATUSES, SEVERITIES } from '@med/shared';
 import { query } from '../db/pool.js';
 import { notFound } from '../lib/errors.js';
 import { audit, auditContext } from '../services/audit.js';
+import { buildFindingsWorkbook } from '../services/findingsExport.js';
 
 export default async function reviewRoutes(app: FastifyInstance): Promise<void> {
   const canRead = app.requireCapability('review:read');
@@ -44,6 +45,35 @@ export default async function reviewRoutes(app: FastifyInstance): Promise<void> 
          FROM review_findings GROUP BY severity, status`,
     );
     return { findings: rows, summary };
+  });
+
+  /**
+   * Every open finding as an Excel workbook, so the gaps can be worked
+   * through and corrected in the authoritative source.
+   */
+  app.get('/findings/export.xlsx', { onRequest: [canRead] }, async (req, reply) => {
+    const q = z
+      .object({
+        status: z
+          .string()
+          .optional()
+          .transform((v) => (v ? v.split(',').filter(Boolean) : undefined)),
+      })
+      .parse(req.query);
+
+    const workbook = await buildFindingsWorkbook({ status: q.status });
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    await audit({ ...auditContext(req), action: 'review.findings_exported' });
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    return reply
+      .header(
+        'content-type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      )
+      .header('content-disposition', `attachment; filename="data-quality-findings-${stamp}.xlsx"`)
+      .send(Buffer.from(buffer));
   });
 
   /** Raise a finding by hand, for something a detector cannot see. */

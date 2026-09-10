@@ -356,6 +356,142 @@ describe('editing published content', () => {
   });
 });
 
+describe('preview publication', () => {
+  async function allowUnvalidated(allowed: boolean) {
+    await query(
+      `UPDATE settings SET value = $1::jsonb WHERE key = 'publication.allow_unvalidated'`,
+      [JSON.stringify(allowed)],
+    );
+  }
+
+  it('is refused while the allowance is off, even when acknowledged', async () => {
+    await allowUnvalidated(false);
+    const version = await createDraft();
+    await transition(editorCookie, version.id, 'in_clinical_review');
+    await transition(reviewerCookie, version.id, 'approved');
+
+    const res = await app.inject({
+      method: 'POST', url: `/api/medications/versions/${version.id}/transition`,
+      headers: { cookie: adminCookie },
+      payload: { to: 'published', acknowledgeUnvalidated: true },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe('publish_blocked');
+    expect(res.json().error.details.unvalidatedPublicationAllowed).toBe(false);
+  });
+
+  it('is refused while the allowance is on but not acknowledged', async () => {
+    await allowUnvalidated(true);
+    const version = await createDraft();
+    await transition(editorCookie, version.id, 'in_clinical_review');
+    await transition(reviewerCookie, version.id, 'approved');
+
+    const res = await transition(adminCookie, version.id, 'published');
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.details.unvalidatedPublicationAllowed).toBe(true);
+  });
+
+  it('publishes when both the allowance and the acknowledgement are present', async () => {
+    await allowUnvalidated(true);
+    const version = await createDraft();
+    await transition(editorCookie, version.id, 'in_clinical_review');
+    await transition(reviewerCookie, version.id, 'approved');
+
+    const res = await app.inject({
+      method: 'POST', url: `/api/medications/versions/${version.id}/transition`,
+      headers: { cookie: adminCookie },
+      payload: { to: 'published', acknowledgeUnvalidated: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().version.publishedUnvalidated).toBe(true);
+    expect(res.json().version.overriddenBlockers.length).toBeGreaterThan(0);
+  });
+
+  it('records permanently on the record what was overridden', async () => {
+    await allowUnvalidated(true);
+    const version = await createDraft();
+    await transition(editorCookie, version.id, 'in_clinical_review');
+    await transition(reviewerCookie, version.id, 'approved');
+    await app.inject({
+      method: 'POST', url: `/api/medications/versions/${version.id}/transition`,
+      headers: { cookie: adminCookie },
+      payload: { to: 'published', acknowledgeUnvalidated: true },
+    });
+
+    const shown = await app.inject({
+      method: 'GET', url: `/api/medications/${version.slug}`, headers: { cookie: physicianCookie },
+    });
+    expect(shown.statusCode).toBe(200);
+    expect(shown.json().publishedUnvalidated).toBe(true);
+    const codes = shown.json().overriddenBlockers.map((b: { code: string }) => b.code);
+    expect(codes).toContain('missing_citation');
+
+    // And in the revision trail, which cannot be rewritten.
+    const revisions = await app.inject({
+      method: 'GET', url: `/api/medications/${version.slug}/revisions`,
+      headers: { cookie: reviewerCookie },
+    });
+    const entry = revisions.json().revisions.find(
+      (r: { action: string }) => r.action === 'published_unvalidated',
+    );
+    expect(entry).toBeDefined();
+    expect(entry.reason).toMatch(/Overridden:/);
+  });
+
+  it('flags the record in search results so it cannot be mistaken for reviewed', async () => {
+    await allowUnvalidated(true);
+    const version = await createDraft();
+    await transition(editorCookie, version.id, 'in_clinical_review');
+    await transition(reviewerCookie, version.id, 'approved');
+    await app.inject({
+      method: 'POST', url: `/api/medications/versions/${version.id}/transition`,
+      headers: { cookie: adminCookie },
+      payload: { to: 'published', acknowledgeUnvalidated: true },
+    });
+
+    const res = await app.inject({
+      method: 'GET', url: '/api/search?q=sertraline', headers: { cookie: physicianCookie },
+    });
+    expect(res.json().hits[0].publishedUnvalidated).toBe(true);
+  });
+
+  it('does not flag a record that passed every gate', async () => {
+    await allowUnvalidated(true);
+    const { version } = await publishFully();
+    const shown = await app.inject({
+      method: 'GET', url: `/api/medications/${version.slug}`, headers: { cookie: physicianCookie },
+    });
+    expect(shown.json().publishedUnvalidated).toBe(false);
+    expect(shown.json().overriddenBlockers).toEqual([]);
+  });
+
+  it('tells every client that the catalogue is in evaluation', async () => {
+    await allowUnvalidated(true);
+    const res = await app.inject({ method: 'GET', url: '/api/settings/public' });
+    expect(res.json().evaluationMode).toBe(true);
+    expect(res.json().evaluationNotice).toMatch(/not use it for clinical decisions/i);
+
+    await allowUnvalidated(false);
+    const off = await app.inject({ method: 'GET', url: '/api/settings/public' });
+    expect(off.json().evaluationMode).toBe(false);
+    expect(off.json().evaluationNotice).toBeNull();
+  });
+
+  it('only an administrator can switch the allowance on', async () => {
+    const denied = await app.inject({
+      method: 'PUT', url: '/api/settings/publication.allow_unvalidated',
+      headers: { cookie: editorCookie }, payload: { value: true },
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const allowed = await app.inject({
+      method: 'PUT', url: '/api/settings/publication.allow_unvalidated',
+      headers: { cookie: adminCookie }, payload: { value: true },
+    });
+    expect(allowed.statusCode).toBe(200);
+  });
+});
+
 describe('comparison', () => {
   it('compares up to three published medications and refuses a fourth', async () => {
     await publishFully();

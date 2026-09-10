@@ -298,7 +298,8 @@ describe('result shape', () => {
     const hit = result.hits[0];
     expect(Object.keys(hit).sort()).toEqual([
       'displayLocale', 'drugClass', 'fallback', 'genericName', 'highlights', 'matchKind',
-      'medicationId', 'score', 'slug', 'state', 'therapeuticGroup', 'tradeNames', 'versionId',
+      'medicationId', 'publishedUnvalidated', 'score', 'slug', 'state', 'therapeuticGroup',
+      'tradeNames', 'versionId',
     ]);
     expect(hit).not.toHaveProperty('contraindications');
   });

@@ -7,6 +7,7 @@ import { pool, query } from '../db/pool.js';
 import { up as migrateUp } from '../db/migrate.js';
 import { MemoryTransport, setTransport } from '../services/mail.js';
 import { hashPassword } from '../lib/crypto.js';
+import { ensureDefaultSettings } from '../services/settings.js';
 
 const exec = promisify(execFile);
 
@@ -36,15 +37,9 @@ export async function resetDatabase(): Promise<void> {
     await query(`ALTER TABLE ${t} ENABLE TRIGGER USER`);
     await query(`REVOKE TRUNCATE ON TABLE ${t} FROM CURRENT_USER`);
   }
-  // Settings are seeded by a migration; restore the rows TRUNCATE removed.
-  await query(
-    `INSERT INTO settings (key, value, needs_approval) VALUES
-       ('institution_name', '"(pending approval)"'::jsonb, true),
-       ('contact_email',    '"(pending approval)"'::jsonb, true),
-       ('legal.privacy_policy', '"(placeholder — awaiting owner approval)"'::jsonb, true),
-       ('legal.terms',          '"(placeholder — awaiting owner approval)"'::jsonb, true)
-     ON CONFLICT (key) DO NOTHING`,
-  );
+  // Settings are seeded by a migration; restore the rows TRUNCATE removed,
+  // from the same definition the application uses.
+  await ensureDefaultSettings();
 }
 
 export async function createTestApp(): Promise<FastifyInstance> {

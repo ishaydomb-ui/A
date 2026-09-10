@@ -73,6 +73,13 @@ Twelve detectors run, among them:
 
 None of these change anything. They are questions for a person.
 
+**Download them all as a workbook.** The Review screen offers *Download all
+findings (.xlsx)*: one row per finding with the medication, the field, what is
+wrong, **the value the catalogue currently holds**, the recommended action and
+a blank *Correction* column. Work through it, fix the underlying data in the
+authoritative Excel, and re-import — the change report will then show exactly
+what your corrections altered.
+
 ### 4. Stage as drafts
 
 Only an administrator can commit. If the batch raised high-severity findings,

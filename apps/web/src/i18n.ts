@@ -118,6 +118,11 @@ const EN = {
   disclaimerShort:
     'A professional reference aid. It does not replace clinical judgement or current prescribing information.',
   disclaimerHeading: 'Important',
+  evaluationHeading: 'Evaluation copy —',
+  unvalidatedRecord: 'Not clinically reviewed',
+  unvalidatedRecordDetail:
+    'This record was published for evaluation before clinical review was complete. It has not been checked against an authoritative source. Do not use it for clinical decisions.',
+  outstandingChecks: 'Outstanding checks',
   privacyPolicy: 'Privacy Policy',
   terms: 'Terms of Use',
   contact: 'Contact',
@@ -239,6 +244,11 @@ const HE = {
   disclaimerShort:
     'כלי עזר מקצועי. אינו מחליף שיקול דעת קליני או מידע מרשם עדכני.',
   disclaimerHeading: 'חשוב',
+  evaluationHeading: 'גרסת הערכה —',
+  unvalidatedRecord: 'לא עבר בדיקה קלינית',
+  unvalidatedRecordDetail:
+    'רשומה זו פורסמה לצורכי הערכה לפני השלמת הבדיקה הקלינית. היא לא הושוותה למקור מוסמך. אין להסתמך עליה לקבלת החלטות קליניות.',
+  outstandingChecks: 'בדיקות שטרם הושלמו',
   privacyPolicy: 'מדיניות פרטיות',
   terms: 'תנאי שימוש',
   contact: 'יצירת קשר',

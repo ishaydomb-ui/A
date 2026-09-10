@@ -1,89 +1,83 @@
 # Decisions taken, and what still needs you
 
-## Part 1 — Things only you can decide
+## Part 1 — Decisions you have made
 
-These are outside what I can settle from inside the project. Grouped so they
-can be answered in one pass.
+Recorded here so the reasoning behind the current configuration is not lost.
+Answered 2026-09-10.
 
-### A. Legal and identity
+### Settled
 
-1. **Privacy Policy and Terms of Use.** Both pages currently show a *factual
-   description of what the system actually does* — what it stores, why, who
-   can see it, how long it is kept — clearly labelled as a draft awaiting your
-   approval. That description is accurate and is what a lawyer needs in order
-   to draft binding text. **I have not written binding legal wording**, and the
-   pages say so. Send me the approved text and I will store it; the pages
-   switch to it automatically.
+| # | Question | Your decision | What was built |
+| --- | --- | --- | --- |
+| 1 | Authoritative Excel | Not blocking. Publish and test first; initially a single user. | Preview publication mode — see below |
+| 2 | Clinical Reviewer | Not needed for MVP. Placeholder for later. | Role kept and enforced; appointment deferred |
+| 3 | 140 data-quality findings | Consolidate them; you will fix them in the authoritative Excel | Excel export of every finding |
+| 4 | First release | Approved | Catalogue published for evaluation |
+| 5 | First account | `ishaydomb@gmail.com` | Created as administrator |
+| 6 | Legal wording | The factual draft suffices for MVP | Unchanged, still marked as a draft |
+| 7 | Institution name and branding | Leave open | Renders as "(pending approval)" |
+| 8 | Contact details | Leave open | Renders as "(pending approval)" |
+| 9 | Hosting | A no-cost option | Local Docker stack, no domain or server |
+| 10 | Firewall | Your recommendation | Local-only: nothing exposed at all |
+| 11 | SMTP | Default (none) | Invitation links shown on screen |
+| 12 | Backup destination | Default | `backups/` on the machine; copy off yourself |
+| 13 | Retention | Default | 30 days |
+| 14 | Product name | Default | "Medication Catalogue" placeholder |
 
-2. **Institution name and branding.** The source website's footer referenced
-   Sheba Medical Center, which its own audit flagged as unverified. Nothing in
-   this system claims any institutional affiliation: the name renders as
-   *"(pending approval)"* until you set it. Confirm in writing what name, logo
-   and wording may be used, and whether you hold authorisation to use them.
+### What decision 1 and 4 required
 
-3. **Contact details.** Which address should appear in the footer and on the
-   legal pages.
+You asked to publish before any clinical review. That is a reasonable thing to
+want for a solo evaluation, but publishing unreviewed clinical content is
+precisely what the workflow exists to prevent, so it could not simply be
+allowed to happen quietly.
 
-4. **The product name.** It is currently "Medication Catalogue" / "קטלוג
-   תרופות" — a placeholder, not a decision.
+Instead there is now an explicit **preview publication mode**:
 
-### B. Infrastructure and money
+- It is a system setting, off by default, changeable only by an administrator.
+- Publishing past the clinical gates additionally requires the request to say
+  so. Neither the setting alone nor the acknowledgement alone is enough.
+- Every record published that way is flagged permanently, and the specific
+  blockers that were overridden are stored on the row itself.
+- The revision trail records it as `published_unvalidated` with the list of
+  what was overridden. That trail cannot be rewritten.
+- A banner appears on **every screen** while the mode is on. Each affected
+  record carries a "Not clinically reviewed" badge in search results, and a
+  warning above its content listing exactly which checks are outstanding.
 
-5. **Server and domain.** A Contabo VPS and a hostname have to be bought and
-   the DNS pointed at it. Both are purchases and a DNS change, so both are
-   yours. Recommended: 2 vCPU / 4 GB / 40 GB, Debian 12.
+All 44 records are published this way. When real review begins, switch the
+setting off; records that then fail their gates stay flagged until they pass.
 
-6. **Firewall.** Ports 80 and 443 open inbound; SSH restricted to known
-   addresses if possible.
+Placeholder citations created during development were deleted rather than
+left in place — a fabricated source is worse than no source, because it makes
+an unchecked claim look sourced. Eighteen were removed and eight findings that
+had been closed with a meaningless note were reopened, which is why all 44
+records are flagged rather than only 39. The one-off script that did it was
+then removed: a tool that deletes citations by matching their title is not
+something to leave lying around.
 
-7. **SMTP credentials**, if you want invitations and password resets
-   delivered by email. Without them the system works but writes messages to an
-   outbox and shows the administrator a link to pass on by hand — deliberately,
-   so a new deployment cannot surprise anyone with unexpected mail.
+### The consolidated gaps (decision 3)
 
-8. **Where backups are copied to.** They are encrypted, so the destination
-   need not be trusted with the contents — but it must not hold the
-   passphrase.
+`data-quality-findings-<date>.xlsx`, downloadable from the Review screen:
 
-9. **Retention period.** 30 days by default. Whoever is accountable for the
-   data should set this.
+- **Summary** — totals by severity and by detector.
+- **Findings** — one row per finding: medication, field, the issue, **the
+  value the catalogue currently holds**, what is wrong, the recommended
+  action, and a blank *Correction* column for you to fill in.
+- **By medication** — which drugs have the most problems, worst first.
 
-### C. Clinical
+132 open findings across 44 medications. Fix them in the authoritative Excel
+and re-import; the change report will show exactly what your corrections
+altered before anything is staged.
 
-10. **The authoritative Excel.** The workbook supplied is the *website
-    snapshot*, and its own Overview sheet states it has not been clinically
-    validated. It is loaded as drafts only. The official Excel is still
-    outstanding, and nothing should be published until records are reconciled
-    against it.
+### Still outstanding
 
-11. **140 open data-quality findings** were raised by importing the snapshot —
-    68 high, 50 medium, 22 low. Each needs a clinical decision. The
-    high-severity ones block publication until closed. Notable ones:
+Nothing blocks you today. These return when the system moves beyond your own
+evaluation:
 
-    - **"NRI" appears as a generic name while "Atomoxetine" sits in the trade
-      names column.** Almost certainly inverted; I have not corrected it.
-    - **"In Israel below the age of 6 and above requires 29 gimel"** — a dose
-      threshold is missing from the sentence. The equivalent row for
-      immediate-release methylphenidate says "above 90 mg", so the number was
-      probably dropped, but I have not filled it in.
-    - **Guanfacine ER clinical notes contain "shor tabechnic"** and mixed
-      Hebrew/English regulatory wording.
-    - **QTc and indication claims have no citations at all.**
-    - **"Blood pressure" is listed as a side effect with no direction.**
-    - **Starting age is blank in 35 of 44 records; monitoring tests in 41 of
-      44.** Each needs deciding: unknown, not applicable, or simply not
-      supplied by this source?
-
-12. **Who the Clinical Reviewer is.** Publication requires a named person with
-    that role. Nothing reaches clinicians without one.
-
-### D. Release
-
-13. **First public release** — putting the system in front of real clinicians
-    — is yours to authorise.
-
-14. **The first invitations.** These are emails to real people, so I have sent
-    none and will not without your say-so.
+- The authoritative Excel, and re-importing from it.
+- Appointing a Clinical Reviewer, and switching preview mode off.
+- Binding legal wording, institution name and contact details.
+- A server and domain, if you want access from outside your own machine.
 
 ## Part 2 — Decisions I took, and why
 
@@ -164,19 +158,25 @@ byte-identical for the audit trail.
 
 ## Part 3 — Status
 
-**Not yet ready for clinical use**, by the criteria in your own brief. Two
-conditions remain:
+**Ready for your evaluation. Not ready for clinical use**, and the interface
+says so on every screen.
 
 | Condition | Status |
 | --- | --- |
+| Runs end to end, at no cost | **Done** — local Docker stack |
 | Restore test performed and verified | **Done** — see [backup-and-restore.md](backup-and-restore.md) |
-| All published clinical content approved by a Clinical Reviewer | **Not done** — no reviewer appointed, no authoritative Excel |
+| Catalogue populated and browsable | **Done** — 44 records published for evaluation |
+| Data gaps consolidated for correction | **Done** — 132 findings exported to Excel |
+| Content checked against an authoritative source | **Not done** — awaiting the official Excel |
+| Content approved by a Clinical Reviewer | **Not done** — deferred by decision, no reviewer appointed |
 
-Everything else is built and tested: 275 automated tests pass, covering
-authentication, permissions, search, Excel import, review, publication,
-revision history, backup and restore, and WCAG 2.1 AA accessibility on
-desktop and phone in both languages.
+287 automated tests pass, covering authentication, permissions, search, Excel
+import, review, publication, preview mode, revision history, backup and
+restore, and WCAG 2.1 AA accessibility on desktop and phone in both
+languages.
 
-The system is ready to receive the authoritative Excel and a clinical
-reviewer. Until both arrive, the catalogue holds unvalidated draft content
-that is invisible to clinicians and marked as unvalidated wherever it appears.
+Because the last two rows are outstanding, every record shows a warning that
+it has not been clinically reviewed, and a banner across the top of every
+screen says the catalogue must not be used for clinical decisions. Those
+disappear on their own once records pass their gates and preview mode is
+switched off — nothing has to be remembered.

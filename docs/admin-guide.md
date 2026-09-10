@@ -134,5 +134,7 @@ brief users.
 | See unresolved data-quality findings | Review → Data quality findings |
 | Import a new workbook | Imports — see [import-guide.md](import-guide.md) |
 | Publish approved content | Review queue → open the record → Publish |
+| Export every data-quality finding | Review → Download all findings (.xlsx) |
+| Turn preview publication on or off | `PUT /api/settings/publication.allow_unvalidated` |
 | Check backups ran | `docker compose logs backup` |
 | Practise a restore | [backup-and-restore.md](backup-and-restore.md) |

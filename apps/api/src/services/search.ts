@@ -33,6 +33,8 @@ export interface SearchHit {
   /** Locale the displayed text came from, when it differs from the request. */
   displayLocale: Locale;
   fallback: boolean;
+  /** Published while clinical gates were still outstanding. */
+  publishedUnvalidated: boolean;
   highlights: {
     genericName: ReturnType<typeof highlight>;
     tradeNames: ReturnType<typeof highlight>;
@@ -61,6 +63,7 @@ interface RawHit {
   locale: Locale;
   display: {
     slug: string;
+    publishedUnvalidated?: boolean;
     genericName: DisplayField;
     tradeNames: DisplayField;
     therapeuticGroup: DisplayField;
@@ -241,6 +244,7 @@ export async function search(options: SearchOptions): Promise<SearchResult> {
       drugClass: textOf(row.display?.drugClass),
       displayLocale: row.display?.genericName?.locale ?? options.locale,
       fallback: row.display?.genericName?.fallback ?? false,
+      publishedUnvalidated: row.display?.publishedUnvalidated ?? false,
       highlights: {
         genericName: highlight(genericName ?? '', terms),
         tradeNames: highlight(tradeNames ?? '', terms),

@@ -4,10 +4,14 @@ import { closePool } from './db/pool.js';
 import { logger } from './lib/logger.js';
 import { initMail } from './services/mail.js';
 import { purgeExpiredSessions } from './services/auth.js';
+import { ensureDefaultSettings } from './services/settings.js';
 import { purgeExpired as purgeRateLimits } from './services/rateLimit.js';
 
 async function main(): Promise<void> {
   await initMail();
+  // A setting added by a later migration must exist even where the database
+  // was created some other way.
+  await ensureDefaultSettings();
   const app = await buildApp();
 
   // Housekeeping: expired sessions and rate-limit windows are pruned hourly.

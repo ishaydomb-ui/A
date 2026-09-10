@@ -81,7 +81,16 @@ export default defineConfig({
 
     {
       name: 'desktop',
-      testIgnore: /auth\.spec\.ts/,
+      testIgnore: /auth\.spec\.ts|evaluation-mode\.spec\.ts/,
+      dependencies: ['setup'],
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 900 } },
+    },
+
+    // Runs on its own: it toggles a system-wide setting that would otherwise
+    // change what the other projects see.
+    {
+      name: 'evaluation-mode',
+      testMatch: /evaluation-mode\.spec\.ts/,
       dependencies: ['setup'],
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 900 } },
     },
@@ -89,7 +98,7 @@ export default defineConfig({
     // A phone profile, because the catalogue is used mostly on a phone.
     {
       name: 'mobile',
-      testIgnore: /auth\.spec\.ts/,
+      testIgnore: /auth\.spec\.ts|evaluation-mode\.spec\.ts/,
       dependencies: ['setup'],
       use: { ...devices['Pixel 5'] },
     },

@@ -51,6 +51,7 @@ export async function indexVersion(
   data: MedicationData,
   aliases: string[],
   client?: Queryable,
+  publishedUnvalidated = false,
 ): Promise<void> {
   await query('DELETE FROM search_documents WHERE version_id = $1', [versionId], client);
   await query('DELETE FROM search_facets WHERE version_id = $1', [versionId], client);
@@ -68,6 +69,7 @@ export async function indexVersion(
     // original text with a note when it came from the other locale.
     const display = {
       slug,
+      publishedUnvalidated,
       genericName: resolveField(data, 'generic_name', locale),
       tradeNames: resolveField(data, 'trade_names', locale),
       therapeuticGroup: resolveField(data, 'therapeutic_group', locale),
@@ -107,9 +109,23 @@ export async function indexVersion(
 }
 
 /** Keeps the index's state column in step after a workflow transition. */
-export async function reindexState(versionId: string, state: string, client?: Queryable): Promise<void> {
+export async function reindexState(
+  versionId: string,
+  state: string,
+  client?: Queryable,
+  publishedUnvalidated?: boolean,
+): Promise<void> {
   await query('UPDATE search_documents SET state = $2 WHERE version_id = $1', [versionId, state], client);
   await query('UPDATE search_facets   SET state = $2 WHERE version_id = $1', [versionId, state], client);
+  if (publishedUnvalidated !== undefined) {
+    await query(
+      `UPDATE search_documents
+          SET display = jsonb_set(display, '{publishedUnvalidated}', to_jsonb($2::boolean))
+        WHERE version_id = $1`,
+      [versionId, publishedUnvalidated],
+      client,
+    );
+  }
 }
 
 export async function removeFromIndex(versionId: string, client?: Queryable): Promise<void> {

@@ -1,6 +1,9 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { query } from '../db/pool.js';
 import { config } from '../config.js';
+import { audit, auditContext } from '../services/audit.js';
+import { listSettings, setSetting, unvalidatedPublicationAllowed } from '../services/settings.js';
 
 const startedAt = Date.now();
 
@@ -81,12 +84,41 @@ export default async function metaRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/settings/public', async () => {
     const { rows } = await query<{ key: string; value: unknown; needs_approval: boolean }>(
       `SELECT key, value, needs_approval FROM settings
-        WHERE key IN ('institution_name', 'contact_email', 'legal.privacy_policy', 'legal.terms')`,
+        WHERE key IN ('institution_name', 'contact_email', 'legal.privacy_policy', 'legal.terms',
+                      'publication.allow_unvalidated', 'publication.unvalidated_notice')`,
     );
     const settings: Record<string, { value: unknown; needsApproval: boolean }> = {};
     for (const row of rows) {
       settings[row.key] = { value: row.value, needsApproval: row.needs_approval };
     }
-    return { settings, environment: config.env };
+
+    // Surfaced separately so the client cannot miss it: while the catalogue is
+    // in evaluation, every screen carries the notice.
+    const evaluationMode = await unvalidatedPublicationAllowed();
+    return {
+      settings,
+      environment: config.env,
+      evaluationMode,
+      evaluationNotice: evaluationMode ? settings['publication.unvalidated_notice']?.value ?? null : null,
+    };
+  });
+
+  /** Settings management. Values needing the owner's sign-off keep their flag. */
+  app.get('/api/settings', { onRequest: [app.requireCapability('users:manage')] }, async () => ({
+    settings: await listSettings(),
+  }));
+
+  app.put('/api/settings/:key', { onRequest: [app.requireCapability('users:manage')] }, async (req) => {
+    const { key } = z.object({ key: z.string().min(1).max(100) }).parse(req.params);
+    const body = z
+      .object({ value: z.unknown(), needsApproval: z.boolean().optional() })
+      .parse(req.body);
+
+    await setSetting(key, body.value, req.currentUser!.id, body.needsApproval);
+    await audit({
+      ...auditContext(req), action: 'settings.updated', entityType: 'setting', entityId: key,
+      detail: { value: body.value as never },
+    });
+    return { status: 'ok' };
   });
 }

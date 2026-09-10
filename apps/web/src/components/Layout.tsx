@@ -67,6 +67,17 @@ export function Layout() {
         </div>
       </header>
 
+      {/* While the catalogue is in evaluation this sits above every screen.
+          It is a banner rather than a footnote because the content behind it
+          has not been clinically reviewed. */}
+      {settings?.evaluationMode && settings.evaluationNotice && (
+        <div className="evaluation-banner" role="status">
+          <div className="evaluation-banner-inner">
+            <strong>{t.evaluationHeading}</strong> {settings.evaluationNotice}
+          </div>
+        </div>
+      )}
+
       {/* tabIndex -1 makes the region focusable programmatically only. */}
       <main id="main-content" className="app-main" tabIndex={-1}>
         <Outlet />

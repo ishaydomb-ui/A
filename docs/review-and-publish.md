@@ -103,6 +103,34 @@ including by an administrator.
 
 Open it from a medication's page, or under **Review**.
 
+## Preview publication
+
+Sometimes the catalogue has to be visible before any clinical review has
+happened — to evaluate the interface, or to check that an import produced what
+was expected. That is legitimate, but it is exactly what the gates exist to
+prevent, so it cannot happen quietly.
+
+Two independent things must be true:
+
+1. **The system allowance is on.** `publication.allow_unvalidated` is a
+   setting only an administrator can change.
+2. **The publish request says so.** It must explicitly acknowledge that the
+   gates are being overridden.
+
+Neither on its own is enough. When both hold:
+
+- the record is flagged permanently as published without clinical review,
+- the blockers that were outstanding are stored on the record itself,
+- the revision trail records it as `published_unvalidated`, listing what was
+  overridden — and that trail cannot be rewritten,
+- a banner appears across **every screen** in the application,
+- the record carries a *Not clinically reviewed* badge in search results, and
+  a warning above its content naming each check it did not pass.
+
+Switch the allowance off when real review begins. Records that then fail their
+gates stay flagged until they pass them properly — the flag clears by being
+earned, not by being reset.
+
 ## Before declaring the catalogue ready for clinical use
 
 Two conditions, and neither is a formality:

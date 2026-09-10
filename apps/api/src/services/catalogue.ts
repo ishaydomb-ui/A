@@ -6,6 +6,7 @@ import { query, withTransaction, type Queryable } from '../db/pool.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { diffData, type FieldChange } from './diff.js';
 import { indexVersion, reindexState } from './indexer.js';
+import { unvalidatedPublicationAllowed } from './settings.js';
 
 export interface VersionRow {
   id: string;
@@ -13,6 +14,8 @@ export interface VersionRow {
   version_number: number;
   state: WorkflowState;
   data: MedicationData;
+  published_unvalidated: boolean;
+  overridden_blockers: PublishBlocker[];
   source_label: string | null;
   source_document: string | null;
   source_version: string | null;
@@ -384,11 +387,20 @@ export async function publishBlockers(versionId: string, client?: Queryable): Pr
   return blockers;
 }
 
+export interface TransitionOptions {
+  /**
+   * Publish despite outstanding clinical gates. Only honoured while the
+   * system-wide preview allowance is switched on, and always recorded.
+   */
+  acknowledgeUnvalidated?: boolean;
+}
+
 export async function transitionVersion(
   versionId: string,
   to: WorkflowState,
   actor: Actor,
   reason: string | null,
+  options: TransitionOptions = {},
 ): Promise<VersionRow> {
   return withTransaction(async (db) => {
     const { rows: locked } = await query<VersionRow>(
@@ -411,10 +423,21 @@ export async function transitionVersion(
       throw conflict('invalid_transition', `Cannot move from "${version.state}" to "${to}".`);
     }
 
+    let overridden: PublishBlocker[] = [];
     if (to === 'published') {
       const blockers = await publishBlockers(versionId, db);
       if (blockers.length > 0) {
-        throw conflict('publish_blocked', 'This version cannot be published yet.', { blockers });
+        // The gates can be waived only deliberately: the allowance has to be
+        // switched on for the whole system AND this call has to say so. The
+        // record then carries the fact permanently.
+        const allowed = await unvalidatedPublicationAllowed(db);
+        if (!allowed || !options.acknowledgeUnvalidated) {
+          throw conflict('publish_blocked', 'This version cannot be published yet.', {
+            blockers,
+            unvalidatedPublicationAllowed: allowed,
+          });
+        }
+        overridden = blockers;
       }
       // Retire the version currently live, so exactly one stays published.
       const { rows: previous } = await query<{ id: string }>(
@@ -453,6 +476,8 @@ export async function transitionVersion(
     }
     if (to === 'published') {
       stamps.push('published_at = now()', `published_by = ${actorParam()}`);
+      stamps.push(`published_unvalidated = ${bind(overridden.length > 0)}`);
+      stamps.push(`overridden_blockers = ${bind(JSON.stringify(overridden))}`);
     }
     if (reason) stamps.push(`change_reason = ${bind(reason)}`);
 
@@ -463,11 +488,23 @@ export async function transitionVersion(
     );
 
     await recordRevision(
-      { medicationId: version.medication_id, versionId, actor, action: 'transitioned',
-        fromState: version.state, toState: to, reason, fieldDiff: [] },
+      {
+        medicationId: version.medication_id,
+        versionId,
+        actor,
+        action: overridden.length > 0 ? 'published_unvalidated' : 'transitioned',
+        fromState: version.state,
+        toState: to,
+        reason:
+          overridden.length > 0
+            ? `${reason ?? 'Published for evaluation before clinical review.'} ` +
+              `Overridden: ${overridden.map((b) => b.code).join(', ')}.`
+            : reason,
+        fieldDiff: [],
+      },
       db,
     );
-    await reindexState(versionId, to, db);
+    await reindexState(versionId, to, db, overridden.length > 0);
     return { ...rows[0], slug: version.slug };
   });
 }

@@ -118,11 +118,20 @@ export function ReviewPage() {
       )}
 
       <section aria-labelledby="findings-heading">
-        <h2 id="findings-heading">Data quality findings</h2>
-        <p className="muted small">
-          Detected during import. Nothing listed here has been corrected automatically — each item
-          needs a human decision.
-        </p>
+        <div className="row" style={{ alignItems: 'flex-start' }}>
+          <div style={{ flex: 1, minWidth: 260 }}>
+            <h2 id="findings-heading">Data quality findings</h2>
+            <p className="muted small">
+              Detected during import. Nothing listed here has been corrected automatically — each
+              item needs a human decision.
+            </p>
+          </div>
+          {/* A plain link, so the browser downloads it and the session cookie
+              is sent exactly as it is for any other request. */}
+          <a className="btn btn-secondary" href="/api/review/findings/export.xlsx" download>
+            Download all findings (.xlsx)
+          </a>
+        </div>
 
         <div className="row" style={{ marginBlockEnd: 16 }}>
           <div>

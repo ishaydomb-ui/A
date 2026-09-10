@@ -72,13 +72,34 @@ if (!parsed.success) {
 const env = parsed.data;
 
 const DEV_PLACEHOLDERS = ['change-me', 'changeme', 'insecure', 'placeholder', 'example'];
+
+/**
+ * A loopback address is a secure context to the browser and is not reachable
+ * from another machine, so running without TLS there is safe. Anywhere else,
+ * an insecure cookie would travel in clear over a real network.
+ */
+function isLoopbackUrl(url: string): boolean {
+  try {
+    const { hostname, protocol } = new URL(url);
+    if (protocol === 'https:') return false;
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+  } catch {
+    return false;
+  }
+}
+
+const loopbackOnly = isLoopbackUrl(env.PUBLIC_URL);
+
 if (env.NODE_ENV === 'production') {
   const lower = env.APP_SECRET.toLowerCase();
   if (DEV_PLACEHOLDERS.some((p) => lower.includes(p))) {
     throw new Error('APP_SECRET still contains a development placeholder; generate a real secret.');
   }
-  if (!env.COOKIE_SECURE) {
-    throw new Error('COOKIE_SECURE must be true in production (the app is served over HTTPS).');
+  if (!env.COOKIE_SECURE && !loopbackOnly) {
+    throw new Error(
+      'COOKIE_SECURE must be true in production. It may only be false when PUBLIC_URL is a ' +
+        'loopback address (http://localhost), which is not reachable from another machine.',
+    );
   }
 }
 
@@ -125,6 +146,8 @@ export const config = {
 
   logLevel: env.LOG_LEVEL,
   trustProxy: env.TRUST_PROXY,
+  /** True when the app is served only on this machine, without TLS. */
+  loopbackOnly,
 } as const;
 
 export type Config = typeof config;

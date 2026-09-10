@@ -13,7 +13,8 @@ keeps unverified clinical content away from the people who would act on it.
 
 | Document | What it covers |
 | --- | --- |
-| [docs/deployment.md](docs/deployment.md) | First deployment on Contabo or any other host |
+| [docs/quickstart-local.md](docs/quickstart-local.md) | **Start here** — running it on your own machine, at no cost |
+| [docs/deployment.md](docs/deployment.md) | Deployment on Contabo or any other host |
 | [docs/migration.md](docs/migration.md) | Moving the system to a different server or cloud |
 | [docs/admin-guide.md](docs/admin-guide.md) | Accounts, roles, day-to-day administration |
 | [docs/import-guide.md](docs/import-guide.md) | Importing and updating the Excel workbook |

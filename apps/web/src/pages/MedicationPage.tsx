@@ -63,7 +63,10 @@ export function MedicationPage() {
   if (!detail) return null;
 
   const name = detail.fields['generic_name']?.value.text ?? detail.slug;
-  const unvalidated = /unvalidated/i.test(detail.validationStatus);
+  // Either the record's own validation status says so, or it was published
+  // with clinical gates still outstanding.
+  const unvalidated =
+    detail.publishedUnvalidated || /unvalidated/i.test(detail.validationStatus);
 
   return (
     <article>
@@ -83,6 +86,9 @@ export function MedicationPage() {
           <span className={`badge ${unvalidated ? 'badge-high' : 'badge-success'}`}>
             {t.validationStatus}: {detail.validationStatus}
           </span>
+          {detail.publishedUnvalidated && (
+            <span className="badge badge-high">{t.unvalidatedRecord}</span>
+          )}
           <span className="badge">
             {t.versionLabel} {detail.versionNumber}
           </span>
@@ -102,10 +108,19 @@ export function MedicationPage() {
       {/* An unvalidated record must say so plainly, right above the content. */}
       {unvalidated && (
         <Notice tone="warning" title={t.disclaimerHeading}>
-          <p>
-            This record has not been reconciled with the authoritative source or approved by a
-            clinical reviewer. Do not rely on it clinically.
-          </p>
+          <p>{t.unvalidatedRecordDetail}</p>
+          {detail.overriddenBlockers.length > 0 && (
+            <>
+              <p style={{ marginBlockEnd: 4 }}>
+                <strong>{t.outstandingChecks}:</strong>
+              </p>
+              <ul style={{ margin: 0, paddingInlineStart: 20 }}>
+                {detail.overriddenBlockers.map((blocker, i) => (
+                  <li key={i}>{blocker.message}</li>
+                ))}
+              </ul>
+            </>
+          )}
         </Notice>
       )}
 

@@ -1,13 +1,13 @@
 # Tests
 
-275 automated tests. All pass.
+287 automated tests. All pass.
 
 | Suite | Count | What it runs against |
 | --- | --- | --- |
 | Domain unit tests | 17 | Pure functions, no I/O |
 | Detector unit tests | 10 | The import quality detectors |
-| API integration | 116 | A real PostgreSQL database |
-| End-to-end | 132 | The real stack, in a real browser |
+| API integration | 124 | A real PostgreSQL database |
+| End-to-end | 136 | The real stack, in a real browser |
 
 ## Running them
 
@@ -74,6 +74,18 @@ Normalisation, Hebrew including final-letter forms, locale fallback with the
 displayed language labelled. Highlighting, facets, filters, pagination, and
 that unpublished content is unreachable for physicians even when explicitly
 requested.
+
+### Preview publication — 12 tests
+
+That publishing past the clinical gates needs **both** the system-wide
+allowance and an explicit acknowledgement on the request — neither alone is
+enough; that the overridden blockers are stored on the record and appear in
+the revision trail, which cannot be rewritten; that the record is flagged in
+search results and on its own page; that a record which passed every gate is
+*not* flagged; that every client is told the catalogue is in evaluation; that
+only an administrator can switch the allowance on; and that the banner appears
+on every screen, disappears when switched off, and passes the accessibility
+checks.
 
 ### Backup and restore — 12 tests
 

@@ -687,3 +687,24 @@ dialog::backdrop { background: rgb(8 12 18 / 55%); }
 @media print {
   .app-header, .app-footer, .compare-tray, .filter-panel, .btn { display: none !important; }
 }
+
+/* ---------------------------------------------------------------------------
+   Evaluation banner.
+
+   Shown while the catalogue may hold content published before clinical
+   review. Deliberately unmissable: high contrast, full width, above the
+   content rather than beneath it.
+--------------------------------------------------------------------------- */
+.evaluation-banner {
+  background: var(--warning-subtle);
+  border-block-end: 2px solid var(--warning);
+  color: var(--text);
+}
+.evaluation-banner-inner {
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding: var(--space-3) var(--space-4);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+.evaluation-banner strong { color: var(--warning); }

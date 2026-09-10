@@ -35,6 +35,7 @@ export interface SearchHit {
   drugClass: string | null;
   displayLocale: Locale;
   fallback: boolean;
+  publishedUnvalidated: boolean;
   highlights: { genericName: HighlightSegment[]; tradeNames: HighlightSegment[] };
 }
 
@@ -80,6 +81,9 @@ export interface MedicationDetail {
   reviewedAt: string | null;
   source: { label: string | null; document: string | null; version: string | null };
   publishedAt: string | null;
+  /** Published while clinical gates were still outstanding. */
+  publishedUnvalidated: boolean;
+  overriddenBlockers: Array<{ code: string; message: string; fieldKey?: string }>;
   fields: Record<string, ResolvedFieldDto>;
   citations: CitationDto[];
 }
@@ -109,4 +113,7 @@ export interface ReviewFinding {
 export interface PublicSettings {
   settings: Record<string, { value: unknown; needsApproval: boolean }>;
   environment: string;
+  /** True while records may be published before clinical review. */
+  evaluationMode: boolean;
+  evaluationNotice: string | null;
 }

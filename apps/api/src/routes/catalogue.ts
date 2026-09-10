@@ -87,6 +87,8 @@ export default async function catalogueRoutes(app: FastifyInstance): Promise<voi
         version: version.source_version,
       },
       publishedAt: version.published_at?.toISOString() ?? null,
+      publishedUnvalidated: version.published_unvalidated,
+      overriddenBlockers: version.overridden_blockers,
       fields,
       raw: version.data,
       citations,
@@ -202,18 +204,37 @@ export default async function catalogueRoutes(app: FastifyInstance): Promise<voi
       .object({
         to: z.enum(WORKFLOW_STATES as unknown as [WorkflowState, ...WorkflowState[]]),
         reason: z.string().max(2000).nullable().optional(),
+        // Publish despite outstanding clinical gates. Honoured only while the
+        // system-wide preview allowance is on, and always recorded.
+        acknowledgeUnvalidated: z.boolean().default(false),
       })
       .parse(req.body);
     await limits.enforce('mutation', req.currentUser!.id);
 
     const version = await catalogue.transitionVersion(
       versionId, body.to, actorOf(req as never), body.reason ?? null,
+      { acknowledgeUnvalidated: body.acknowledgeUnvalidated },
     );
     await audit({
-      ...auditContext(req), action: `catalogue.${body.to}`, entityType: 'medication_version',
-      entityId: versionId, detail: { to: body.to, reason: body.reason ?? null },
+      ...auditContext(req),
+      action: version.published_unvalidated ? 'catalogue.published_unvalidated' : `catalogue.${body.to}`,
+      entityType: 'medication_version',
+      entityId: versionId,
+      detail: {
+        to: body.to,
+        reason: body.reason ?? null,
+        unvalidated: version.published_unvalidated,
+        overriddenBlockers: version.overridden_blockers,
+      },
     });
-    return { version: { id: version.id, state: version.state } };
+    return {
+      version: {
+        id: version.id,
+        state: version.state,
+        publishedUnvalidated: version.published_unvalidated,
+        overriddenBlockers: version.overridden_blockers,
+      },
+    };
   });
 
   /** Tells the UI which buttons to offer, and why publishing is blocked. */

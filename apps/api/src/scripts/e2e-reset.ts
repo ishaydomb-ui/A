@@ -15,6 +15,7 @@ import { hashPassword } from '../lib/crypto.js';
 import { addCitation, transitionVersion, type Actor } from '../services/catalogue.js';
 import { commitBatch, uploadWorkbook, validateBatch } from '../services/import/pipeline.js';
 import { suggestMapping } from '../services/import/mapping.js';
+import { ensureDefaultSettings } from '../services/settings.js';
 
 export const E2E_PASSWORD = 'e2e-test-password-value-1';
 const PUBLISHED = ['sertraline', 'fluoxetine', 'methylphenidate', 'escitalopram', 'risperidone'];
@@ -33,14 +34,7 @@ async function wipe(): Promise<void> {
     await query(`ALTER TABLE ${t} ENABLE TRIGGER USER`);
     await query(`REVOKE TRUNCATE ON TABLE ${t} FROM CURRENT_USER`);
   }
-  await query(
-    `INSERT INTO settings (key, value, needs_approval) VALUES
-       ('institution_name', '"(pending approval)"'::jsonb, true),
-       ('contact_email',    '"(pending approval)"'::jsonb, true),
-       ('legal.privacy_policy', '"(placeholder — awaiting owner approval)"'::jsonb, true),
-       ('legal.terms',          '"(placeholder — awaiting owner approval)"'::jsonb, true)
-     ON CONFLICT (key) DO NOTHING`,
-  );
+  await ensureDefaultSettings();
 }
 
 async function makeUser(email: string, role: Role, name: string): Promise<Actor> {
