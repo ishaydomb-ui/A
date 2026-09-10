@@ -37,6 +37,9 @@ Run with: python -m grocery_bot.cli <command>
     benefits-merchant <chain> [--json]  does this chain carry a benefit
                           anywhere? distinguishes "no benefit" from
                           "lookup failed" — see benefits_catalog.py
+    benefits-area <שכונה> | <lat> <lon> [--radius KM] [--json]
+                          benefit chains in a neighbourhood, or near a
+                          point — the "outside a mall" question
     benefits-mall <mall> [--json]      benefit chains in a named mall,
                           named however you'd say it ("רמת אביב",
                           "בקניון רמת אביב", "ramat aviv")
@@ -57,7 +60,7 @@ wrong prices rather than failing loudly.
 `_DB_ONLY_COMMANDS` needs nothing but `GROCERY_BOT_DB_PATH`: add-item,
 remove-item, list-items, price, deals, recipe, recipe-text, meal-plan,
 nudge, confirm-card, benefits-catalog, benefits-branches, benefits-mall,
-benefits-merchant,
+benefits-merchant, benefits-area,
 price-compare, basket,
 coffee-catalog, coffee-nearby, coffee-terms, coffee-by-term.
 No Telegram token, no store session, no exit node — that project has no use for this
@@ -793,6 +796,117 @@ def _benefits_branches(storage: Storage, args: list[str]) -> int:
     return 0 if rows else 1
 
 
+def _benefits_area(storage: Storage, args: list[str]) -> int:
+    """Benefit chains in a neighbourhood, or near a point — see areas.py.
+
+    The question `benefits-mall` could not answer: "ומחוץ לקניון, באזור
+    הכללי של שכונת רמת אביב?". Malls are named places; a neighbourhood
+    is not in the address data at all, so this reads the geocoded cache.
+
+    Every answer states how many addresses in the city could not be
+    geocoded, because an unplaced address is invisible here and a
+    confident "that is everything" over partial data is the failure this
+    project keeps finding.
+    """
+    import json
+
+    from . import areas, malls
+
+    as_json = "--json" in args
+    plain = [a for a in args if not a.startswith("--")]
+    radius = _float_flag(args, "--radius") or 1.0
+    geo = areas.load_geocodes()
+    cover = areas.coverage(geo=geo)
+    rows = malls.load_rows()
+
+    # Two coordinates instead of a name: "what is around me, here".
+    if len(plain) == 2 and all(_looks_numeric(p) for p in plain):
+        lat, lon = float(plain[0]), float(plain[1])
+        near = areas.chains_near(lat, lon, rows, radius_km=radius, geo=geo)
+        if as_json:
+            print(json.dumps({"lat": lat, "lon": lon, "radius_km": radius,
+                              "recognized": True, "coverage": cover,
+                              "chains": [{"chain": c, "branch": b, "address": a,
+                                          "km": round(k, 2)} for c, b, a, k in near]},
+                             ensure_ascii=False))
+            return 0 if near else 1
+        print(f"{len(near)} רשתות עם הטבה ברדיוס {radius} ק\"מ:")
+        for chain, _branch, address, km in near:
+            print(f"  {km:4.2f} ק\"מ  {chain[:26]:28} {address[:34]}")
+        _print_coverage(cover)
+        return 0 if near else 1
+
+    query = " ".join(plain).strip()
+    if not query:
+        print("usage: benefits-area <שכונה> | <lat> <lon> [--radius KM]")
+        print("known: " + " | ".join(areas.known_areas(geo=geo)[:12]))
+        return 2
+
+    found_areas = areas.resolve_areas(query, geo=geo)
+    if not found_areas:
+        if as_json:
+            print(json.dumps({"query": query, "recognized": False, "areas": [],
+                              "chains": [], "coverage": cover,
+                              "known_areas": areas.known_areas(geo=geo)},
+                             ensure_ascii=False))
+        else:
+            print(f'לא מזוהה אזור בשם "{query}".')
+            print("אזורים ידועים: " + " | ".join(areas.known_areas(geo=geo)[:12]))
+        return 1
+
+    found = areas.chains_in_area(found_areas, rows, geo=geo)
+    priced, problems = _with_discounts(found)
+    # Ishay's question was "ומחוץ לקניון" — outside the mall. A
+    # neighbourhood answer that silently mixes the mall's shops with the
+    # street's answers a different question from the one asked, and in
+    # רמת אביב the mall is most of the neighbourhood's benefit chains.
+    in_mall = {c: malls.mall_of(a, b) for c, b, a, _d, _w in priced}
+    if as_json:
+        print(json.dumps({
+            "query": query, "recognized": True, "areas": found_areas,
+            "coverage": cover, "rates_known": not problems["catalog_error"],
+            "chains": [{"chain": c, "branch": b, "address": a,
+                        "discount": d, "wallet": w, "mall": in_mall.get(c, "")}
+                       for c, b, a, d, w in priced],
+        }, ensure_ascii=False))
+        return 0
+
+    street = [r for r in priced if not in_mall.get(r[0])]
+    mall_rows = [r for r in priced if in_mall.get(r[0])]
+    print(f"{' + '.join(found_areas)} — {len(priced)} רשתות עם הטבה")
+    if street:
+        print(f"\nמחוץ לקניון ({len(street)}):")
+        for chain, _branch, address, discount, _wallet in street:
+            rate = f"{discount:.0f}%" if discount else "—"
+            print(f"  {rate:>5}  {chain[:26]:28} {address[:34]}")
+    else:
+        print("\nמחוץ לקניון: אין — כל ההטבות באזור הזה נמצאות בקניון.")
+    if mall_rows:
+        names = sorted({in_mall[r[0]] for r in mall_rows})
+        print(f"\nבתוך {', '.join(names)} ({len(mall_rows)}):")
+        for chain, _branch, _address, discount, _wallet in mall_rows[:8]:
+            rate = f"{discount:.0f}%" if discount else "—"
+            print(f"  {rate:>5}  {chain[:26]}")
+        if len(mall_rows) > 8:
+            print(f"   ...ועוד {len(mall_rows) - 8} — /benefits-mall לרשימה מלאה")
+    _print_coverage(cover)
+    return 0
+
+
+def _looks_numeric(text) -> bool:
+    try:
+        float(text)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def _print_coverage(cover: dict) -> None:
+    """Say what is missing. An unplaced address is invisible above."""
+    if cover.get("missing"):
+        print(f"   ({cover['missing']} כתובות בעיר לא אותרו — ייתכן שחסרות חנויות)")
+
+
 def _benefits_merchant(storage: Storage, args: list[str]) -> int:
     """Does this chain carry a benefit anywhere? — see benefits_catalog.py.
 
@@ -1254,6 +1368,7 @@ _DB_ONLY_COMMANDS = {
     "benefits-catalog": _benefits_catalog,
     "benefits-branches": _benefits_branches,
     "benefits-mall": _benefits_mall,
+    "benefits-area": _benefits_area,
     "benefits-merchant": _benefits_merchant,
     "benefits-remember": _benefits_remember,
     # Reads flat JSON under data/coffeetrail/ (gitignored, external
