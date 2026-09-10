@@ -151,15 +151,38 @@ Three ways to change it, in order of how exposed they leave you.
 
 ### 1. SSH tunnel — nothing is exposed
 
-From your own machine, not from inside the SSH session:
+On the server:
 
 ```bash
-ssh -L 8080:127.0.0.1:8080 user@your-server
+./ops/ssh-tunnel.sh
 ```
 
-Leave that open and use `http://localhost:8080` locally. The traffic goes
-through SSH; nothing is opened to the internet. Phone SSH clients such as
-Termius offer the same thing under **Port Forwarding**.
+It closes any public tunnel, makes sure the app is configured for loopback
+access, checks that it answers, and prints the exact command to run — with
+your username and the server's address already filled in.
+
+Then, **on your own machine and not inside the SSH session**:
+
+```bash
+ssh -N -L 8080:127.0.0.1:8080 user@your-server
+```
+
+Leave that window open and browse to `http://localhost:8080`. The traffic runs
+inside your SSH connection; nothing is opened to the internet, and closing the
+window ends the access. `-N` just means "no remote shell, only the forward".
+
+If 8080 is already taken on your machine, forward a different local port —
+`-L 8090:127.0.0.1:8080` — and browse to `http://localhost:8090`.
+
+Phone SSH clients such as Termius offer the same thing under **Port
+Forwarding**: local port 8080, destination `127.0.0.1`, remote port 8080.
+
+> One thing worth knowing: over a tunnel the browser sees plain
+> `http://localhost`, and some browsers — Safari among them — refuse to store a
+> cookie marked `Secure` on a plain connection. Sign-in would then appear to
+> succeed while leaving you signed out. `ops/ssh-tunnel.sh` sets
+> `COOKIE_SECURE=false` and `PUBLIC_URL=http://localhost:8080` for you, which
+> is safe precisely because loopback traffic never touches a network.
 
 ### 2. A temporary public address — for a phone
 
