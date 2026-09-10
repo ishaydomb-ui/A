@@ -7,6 +7,12 @@
    change rather than a separate stylesheet.
 --------------------------------------------------------------------------- */
 :root {
+  /* Tells the browser which theme our OWN page is in, independent of the
+     device's setting — otherwise native controls (checkboxes, scrollbars)
+     render in the device's colour scheme even while the page around them
+     stays light, per the forced-light default below. */
+  color-scheme: light;
+
   --bg:            #ffffff;
   --bg-subtle:     #f4f6f8;
   --bg-raised:     #ffffff;
@@ -81,48 +87,12 @@
   --z-compare-bar: 25;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --bg:            #10141a;
-    --bg-subtle:     #171d25;
-    --bg-raised:     #1b222b;
-    --bg-hover:      #232c37;
-    --border:        #333e4b;
-    --border-strong: #566475;
-
-    --text:          #eef2f6;  /* 15.4:1 on --bg */
-    --text-muted:    #aeb9c6;  /* 8.4:1  on --bg */
-    --text-faint:    #8e9aa8;  /* 5.6:1  on --bg */
-
-    --accent:        #6cb2f5;  /* 7.5:1 on --bg */
-    --accent-hover:  #8ac3f8;
-    --accent-text:   #08111c;
-    --accent-subtle: #17293c;
-
-    --accent-2:        #eeb0c2;  /* 10.2:1 on --bg */
-    --accent-2-hover:  #f4c6d3;
-    --accent-2-text:   #2e1620;
-    --accent-2-subtle: #2e1620;
-    --header-wash-1: #212c39;
-    --header-wash-2: #282b34;
-
-    --danger:        #ff9a9f;
-    --danger-subtle: #341a1d;
-    --warning:       #f0c07a;
-    --warning-subtle:#33260f;
-    --success:       #7fd2a4;
-    --success-subtle:#12291e;
-
-    --mark-bg:       #5c4a00;
-    --mark-text:     #fff6cf;
-
-    --focus:         #6cb2f5;
-    --shadow-1: 0 1px 2px rgb(0 0 0 / 40%);
-    --shadow-2: 0 8px 24px rgb(0 0 0 / 55%);
-  }
-}
-
+/* Dark only ever applies through an explicit choice (the theme toggle),
+   never automatically from the device's own colour-scheme setting — a
+   shared clinical screen should not darken itself just because someone's
+   phone is in system dark mode. */
 :root[data-theme='dark'] {
+  color-scheme: dark;
   --bg: #10141a; --bg-subtle: #171d25; --bg-raised: #1b222b; --bg-hover: #232c37;
   --border: #333e4b; --border-strong: #566475;
   --text: #eef2f6; --text-muted: #aeb9c6; --text-faint: #8e9aa8;

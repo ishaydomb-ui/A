@@ -5,6 +5,7 @@ import { api } from '../lib/api.ts';
 import type { PublicSettings } from '../lib/types.ts';
 import { Notice } from '../components/Notice.tsx';
 import { LanguageToggle } from '../components/LanguageToggle.tsx';
+import { ThemeToggle } from '../components/ThemeToggle.tsx';
 
 /**
  * Privacy Policy and Terms of Use.
@@ -35,6 +36,7 @@ export function LegalPage({ document: which }: { document: 'privacy' | 'terms' }
           <Link to="/">{t.appName}</Link>
           <span className="spacer" />
           <LanguageToggle />
+          <ThemeToggle />
         </div>
 
         <h1>{title}</h1>

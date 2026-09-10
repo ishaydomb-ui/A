@@ -18,6 +18,9 @@ const EN = {
   language: 'Language',
   switchToHebrew: 'עברית',
   switchToEnglish: 'English',
+  theme: 'Theme',
+  switchToDark: 'Dark',
+  switchToLight: 'Light',
 
   // Navigation
   navSearch: 'Catalogue',
@@ -180,6 +183,9 @@ const HE = {
   language: 'שפה',
   switchToHebrew: 'עברית',
   switchToEnglish: 'English',
+  theme: 'ערכת נושא',
+  switchToDark: 'כהה',
+  switchToLight: 'בהיר',
 
   navSearch: 'קטלוג',
   navReview: 'בדיקה',

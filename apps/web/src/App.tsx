@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router-dom';
 import { DIRECTION, type Locale } from '@med/shared';
 import { I18nContext, STRINGS, readStoredLocale, storeLocale } from './i18n.ts';
 import { AuthProvider, useAuth } from './lib/auth.tsx';
+import { ThemeContext, readStoredTheme, storeTheme, type Theme } from './lib/theme.ts';
 import { Layout } from './components/Layout.tsx';
 import { RequireAuth } from './components/RequireAuth.tsx';
 import { RequireCapability } from './components/RequireCapability.tsx';
@@ -23,10 +24,16 @@ import { NotFoundPage } from './pages/NotFoundPage.tsx';
 
 export function App() {
   const [locale, setLocaleState] = useState<Locale>(() => readStoredLocale());
+  const [theme, setThemeState] = useState<Theme>(() => readStoredTheme());
 
   const setLocale = useCallback((next: Locale) => {
     setLocaleState(next);
     storeLocale(next);
+  }, []);
+
+  const setTheme = useCallback((next: Theme) => {
+    setThemeState(next);
+    storeTheme(next);
   }, []);
 
   // The document's language and direction follow the chosen locale, so screen
@@ -38,16 +45,26 @@ export function App() {
     document.title = STRINGS[locale].appName;
   }, [locale]);
 
+  // The theme is stamped explicitly rather than left to the device's own
+  // colour-scheme setting — see readStoredTheme for why — so light always
+  // applies until someone opts into dark here.
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
   const i18n = useMemo(
     () => ({ locale, dir: DIRECTION[locale], t: STRINGS[locale], setLocale }),
     [locale, setLocale],
   );
+  const themeValue = useMemo(() => ({ theme, setTheme }), [theme, setTheme]);
 
   return (
     <I18nContext.Provider value={i18n}>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
+      <ThemeContext.Provider value={themeValue}>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </ThemeContext.Provider>
     </I18nContext.Provider>
   );
 }

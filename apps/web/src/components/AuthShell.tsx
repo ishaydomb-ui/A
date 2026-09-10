@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useI18n } from '../i18n.ts';
 import { LanguageToggle } from './LanguageToggle.tsx';
+import { ThemeToggle } from './ThemeToggle.tsx';
 
 export function AuthShell({ title, children }: { title: string; children: ReactNode }) {
   const { t } = useI18n();
@@ -13,6 +14,7 @@ export function AuthShell({ title, children }: { title: string; children: ReactN
           <strong>{t.appName}</strong>
           <span className="spacer" />
           <LanguageToggle />
+          <ThemeToggle />
         </div>
 
         <h1>{title}</h1>

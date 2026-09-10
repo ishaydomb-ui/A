@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth.tsx';
 import { api } from '../lib/api.ts';
 import type { PublicSettings } from '../lib/types.ts';
 import { LanguageToggle } from './LanguageToggle.tsx';
+import { ThemeToggle } from './ThemeToggle.tsx';
 
 /** Account / language / sign-out. Rendered twice — inline on a wide screen,
     inside the overflow menu on a narrow one — never both at once; see the
@@ -15,6 +16,7 @@ function UserActions({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <>
       <LanguageToggle />
+      <ThemeToggle />
       <Link to="/account" className="btn btn-sm btn-secondary" onClick={onNavigate}>
         {session?.user.displayName ?? t.navAccount}
       </Link>
