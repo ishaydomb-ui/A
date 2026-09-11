@@ -49,6 +49,7 @@ documented as such rather than presented as reliable.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from .disambiguate import _normalise
@@ -97,6 +98,40 @@ def _sold_by_weight(name: str) -> bool:
     return any(word in (name or "") for word in _WEIGHED_WORDS)
 
 
+# A promotion that only pays out on a second unit, or on a different
+# product entirely. Measured on the live Tiv Taam feed 2026-09-11:
+# 3,650 of 13,087 live promotions are worded this way, and **1,530 of
+# them carry min_qty = 1**, so the quantity field cannot be used to
+# detect them — the wording is the only signal there is.
+#
+# Why it matters, with the numbers that exposed it: every one of the 12
+# picks the Tiv Taam cycle proposed that day was of this kind. Broccoli
+# reads shelf ₪24.90, discounted ₪12.45, min_qty 1 — and ₪12.45 is the
+# price of *the second bag*, so one bag costs the full ₪24.90. The run
+# advertised ₪161.87 of savings on a ₪135.93 cart that would in fact have
+# cost ₪297.80 and saved nothing.
+#
+# Buying two to make the promotion real is a different offer, and not one
+# the household asked for, so it is Ishay's call rather than a silent
+# change of behaviour. Until then these are refused: a saving that does
+# not happen is worse than a deal not found, because the report is what
+# he checks the cart against.
+_MULTI_BUY_PATTERN = re.compile(
+    r"השני|השניה|השנייה|השלישי|השלישית|הרביעי|מהשני"
+    r"|קנה\s*\d|\d\s*יח['\"׳]?\s*ב|\d\s*ב\s*-?\s*\d"
+)
+
+
+def _needs_more_than_one(description: str, min_qty) -> bool:
+    """Does this promotion require more than the single unit we add?"""
+    try:
+        if float(min_qty or 1) > 1:
+            return True
+    except (TypeError, ValueError):
+        pass
+    return bool(_MULTI_BUY_PATTERN.search(description or ""))
+
+
 def _plausible_novel(name: str, shelf_price: float, discount: float) -> bool:
     """Is this a real, small, safe-to-guess deal — or a feed artefact?"""
     if shelf_price > NOVEL_MAX_PRICE:
@@ -112,16 +147,37 @@ def _plausible_novel(name: str, shelf_price: float, discount: float) -> bool:
 # a name, and names lie — so it is a guard, not a guarantee, and the
 # summary labels these picks as unfamiliar for exactly that reason.
 _PERISHABLE_WORDS = (
-    "טרי", "טרייה", "חלב", "גבינ", "יוגורט", "קוטג", "שמנת", "חמאה", "ביצים",
+    # "טרי" and "פירות" are spelled out rather than left as stems: as a
+    # stem, "טרי" reads "טריאקי" as fresh and "פיר" reads "פירורי לחם"
+    # and "פירה" as fruit.
+    "טרי ", "טריה", "טרייה", "טריים", "טריות",
+    "חלב", "גבינ", "יוגורט", "קוטג", "שמנת", "חמאה", "ביצים",
     "בשר", "עוף", "הודו", "דג ", "דגים", "סלמון", "טונה טרי", "סלט", "לחם",
-    "פיתה", "לחמני", "עוגה", "בצק", "ירק", "פיר", "עגבני", "מלפפון", "חסה",
+    "פיתה", "לחמני", "עוגה", "בצק", "ירק", "פירות", "עגבני", "מלפפון", "חסה",
     "בננ", "תפוח", "אבוקדו", "לימון", "גזר", "בצל", "שום טרי",
 )
 
 
+# Matched at the start of a word, optionally behind one inseparable
+# prefix letter — not anywhere in the string. A plain substring test
+# reads "אטריות" and "פטריות" as "טרי", "טריאקי" as fresh, and
+# "כפפות ניטריל" as food: 5,591 of Tiv Taam's 24,741 product names were
+# flagged perishable, and the noodles, the teriyaki and the gloves were
+# all among them. That was harmless while the guard only ran on novel
+# picks; once it runs on the household's own repertoire (2026-09-11) it
+# silently withholds real deals on things they buy every week.
+# A trailing space in the list means "this word and nothing longer" —
+# "דג " must not also catch "דגני בוקר".
+_PERISHABLE_PATTERN = re.compile(
+    r"(?:^|[^֐-׿])[בהולמשכ]?(?:" + "|".join(
+        re.escape(w.strip()) + (r"(?![֐-׿])" if w != w.rstrip() else "")
+        for w in _PERISHABLE_WORDS
+    ) + r")"
+)
+
+
 def _looks_perishable(name: str) -> bool:
-    lowered = name or ""
-    return any(word in lowered for word in _PERISHABLE_WORDS)
+    return bool(_PERISHABLE_PATTERN.search(name or ""))
 
 
 @dataclass(frozen=True)
@@ -193,6 +249,8 @@ def _barcode_picks(
             continue
         if not familiar_only and familiar:
             continue  # handled by the familiar pass
+        if _needs_more_than_one(promo.get("description"), promo.get("min_qty")):
+            continue
         deal_price = float(promo["discounted_price"])
         shelf_price = float(shelf["price"])
         # A "deal" dearer than the shelf is a multi-buy total or a feed
@@ -248,6 +306,8 @@ def _novel_shufersal_picks(
             continue
         folded = _normalise(product.name)
         if folded in known or any(folded == s or folded in s or s in folded for s in skip):
+            continue
+        if _needs_more_than_one(promo.description, getattr(promo, "min_qty", 1)):
             continue
         if _looks_perishable(product.name):
             continue
@@ -316,6 +376,14 @@ def picks_for(
     familiar: list[DealPick] = []
     for deal in find_stockup_deals(storage, store):
         if pantryable_only and not deal.pantryable:
+            continue
+        # Shufersal words it differently — "2ב5 פתיתים ללא גלוטן350 אסם",
+        # where ₪5 buys two and one still costs ₪13.90 — but it is the
+        # same mistake, so the same guard runs on both chains rather than
+        # once per feed. (Its leading bare number is a *price*, not a
+        # quantity: "19.90 מרק בצל/פטריות" is a single-unit deal, which
+        # is why the pattern needs a digit on both sides of the ב.)
+        if _needs_more_than_one(deal.description, getattr(deal, "min_qty", 1)):
             continue
         # Search on the name the household's own purchase produced, not
         # the catalogue's — that is the term the cart matcher and the

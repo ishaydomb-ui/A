@@ -334,3 +334,21 @@ it is enforced for every chain, and test the same product through each.
 If a rule is implemented twice, the two copies will drift — the fallback
 path is the one that drifts, because it is written for the data that is
 missing rather than for the rule.
+
+**And check what widening a guard now costs.** Two things surfaced the
+moment `_looks_perishable` started running on the household's own
+repertoire instead of only on strangers:
+
+- It was a substring test, so "טרי" matched **אטריות**, **פטריות**,
+  **טריאקי** and **ניטריל**, and "פיר" matched **פירורי לחם**. 5,591 of
+  Tiv Taam's 24,741 product names were "perishable". While the guard
+  only refused unfamiliar products that cost nothing; applied to the
+  weekly list it silently withholds real deals. Hebrew keyword matching
+  needs a word start and an optional prefix letter, never `in`.
+- The same day, the promotion wording turned out to carry conditions the
+  structured fields do not. Tiv Taam: 3,650 of 13,087 live promotions
+  say "השני ב 50%" or "קנה 2 ... ב 5 ש\"ח", and **1,530 of those carry
+  `min_qty = 1`**. Shufersal says it as "2ב5" — but there a *leading*
+  number is a price ("19.90 מרק בצל/פטריות"), so the same pattern must
+  not read it as a quantity. A new chain will word it a third way:
+  read a few hundred real descriptions before trusting `min_qty`.

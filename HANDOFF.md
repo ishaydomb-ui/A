@@ -143,7 +143,30 @@ checked so far:
    `startswith` — but the reviewer's point about **size and selling
    unit** is unverified and still open.
 
-Not yet checked: barcode-does-not-prove-promo-applies (their 5d), and
+4. **VERIFIED, AND THE WORST ONE — partly fixed 2026-09-11.** Their 5d,
+   "a barcode match does not prove the promotion applies." Correct, and
+   the money was larger than the perishable bug: every one of the 12
+   picks the Tiv Taam cycle proposed that day was a "השני ב־" promotion
+   whose `discounted_price` is the price of the *second* unit. Reported
+   saving ₪161.87; real saving at quantity 1, zero. `min_qty` does not
+   flag them (1,530 live promotions are worded multi-buy and carry
+   `min_qty = 1`), so `_needs_more_than_one` checks the wording too.
+   Refused from auto-add now; 6 genuine single-unit deals remain.
+   **Open for Ishay:** whether to buy two and make the promotion real,
+   or surface them in the report as "worth taking two" without adding.
+   **Unverified assumption left standing:** club-priced deals ("יין
+   49.90 - מועדון") are kept, assuming the account is a TivCoins member.
+   Not checked against the account.
+
+5. **Found while fixing 1, nobody's claim.** `_looks_perishable` was a
+   substring test, so "טרי" matched אטריות/פטריות/טריאקי/ניטריל and
+   "פיר" matched פירורי לחם — 5,591 of Tiv Taam's 24,741 names read as
+   perishable. Harmless while the guard only refused strangers; once it
+   runs on the weekly list it withholds real deals in silence. Now
+   matched at a word start behind an optional prefix letter; 4,921 names
+   flagged, the real perishables all still caught.
+
+Not yet checked: the reviewer's size/selling-unit point (item 3), and
 every recommendation in sections 1-4 and 6-10, which are design
 proposals for Ishay rather than factual claims.
 

@@ -146,6 +146,22 @@ class NovelDealTests(unittest.TestCase):
         self._catalog((_product("1", "גבינה צהובה פרוסה", 20.0), _promo("1", 6.0)))
         self.assertEqual(dealfill.picks_for(self.storage, "shufersal"), [])
 
+    def test_a_two_for_one_price_is_not_a_single_unit_price(self) -> None:
+        # Live 2026-09-11: "2ב5 פתיתים ללא גלוטן350 אסם", shelf ₪13.90.
+        # ₪5 buys two; one still costs ₪13.90, so the 64% never happens.
+        self._catalog((_product("1", "פתיתים ללא גלוטן", 13.9),
+                       _promo("1", 5.0, desc="2ב5 פתיתים ללא גלוטן350 אסם")))
+        self.assertEqual(dealfill.picks_for(self.storage, "shufersal"), [])
+
+    def test_a_leading_price_is_a_price_and_not_a_quantity(self) -> None:
+        # Shufersal writes single-unit deals as "19.90 מרק בצל/פטריות".
+        # Reading that leading number as a quantity would refuse most of
+        # the feed's real deals.
+        self._catalog((_product("1", "מרק פטריות קנור", 19.9),
+                       _promo("1", 9.9, desc="9.90 מרק בצל/פטריות 400 גרם")))
+        picks = dealfill.picks_for(self.storage, "shufersal")
+        self.assertEqual([p.catalog_name for p in picks], ["מרק פטריות קנור"])
+
     def test_novel_picks_can_be_switched_off_without_losing_familiar_ones(self) -> None:
         self.storage.replace_stock_items(
             "shufersal", [StockItem("P_1", "מרכך כביסה", 0.05, "טיפוח, תינוקות וניקיון")]
@@ -217,6 +233,37 @@ class BarcodeChainDealTests(unittest.TestCase):
             [p for p in dealfill.picks_for(self.storage, "tivtaam") if p.familiar], []
         )
 
+    def _promo(self, description, min_qty=1.0) -> None:
+        self.storage.replace_store_promotions("tivtaam", [
+            {"barcode": "111", "promotion_id": "a", "description": description,
+             "discounted_price": 12.45, "min_qty": min_qty,
+             "starts_at": "2000-01-01T00:00:00", "ends_at": "2099-01-01T00:00:00",
+             "observed_at": "2026-09-06"},
+        ])
+
+    def test_a_second_unit_promotion_is_not_a_saving_on_one_unit(self) -> None:
+        # "השני ב 50%" prices the *second* bag. Buying one costs the full
+        # shelf price, so the 50% the feed implies never happens.
+        self._promo("מבצע השני ב 50%")
+        self.assertEqual(dealfill.picks_for(self.storage, "tivtaam"), [])
+
+    def test_min_qty_cannot_be_trusted_to_flag_those(self) -> None:
+        # The live feed had 1,530 multi-buy promotions carrying min_qty=1,
+        # which is why the wording is checked and not just the number.
+        self._promo("קנה 2 המבורגרים בל ציפס ב 5 ש\"ח")
+        self.assertEqual(dealfill.picks_for(self.storage, "tivtaam"), [])
+
+    def test_min_qty_above_one_is_refused_whatever_the_wording_says(self) -> None:
+        self._promo("מבצע", min_qty=2.0)
+        self.assertEqual(dealfill.picks_for(self.storage, "tivtaam"), [])
+
+    def test_a_plain_single_unit_promotion_is_still_a_deal(self) -> None:
+        # The guard must not swallow ordinary price promotions, which are
+        # most of the feed.
+        self._promo("ברוקולי ב- 12.45")
+        picks = dealfill.picks_for(self.storage, "tivtaam")
+        self.assertEqual([p.catalog_name for p in picks], ["ברוקולי קפוא 800 גר"])
+
     def _perishable_bought_before(self) -> None:
         """The live case: a previously-bought perishable, deeply discounted.
 
@@ -265,6 +312,28 @@ class BarcodeChainDealTests(unittest.TestCase):
         ])
         picks = dealfill.picks_for(self.storage, "tivtaam", pantryable_only=False)
         self.assertEqual([p.catalog_name for p in picks if not p.familiar], [])
+
+
+class PerishableWordTests(unittest.TestCase):
+    """The keyword guard reads a product name, so it has to read Hebrew
+    words rather than substrings. Every case here was found in the live
+    Tiv Taam feed on 2026-09-11."""
+
+    def test_a_stem_does_not_match_the_middle_of_a_word(self) -> None:
+        for pantry in ("אטריות אורז", "רוטב טריאקי", "כפפות ניטריל",
+                       "פטריות שמפיניון פרוסות", "דגני בוקר"):
+            with self.subTest(pantry):
+                self.assertFalse(dealfill._looks_perishable(pantry))
+
+    def test_the_real_perishables_still_match(self) -> None:
+        for fresh in ("סלמון טרי", "חלב 3%", "גבינת קוטג", "לחם אחיד",
+                      "בצק פריך מלוח 900 גר מעדנות", "עגבניות שרי",
+                      "פירות יער קפואים", "דג מושט"):
+            with self.subTest(fresh):
+                self.assertTrue(dealfill._looks_perishable(fresh))
+
+    def test_a_prefix_letter_does_not_hide_a_perishable(self) -> None:
+        self.assertTrue(dealfill._looks_perishable("מארז ובשר טחון"))
 
 
 if __name__ == "__main__":
