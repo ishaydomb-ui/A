@@ -1778,6 +1778,118 @@ class GroceryBot:
     ) -> None:
         await self._ask_ambiguities(update.effective_chat.id, context, reports)
 
+    def _autochoice_preview(self) -> tuple[dict, list]:
+        """What the rule would close, without closing anything.
+
+        The rule is `localmatch.resolve_term`, which already exists and is
+        deliberately timid: it accepts a candidate only when the product
+        name *is* the term, or continues it with nothing but size and
+        packaging, and prefers a price-controlled product on a tie (Ishay,
+        2026-09-07). Two live errors are why it is that strict — "בננה"
+        once resolved to בננה ציפס, and "מלפפון" to pickles, both by
+        sorting cheapest-first.
+
+        Measured on the real backlog 2026-09-11: of 80 open questions it
+        closes **14**. The other 66 are questions like בצל → יבש / אדום /
+        שאלוט, which is a real decision and not a rule's to make. That
+        number is reported rather than smoothed over: the audit's hope
+        was "one rule replaces dozens of questions", and the honest
+        answer here is that a safe rule replaces a sixth of them.
+        """
+        from . import localmatch
+
+        open_rows = [
+            row for row in self.storage.list_pending_ambiguities()
+            if self.storage.preferred_for(row["store"], row["original_term"]) is None
+        ]
+        picks = []
+        for store in {row["store"] for row in open_rows}:
+            terms = [r["original_term"] for r in open_rows if r["store"] == store]
+            report = localmatch.seed_memory(self.storage, store, terms, dry_run=True)
+            picks.extend((store, hit) for hit in report["seeded"])
+        return {"open": len(open_rows)}, picks
+
+    async def autochoice(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/autochoice — offer to close the questions a rule can answer.
+
+        Never applied without being approved once, with its own examples
+        in front of the household: a rule nobody chose is a rule nobody
+        can predict, and not deleting a line is not consent.
+        """
+        if not _authorized(self.config, update):
+            return
+        from .chains import display_name
+        from .htmltext import bold as _b, escape as _md
+
+        counts, picks = await asyncio.to_thread(self._autochoice_preview)
+        if not picks:
+            await update.message.reply_text(
+                f"אין שאלה פתוחה שאפשר לענות עליה בכלל בטוח. "
+                f"({counts['open']} ממתינות — /questions)"
+            )
+            return
+        lines = [
+            _b(f"אפשר לסגור {len(picks)} שאלות לפי כלל אחד"),
+            "הכלל: מוצר ששמו <b>זהה</b> למונח (או ממשיך אותו רק בגודל/אריזה), "
+            "הזול מבין המתאימים, ומוצר בפיקוח מנצח בשוויון.",
+            "",
+        ]
+        for store, hit in picks[:8]:
+            mark = " · בפיקוח" if hit.controlled else ""
+            lines.append(
+                f"• {_md(hit.term)} ← {_md(hit.name)} "
+                f"<i>({hit.price:.2f}₪, {display_name(store)}{mark})</i>"
+            )
+        if len(picks) > 8:
+            lines.append(f"   <i>...ועוד {len(picks) - 8}</i>")
+        lines.append("")
+        lines.append(
+            f"<i>{counts['open'] - len(picks)} שאלות אחרות נשארות — "
+            "שם ההבדל מהותי (בצל יבש מול אדום), וזו החלטה שלכם.</i>"
+        )
+        await _send_html(
+            context, update.effective_chat.id, "\n".join(lines),
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("✅ החל את הכלל", callback_data="autochoice:apply"),
+                InlineKeyboardButton("לא", callback_data="autochoice:no"),
+            ]]),
+        )
+
+    async def on_autochoice_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        await query.answer()
+        if not _authorized(self.config, update):
+            return
+        if query.data.endswith(":no"):
+            await query.edit_message_text("בסדר — לא שיניתי כלום.")
+            return
+
+        def _apply():
+            from . import localmatch
+
+            open_rows = [
+                row for row in self.storage.list_pending_ambiguities()
+                if self.storage.preferred_for(row["store"], row["original_term"]) is None
+            ]
+            applied = 0
+            for store in {row["store"] for row in open_rows}:
+                rows = [r for r in open_rows if r["store"] == store]
+                report = localmatch.seed_memory(
+                    self.storage, store, [r["original_term"] for r in rows]
+                )
+                chosen = {hit.term for hit in report["seeded"]}
+                for row in rows:
+                    if row["original_term"] in chosen:
+                        self.storage.mark_ambiguity_resolved(row["id"])
+                        applied += 1
+            return applied
+
+        applied = await asyncio.to_thread(_apply)
+        await query.edit_message_text(
+            f"✅ נסגרו {applied} שאלות. הבחירות נשמרו ואפשר לשנות כל אחת "
+            "בפעם הבאה שהמוצר עולה."
+        )
+
     async def requests_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/requests — what happened to the things people asked for.
 
@@ -2144,6 +2256,7 @@ async def _register_bot_metadata(application: Application) -> None:
             BotCommand("done", "סיימתי לקנות — מלא את העגלה מחדש"),
             BotCommand("questions", "שאלות בחירה שממתינות — לענות כשנוח"),
             BotCommand("requests", "מה קרה למה שביקשנו — בעגלה, נקנה, סופק"),
+            BotCommand("autochoice", "לסגור שאלות שאפשר לענות עליהן בכלל אחד"),
             BotCommand("cheaper", "השוואת ₪ לק\"ג — יש חלופה זולה יותר?"),
             BotCommand("list_full", "רשימה להדבקה בהזמנה מהירה"),
             BotCommand("digest", "כל הקנייה בהודעה אחת — רשימה, מבצעים, חלופות"),
@@ -2257,6 +2370,7 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("digest", bot.digest))
     application.add_handler(CommandHandler("questions", bot.questions))
     application.add_handler(CommandHandler("requests", bot.requests_status))
+    application.add_handler(CommandHandler("autochoice", bot.autochoice))
     application.add_handler(CallbackQueryHandler(bot.resolve_ambiguity, pattern=r"^(resolve|skip):"))
     application.add_handler(
         CallbackQueryHandler(bot.on_proposal_button, pattern=r"^(ptoggle|pall|pnone|pconfirm):")
@@ -2269,6 +2383,9 @@ def build_application(config: Config, storage: Storage) -> Application:
     )
     application.add_handler(
         CallbackQueryHandler(bot.on_cycle_details, pattern=r"^cycledetails$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(bot.on_autochoice_button, pattern=r"^autochoice:")
     )
     application.add_handler(
         CallbackQueryHandler(bot.on_card_button, pattern=r"^cardok$")
