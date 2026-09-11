@@ -472,7 +472,8 @@ class GroceryBot:
                 text=f"🛒 ממלא {plan.total} פריטים ב{display_name(store)}…",
             )
             store_reports = await asyncio.to_thread(
-                add_terms_to_cart, self.storage, {store: factory}, plan.terms
+                add_terms_to_cart, self.storage, {store: factory}, plan.terms,
+                None, True,
             )
             # Tag what went in because of a promotion, so /lastdeals can
             # answer afterwards instead of the household having to ask.

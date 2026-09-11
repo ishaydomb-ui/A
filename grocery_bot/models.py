@@ -123,6 +123,14 @@ class OrderCycleReport:
     ambiguous: list[CartAddResult] = field(default_factory=list)
     not_found: list[CartAddResult] = field(default_factory=list)
     errors: list[CartAddResult] = field(default_factory=list)
+    # Deliberately not added, because a person had just done something to
+    # this cart: they removed the line, or it is already there. Its own
+    # bucket rather than not_found, which would read as "the store does
+    # not have it" and would train the repeat-failure report on things
+    # that never failed. Kept out of `results` for the same reason — the
+    # cart views render what the run *did*, and a declined add did not
+    # happen at the store at all.
+    skipped: list[CartAddResult] = field(default_factory=list)
 
     def record(self, result: CartAddResult) -> None:
         bucket = {
@@ -130,6 +138,7 @@ class OrderCycleReport:
             "ambiguous": self.ambiguous,
             "not_found": self.not_found,
             "error": self.errors,
+            "skipped": self.skipped,
         }[result.status]
         bucket.append(result)
 

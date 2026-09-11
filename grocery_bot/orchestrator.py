@@ -98,13 +98,18 @@ def run_order_cycle(
             prematched = _prefetch_matches(
                 adapter, storage, store, asked_terms + [p.term for p in deal_picks]
             )
+            # Read the cart once, before touching it. See CartGuard: the
+            # household edits this cart on the site, and until now the bot
+            # only ever looked afterwards.
+            guard = CartGuard.read(storage, adapter, store)
             total_items = len(base_items) + len(adhoc_items) + len(deal_picks)
             done = 0
 
             for base_item in base_items:
                 term = base_item.search_term_for(store)
                 result = _add_one(
-                    storage, adapter, store, term, base_item.default_quantity, prematched
+                    storage, adapter, store, term, base_item.default_quantity,
+                    prematched, guard,
                 )
                 # Carry the weight through so the cart view can say "0.5 ק"ג"
                 # rather than a meaningless "×1" for loose produce.
@@ -117,7 +122,8 @@ def run_order_cycle(
 
             for adhoc in adhoc_items:
                 result = _add_one(
-                    storage, adapter, store, adhoc.text, adhoc.quantity, prematched
+                    storage, adapter, store, adhoc.text, adhoc.quantity,
+                    prematched, guard,
                 )
                 result.requested_by = adhoc.requested_by
                 report.record(result)
@@ -136,7 +142,8 @@ def run_order_cycle(
 
             for pick in deal_picks:
                 result = _add_one(
-                    storage, adapter, store, pick.term, pick.quantity, prematched
+                    storage, adapter, store, pick.term, pick.quantity,
+                    prematched, guard,
                 )
                 # Only a line that actually made it into the cart is worth
                 # calling a deal. An ambiguous or missing one would put a
@@ -186,6 +193,82 @@ def record_deals(storage: Storage, reports: dict[str, OrderCycleReport]) -> None
         logger.exception("Could not record this cycle's deal picks")
 
 
+class CartGuard:
+    """What a person did to this cart, and what that forbids us to do.
+
+    The cart is shared. Ishay fills it through the bot; his partner edits
+    it on the site, with no Telegram in the loop at all. Until now the
+    bot read the cart only *after* filling it, so two things could happen
+    silently: a line she had deleted came straight back on the next add,
+    and an item already in the cart was added a second time.
+
+    Neither is "learning from removals", which Ishay ruled out and which
+    this deliberately does not do: nothing here changes a preference, a
+    quantity or a list. It only declines to undo, within one round, an
+    edit a person made to the cart it is about to touch.
+
+    **An empty cart blocks nothing.** After a shop the chain empties the
+    cart, so every manifest line reads as "removed" — which would stop
+    the refill from putting anything back and leave the household with an
+    empty cart and no explanation. Same trap as `standingcart.removals`,
+    same answer.
+
+    Unreadable is not empty: when the cart cannot be read the guard
+    allows everything, because a page-load failure must not silently stop
+    a shop from being filled.
+    """
+
+    def __init__(self, present: dict, removed: dict, readable: bool = True):
+        self.present = present          # key -> name, already in the cart
+        self.removed = removed          # key -> name, taken out by a person
+        self.readable = readable
+
+    @classmethod
+    def empty(cls) -> "CartGuard":
+        return cls({}, {}, readable=False)
+
+    @classmethod
+    def read(cls, storage: Storage, adapter, store: str) -> "CartGuard":
+        from . import standingcart
+
+        reader = getattr(adapter, "cart_summary", None)
+        if reader is None:
+            return cls.empty()
+        try:
+            summary = reader() or {}
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not read the %s cart before filling it", store)
+            return cls.empty()
+        if not summary.get("ok"):
+            return cls.empty()
+        items = summary.get("items") or []
+        present = {}
+        for item in items:
+            for key in (str(item.get("code") or ""), (item.get("name") or "").strip()):
+                if key:
+                    present[key] = (item.get("name") or "").strip()
+        if not items:
+            # Empty: a completed shop, not a hundred deletions.
+            return cls(present={}, removed={})
+        removed = {}
+        for row in standingcart.removals(storage, store, items):
+            for key in (str(row.get("code") or ""), (row.get("name") or "").strip()):
+                if key:
+                    removed[key] = (row.get("name") or "").strip()
+        return cls(present, removed)
+
+    def blocks(self, code: str = "", name: str = "") -> str:
+        """Why this must not be added now, or "" when it may be."""
+        for key in (str(code or ""), (name or "").strip()):
+            if not key:
+                continue
+            if key in self.removed:
+                return "הוסר ידנית מהעגלה"
+            if key in self.present:
+                return "כבר בעגלה"
+        return ""
+
+
 def _remember_failures(storage: Storage, report) -> None:
     """Persist what this run could not add, so a pattern can be seen.
 
@@ -210,6 +293,7 @@ def add_terms_to_cart(
     adapter_factories: dict[str, AdapterFactory],
     terms: list[tuple[str, int]],
     on_progress=None,
+    guard_cart: bool = False,
 ) -> dict[str, OrderCycleReport]:
     """Put specific items straight into the real cart.
 
@@ -217,6 +301,15 @@ def add_terms_to_cart(
     וגבינה" names the things to add; running the whole standing list
     would drop another dozen products into the cart the user never asked
     for in that message.
+
+    `guard_cart` decides whether a person's edits to the cart veto an
+    add, and it is **off by default on purpose**. This function serves
+    two callers that mean opposite things. The standing refill fills the
+    cart on its own and must not undo a deletion, so it passes True. A
+    person typing "תוסיף חלב" is asking for milk *now* — if they deleted
+    it an hour ago and are asking again, they changed their mind, and a
+    bot that answered "it was removed" would be refusing an instruction
+    by citing the instruction it was given earlier.
     """
     reports: dict[str, OrderCycleReport] = {}
     for store, make_adapter in adapter_factories.items():
@@ -237,8 +330,11 @@ def add_terms_to_cart(
                 continue
 
             prematched = _prefetch_matches(adapter, storage, store, [t for t, _ in terms])
+            guard = CartGuard.read(storage, adapter, store) if guard_cart else CartGuard.empty()
             for index, (term, quantity) in enumerate(terms, start=1):
-                result = _add_one(storage, adapter, store, term, quantity, prematched)
+                result = _add_one(
+                    storage, adapter, store, term, quantity, prematched, guard
+                )
                 report.record(result)
                 if on_progress is not None:
                     try:
@@ -278,8 +374,14 @@ def _add_one(
     term: str,
     quantity: int,
     prematched: dict | None = None,
+    guard: "CartGuard | None" = None,
 ):
     """Add one term, honouring a previously remembered product choice.
+
+    `guard` is what a person did to this cart since we last filled it.
+    Every add is checked against it first, at whatever identity we have
+    at that point: the remembered product, the bulk match, or — when the
+    search has not run yet — the term itself.
 
     Without the memory lookup this bot is unusable in practice: a real
     Shufersal search for an everyday term returns ~20 tiles, so every
@@ -288,8 +390,22 @@ def _add_one(
     one-time question per product, which is what the project's "focused
     decision point, only on genuine ambiguity" rule actually asks for.
     """
+    guard = guard or CartGuard.empty()
+    blocked = guard.blocks(name=term)
+    if blocked:
+        return CartAddResult(
+            item_name=term, store=store, status="skipped",
+            detail=blocked, quantity=quantity,
+        )
+
     preferred = storage.preferred_for(store, term)
     if preferred is not None:
+        blocked = guard.blocks(preferred["product_code"], preferred["product_name"])
+        if blocked:
+            return CartAddResult(
+                item_name=term, store=store, status="skipped",
+                detail=blocked, quantity=quantity,
+            )
         result = adapter.add_specific_product(
             preferred["product_name"],
             quantity,
@@ -313,6 +429,12 @@ def _add_one(
     # product code, so this is a direct add rather than a page load.
     hit = (prematched or {}).get(term)
     if hit and hit.get("code"):
+        blocked = guard.blocks(hit["code"], hit.get("name") or "")
+        if blocked:
+            return CartAddResult(
+                item_name=term, store=store, status="skipped",
+                detail=blocked, quantity=quantity,
+            )
         if not hit.get("in_stock", True):
             logger.info("Skipping %r — matched product is out of stock", term)
             return CartAddResult(
@@ -520,6 +642,22 @@ def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
                 lines.append(f"🏷️ נוספו בגלל מבצע חריג ({len(dealt)}) — מחקו מה שלא צריך:")
                 for r in dealt:
                     lines.append(f"   • {_md(r.item_name)} — <i>{_md(r.deal)}</i>")
+        if report.skipped:
+            # Said out loud, never silently. "The cart is missing the milk
+            # I asked for" with no explanation is worse than one extra
+            # line, and this is the only place the reason exists.
+            removed = [r for r in report.skipped if "הוסר" in (r.detail or "")]
+            already = [r for r in report.skipped if r not in removed]
+            if removed:
+                lines.append(
+                    f"✋ לא הוחזרו ({len(removed)}) — הוסרו מהעגלה ידנית: "
+                    + ", ".join(_md(r.item_name) for r in removed)
+                )
+            if already:
+                lines.append(
+                    f"↩️ כבר בעגלה ({len(already)}): "
+                    + ", ".join(_md(r.item_name) for r in already)
+                )
         if report.ambiguous:
             lines.append(
                 f"❓ דורש בחירה ({len(report.ambiguous)}): "

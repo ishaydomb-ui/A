@@ -160,9 +160,24 @@ def removals(storage, store: str, cart_items) -> list[dict]:
     `cart_items` is the adapter's own reading of the live cart. Anything
     in the manifest and no longer in the cart was removed by a person —
     the bot never removes on its own.
+
+    **An empty cart proves nothing and is treated as nothing.** This runs
+    at `/done`, right after a shop, and a chain empties the cart when an
+    order is placed. So "the manifest holds 120 items and the cart holds
+    none" is the *expected* reading after a completed purchase, not 120
+    deletions — and logging it as deletions would fill the habit report
+    with every product the household actually bought. Caught 2026-09-11
+    before it ever ran: the log was still empty, and the live manifest
+    held 120 Shufersal lines waiting to be misread at the next `/done`.
+
+    A cart with something in it is a different matter: the rest survived
+    checkout or was never bought, so a line missing from it really was
+    taken out.
     """
     data = _manifest(storage).get("stores", {}).get(store, [])
     if not data:
+        return []
+    if not cart_items:
         return []
     present = {str(item.get("code") or "") for item in (cart_items or [])}
     present |= {(item.get("name") or "").strip() for item in (cart_items or [])}
