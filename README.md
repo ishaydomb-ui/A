@@ -26,6 +26,7 @@ keeps unverified clinical content away from the people who would act on it.
 | [docs/technical-capabilities.md](docs/technical-capabilities.md) | Code-verified capabilities report, for external/clinical-safety review |
 | [docs/roadmap-proposals.md](docs/roadmap-proposals.md) | Unified list of proposed future capabilities, staged and prioritised |
 | [docs/telegram-bot.md](docs/telegram-bot.md) | Optional Telegram bot for project discussion with Claude |
+| [ops/update.sh](ops/update.sh) | One command to bring a running deployment up to date |
 
 ## What it does
 
