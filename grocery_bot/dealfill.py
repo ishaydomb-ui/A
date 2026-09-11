@@ -111,11 +111,12 @@ def _sold_by_weight(name: str) -> bool:
 # advertised ₪161.87 of savings on a ₪135.93 cart that would in fact have
 # cost ₪297.80 and saved nothing.
 #
-# Buying two to make the promotion real is a different offer, and not one
-# the household asked for, so it is Ishay's call rather than a silent
-# change of behaviour. Until then these are refused: a saving that does
-# not happen is worse than a deal not found, because the report is what
-# he checks the cart against.
+# Buying two to make the promotion real was Ishay's call, and he took it
+# on 2026-09-11 ("Add buy two on multiply"). So these are now split in
+# two: the ones whose arithmetic can actually be done go in the cart at
+# the right quantity (see `_parse_multi_buy`), and everything else stays
+# refused and reported. A saving that does not happen is worse than a
+# deal not found, because the report is what he checks the cart against.
 _MULTI_BUY_PATTERN = re.compile(
     r"השני|השניה|השנייה|השלישי|השלישית|הרביעי|מהשני"
     r"|קנה\s*\d|\d\s*יח['\"׳]?\s*ב|\d\s*ב\s*-?\s*\d"
@@ -130,6 +131,71 @@ def _needs_more_than_one(description: str, min_qty) -> bool:
     except (TypeError, ValueError):
         pass
     return bool(_MULTI_BUY_PATTERN.search(description or ""))
+
+
+# How many multi-buy deals a cycle may act on. Every one of these doubles
+# an outlay the household did not ask for, so the cap is tighter than the
+# single-unit one and they are ranked by real saving, not by percentage.
+MAX_MULTI_BUY_PICKS = 3
+# Below this the second unit is not worth the shelf space or the tap.
+MIN_MULTI_BUY_SAVING = 3.0
+# A pack quantity above this is a storage decision, not a price one — and
+# a large leading number is usually grams: "300ב30 פסטרמה" is 300g for
+# ₪30, not three hundred packets.
+MAX_MULTI_BUY_QTY = 4
+
+# "השני ב 50%" — the second unit at a discount. Tiv Taam's form, and the
+# one where `discounted_price` is the *second unit's* price.
+_SECOND_UNIT = re.compile(r"ה(?:שני|שניה|שנייה)\s*ב\s*-?\s*(\d+(?:\.\d+)?)\s*(%?)")
+# "2ב5", "2 ב 90" — N units for a total. Shufersal's form, where
+# `discounted_price` is the price of the whole pack.
+_N_FOR_TOTAL = re.compile(r"(?<!\d)(\d{1,2})\s*ב\s*-?\s*(\d+(?:\.\d+)?)(?!\d)")
+
+
+def _parse_multi_buy(description: str, shelf_price: float, deal_price: float):
+    """(quantity, total price) for a multi-buy we can actually compute.
+
+    Returns None whenever the condition cannot be read with confidence,
+    which is most of the time and is the point. Three things it refuses:
+
+    **"קנה 2 המבורגרים בל ציפס ב 5 ש\"ח".** The promotion hangs off the
+    chips barcode and pays out only if you buy *burgers*. Buying two bags
+    of chips earns nothing. Anything opening with "קנה" is treated as
+    conditional on another product and left alone — the feeds give no
+    structured way to tell which product that is.
+
+    **"300ב30 פסטרמה".** Three hundred grams for ₪30, not three hundred
+    packets. A leading number above `MAX_MULTI_BUY_QTY` is a weight or a
+    price, never a pack count.
+
+    **Anything where the two chains' opposite meanings would collide.**
+    "השני ב 50%" prices the *second* unit, so two cost shelf + deal;
+    "2ב5" prices the *pair*, so two cost deal. Each form is matched
+    explicitly rather than inferred from the numbers, because the numbers
+    alone cannot distinguish them.
+    """
+    text = " ".join(str(description or "").split())
+    if not text or shelf_price <= 0 or deal_price <= 0:
+        return None
+    if text.startswith("קנה") or " קנה " in text:
+        return None
+
+    second = _SECOND_UNIT.search(text)
+    if second:
+        # The deal price is what the second unit costs. The stated number
+        # is a cross-check, not the source: the feed's own price is what
+        # the till will charge.
+        total = shelf_price + deal_price
+        return (2, total) if total < 2 * shelf_price else None
+
+    pack = _N_FOR_TOTAL.search(text)
+    if pack:
+        quantity = int(pack.group(1))
+        if not 2 <= quantity <= MAX_MULTI_BUY_QTY:
+            return None
+        total = deal_price
+        return (quantity, total) if total < quantity * shelf_price else None
+    return None
 
 
 def _plausible_novel(name: str, shelf_price: float, discount: float) -> bool:
@@ -200,6 +266,19 @@ class DealPick:
     @property
     def label(self) -> str:
         """Why this is in the cart, short enough to scan in a list."""
+        if self.quantity > 1:
+            # Said in units, not in unit prices. "2 יחידות ב-37.35₪" is
+            # what the till will show; a per-unit figure hides that the
+            # outlay went up, which is the one thing a person needs to see
+            # before agreeing to a multi-buy.
+            paid = self.deal_price * self.quantity
+            full = self.shelf_price * self.quantity
+            base = (
+                f"{self.quantity} יחידות ב-{paid:.2f}₪ במקום {full:.2f}₪ "
+                f"(חיסכון {full - paid:.2f}₪)"
+            )
+            note = _condition_note(self.description)
+            return f"{base} · {note}" if note else base
         saved = self.shelf_price - self.deal_price
         base = (
             f"-{round(self.discount * 100)}% · {self.deal_price:.2f}₪ "
@@ -395,7 +474,11 @@ def picks_for(
             if novel_limit
             else []
         )
-        return familiar + novel
+        multi = multi_buy_picks(
+            storage, store,
+            skip | {_normalise(p.term) for p in familiar + novel},
+        )
+        return familiar + multi + novel
 
     familiar: list[DealPick] = []
     for deal in find_stockup_deals(storage, store):
@@ -439,7 +522,142 @@ def picks_for(
         if novel_limit
         else []
     )
-    return familiar + novel
+    multi = multi_buy_picks(
+        storage, store, skip | {_normalise(p.term) for p in familiar + novel}
+    )
+    return familiar + multi + novel
+
+
+
+def _one_per_promotion(picks: list[DealPick], limit: int) -> list[DealPick]:
+    """Best pick per promotion, ranked by shekels saved.
+
+    A chain-wide promotion is attached to every product it covers: "יין
+    2 ב 90 מועדון" came back three times on 2026-09-11, once per bottle
+    in the range, and the cap of three would have been spent on six
+    bottles of the same wine. One line per promotion, then rank.
+    """
+    best: dict = {}
+    for pick in picks:
+        saving = (pick.shelf_price - pick.deal_price) * pick.quantity
+        key = " ".join(str(pick.description or "").split()) or pick.catalog_name
+        current = best.get(key)
+        if current is None or saving > (current.shelf_price - current.deal_price) * current.quantity:
+            best[key] = pick
+    ranked = sorted(
+        best.values(),
+        key=lambda p: -(p.shelf_price - p.deal_price) * p.quantity,
+    )
+    return ranked[:limit]
+
+
+def multi_buy_picks(
+    storage, store: str, skip: set[str] | None = None,
+    limit: int = MAX_MULTI_BUY_PICKS,
+) -> list[DealPick]:
+    """Multi-buy deals worth taking at the quantity they actually need.
+
+    Approved by Ishay on 2026-09-11 — before that these were reported and
+    never bought, because the run that exposed the whole problem promised
+    ₪161.87 of savings on twelve of them and would have delivered none.
+
+    Four guards, and each one exists because of something in the live
+    feeds rather than in principle:
+
+    - **Only what `_parse_multi_buy` will commit to.** Most multi-buy
+      wording is not committable; see there.
+    - **Only products the household already buys.** Two units of a
+      stranger is two units of a guess, at double the cost.
+    - **Only shelf-stable ones.** The second unit is the one most likely
+      to rot: that is the whole objection to multi-buy on fresh food.
+    - **A real saving, ranked by shekels not percent.** A 50% discount on
+      a second ₪4 packet is ₪2 and a cupboard slot.
+    """
+    skip = skip or set()
+    if store not in BARCODE_DEAL_STORES:
+        return _multi_buy_picks_by_name(storage, skip, limit)
+
+    promotions = storage.live_store_promotions(store)
+    if not promotions:
+        return []
+    prices = storage.latest_store_prices(store)
+    bought = storage.bought_barcodes(store)
+    picks: list[DealPick] = []
+    for barcode, promo in promotions.items():
+        if barcode not in bought:
+            continue
+        shelf = prices.get(barcode)
+        name = (shelf or {}).get("name") or ""
+        if not shelf or not shelf.get("price") or not name:
+            continue
+        if _looks_perishable(name):
+            continue
+        folded = _normalise(name)
+        if any(folded == s or folded in s or s in folded for s in skip):
+            continue
+        shelf_price = float(shelf["price"])
+        try:
+            deal_price = float(promo["discounted_price"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        parsed = _parse_multi_buy(promo.get("description"), shelf_price, deal_price)
+        if parsed is None:
+            continue
+        quantity, total = parsed
+        saving = shelf_price * quantity - total
+        if saving < MIN_MULTI_BUY_SAVING:
+            continue
+        # Same ceiling as a novel single: past ~80% "off" the number is
+        # almost always a unit mismatch in the feed, not a discount.
+        if saving / (shelf_price * quantity) > NOVEL_MAX_DISCOUNT:
+            continue
+        picks.append(
+            DealPick(
+                term=name, catalog_name=name, shelf_price=shelf_price,
+                deal_price=total / quantity, discount=saving / (shelf_price * quantity),
+                description=promo.get("description", ""), quantity=quantity,
+            )
+        )
+    return _one_per_promotion(picks, limit)
+
+
+def _multi_buy_picks_by_name(storage, skip: set[str], limit: int) -> list[DealPick]:
+    """The same, at a chain whose promotions join on the product name."""
+    known = {
+        _normalise(row["product_name"]): row["product_name"]
+        for row in storage.list_stock_items("shufersal")
+    }
+    picks: list[DealPick] = []
+    for product, promo in storage.catalog_deals():
+        if not product.price or not promo or not promo.discounted_price:
+            continue
+        folded = _normalise(product.name)
+        if not any(folded == k or folded in k or k in folded for k in known):
+            continue
+        if any(folded == s or folded in s or s in folded for s in skip):
+            continue
+        if _looks_perishable(product.name) or getattr(product, "is_weighted", False):
+            continue
+        parsed = _parse_multi_buy(
+            promo.description, float(product.price), float(promo.discounted_price)
+        )
+        if parsed is None:
+            continue
+        quantity, total = parsed
+        saving = float(product.price) * quantity - total
+        if saving < MIN_MULTI_BUY_SAVING:
+            continue
+        if saving / (float(product.price) * quantity) > NOVEL_MAX_DISCOUNT:
+            continue
+        picks.append(
+            DealPick(
+                term=product.name, catalog_name=product.name,
+                shelf_price=float(product.price), deal_price=total / quantity,
+                discount=saving / (float(product.price) * quantity),
+                description=promo.description or "", quantity=quantity,
+            )
+        )
+    return _one_per_promotion(picks, limit)
 
 
 @dataclass(frozen=True)
@@ -458,6 +676,11 @@ class SecondUnitOffer:
     shelf_price: float
     description: str
     familiar: bool
+    # Set when the wording *was* readable but the deal was still not
+    # taken — it is capped out, or the saving is too small to be worth a
+    # second unit. Reported with its real arithmetic in that case.
+    quantity: int = 0
+    total_price: float = 0.0
 
 
 # How many of these are worth naming. Higher than the cart cap because
@@ -466,28 +689,29 @@ MAX_MULTI_BUY_NOTES = 6
 
 
 def multi_buy_offers(
-    storage, store: str, limit: int = MAX_MULTI_BUY_NOTES
+    storage, store: str, limit: int = MAX_MULTI_BUY_NOTES,
+    skip: set[str] | None = None,
 ) -> list[SecondUnitOffer]:
-    """Deals that need a second unit, on things the household buys.
+    """Multi-buy deals reported rather than taken.
 
-    Reported, never added. Two reasons it stops at reporting:
+    Since Ishay approved buying two (2026-09-11), the ones whose
+    arithmetic can be read go into the cart through `multi_buy_picks`.
+    What lands here is the remainder, and the remainder is the majority:
+    a promotion that pays out on a *different* product ("קנה 2
+    המבורגרים בל ציפס ב 5 ש"ח"), one written as a weight ("300ב30"), or
+    any wording `_parse_multi_buy` will not commit to.
 
-    Buying two of something to earn a discount is a different purchase
-    from the one that was asked for, and the whole design keeps that
-    decision with the person.
-
-    And the arithmetic genuinely cannot be done from the feeds. The two
-    chains mean opposite things by the same field: at Tiv Taam "מבצע
-    השני ב 50%" with `discounted_price` 12.45 against a ₪24.90 shelf
-    means the *second* bag costs ₪12.45, so two cost ₪37.35; at
-    Shufersal "2ב5" with `discounted_price` 5.00 against a ₪13.90 shelf
-    means *both* cost ₪5.00 together. Printing one saving figure for
-    both would be wrong half the time, so the promotion's own wording is
-    passed through verbatim and the household reads the condition.
+    For those the promotion's own text is passed through verbatim and no
+    saving is computed, because the two chains mean opposite things by
+    `discounted_price`: at Tiv Taam "השני ב 50%" prices the *second*
+    bag, at Shufersal "2ב5" prices the *pair*. One figure for both would
+    be wrong half the time.
 
     Limited to things already bought before: a multi-buy on a stranger is
     two units of a guess.
     """
+    # Anything the cycle actually took is not also "not added".
+    skip = {_normalise(t) for t in (skip or set()) if t}
     if store in BARCODE_DEAL_STORES:
         promotions = storage.live_store_promotions(store)
         if not promotions:
@@ -506,9 +730,19 @@ def multi_buy_offers(
                 continue
             if _looks_perishable(name):
                 continue
+            folded = _normalise(name)
+            if any(folded == t or folded in t or t in folded for t in skip):
+                continue
+            shelf_price = float(shelf["price"])
+            parsed = _parse_multi_buy(
+                promo.get("description"), shelf_price,
+                float(promo.get("discounted_price") or 0),
+            )
             offers.append(SecondUnitOffer(
-                name=name, shelf_price=float(shelf["price"]),
+                name=name, shelf_price=shelf_price,
                 description=promo.get("description", ""), familiar=True,
+                quantity=parsed[0] if parsed else 0,
+                total_price=parsed[1] if parsed else 0.0,
             ))
         offers.sort(key=lambda o: -o.shelf_price)
         return offers[:limit]
@@ -525,9 +759,17 @@ def multi_buy_offers(
             continue
         if _looks_perishable(product.name):
             continue
+        if any(folded == t or folded in t or t in folded for t in skip):
+            continue
+        parsed = _parse_multi_buy(
+            promo.description, float(product.price),
+            float(promo.discounted_price or 0),
+        )
         offers.append(SecondUnitOffer(
             name=product.name, shelf_price=float(product.price),
             description=promo.description or "", familiar=True,
+            quantity=parsed[0] if parsed else 0,
+            total_price=parsed[1] if parsed else 0.0,
         ))
     offers.sort(key=lambda o: -o.shelf_price)
     return offers[:limit]
@@ -547,11 +789,25 @@ def format_multi_buy_offers(offers: list[SecondUnitOffer]) -> str:
 
     lines = [_b("🔁 מבצעים שדורשים יותר מיחידה אחת") + " — לא נוספו:"]
     for offer in offers:
+        # Where the wording was readable, say what it would actually cost;
+        # where it was not, pass the promotion's own text through and
+        # compute nothing. The difference is visible on the line.
+        if offer.quantity:
+            saving = offer.shelf_price * offer.quantity - offer.total_price
+            detail = (
+                f"{offer.quantity} יחידות ב-{offer.total_price:.2f}₪ "
+                f"(חיסכון {saving:.2f}₪)"
+            )
+        else:
+            detail = _esc(offer.description)
         lines.append(
             f"   • {_esc(offer.name)} — מדף {offer.shelf_price:.2f}₪"
-            f"\n      <i>{_esc(offer.description)}</i>"
+            f"\n      <i>{detail}</i>"
         )
-    lines.append("   <i>הבוט לא מוסיף שתיים ביוזמתו. אם שווה לכם — הוסיפו באתר.</i>")
+    lines.append(
+        "   <i>אלה לא נלקחו — או שהתנאי לא ברור, או שהם מעבר למכסה. "
+        "אם שווה לכם, הוסיפו באתר.</i>"
+    )
     return "\n".join(lines)
 
 

@@ -241,11 +241,13 @@ class BarcodeChainDealTests(unittest.TestCase):
              "observed_at": "2026-09-06"},
         ])
 
-    def test_a_second_unit_promotion_is_not_a_saving_on_one_unit(self) -> None:
-        # "השני ב 50%" prices the *second* bag. Buying one costs the full
-        # shelf price, so the 50% the feed implies never happens.
+    def test_a_second_unit_promotion_is_never_taken_at_one(self) -> None:
+        # "השני ב 50%" prices the *second* bag, so at quantity 1 the
+        # discount simply does not happen. Since 2026-09-11 it may be
+        # taken at two instead — but never at one.
         self._promo("מבצע השני ב 50%")
-        self.assertEqual(dealfill.picks_for(self.storage, "tivtaam"), [])
+        picks = dealfill.picks_for(self.storage, "tivtaam")
+        self.assertTrue(all(p.quantity == 2 for p in picks), picks)
 
     def test_min_qty_cannot_be_trusted_to_flag_those(self) -> None:
         # The live feed had 1,530 multi-buy promotions carrying min_qty=1,
@@ -397,18 +399,115 @@ class MultiBuyOfferTests(unittest.TestCase):
         offers = dealfill.multi_buy_offers(self.storage, "tivtaam")
         self.assertNotIn("ציפס קלאסי 1 קג", [o.name for o in offers])
 
-    def test_the_promotion_wording_is_passed_through_not_a_saving(self) -> None:
-        # The two chains mean opposite things by discounted_price, so a
-        # single computed saving would be wrong half the time.
+    def test_an_unreadable_condition_is_passed_through_verbatim(self) -> None:
+        # No saving is computed for one of these: the promotion pays out
+        # on a different product, and the feeds give no way to say which.
+        self.storage.replace_store_promotions("tivtaam", [
+            {"barcode": "111", "promotion_id": "a",
+             "description": "קנה 2 המבורגרים בל ציפס ב 5 ש\"ח",
+             "discounted_price": 5.0, "min_qty": 1,
+             "starts_at": PAST, "ends_at": FUTURE, "observed_at": "2026-09-06"},
+        ])
         text = dealfill.format_multi_buy_offers(
             dealfill.multi_buy_offers(self.storage, "tivtaam")
         )
-        self.assertIn("מבצע השני ב 50%", text)
-        self.assertIn("24.90", text)
+        self.assertIn("המבורגרים", text)
         self.assertNotIn("חיסכון", text)
 
     def test_nothing_to_report_formats_to_nothing(self) -> None:
         self.assertEqual(dealfill.format_multi_buy_offers([]), "")
+
+
+class MultiBuyPickTests(unittest.TestCase):
+    """Buying two, approved by Ishay 2026-09-11 ("Add buy two on multiply").
+
+    Only where the arithmetic can actually be done — before this, twelve
+    such "deals" promised ₪161.87 and would have delivered nothing.
+    """
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        self.storage = Storage(str(Path(self._tmpdir.name) / "t.sqlite3"))
+
+    def _feed(self, name, price, description, deal_price, barcode="111"):
+        self.storage.record_store_prices("tivtaam", [
+            {"barcode": barcode, "name": name, "price": price,
+             "observed_at": "2026-08-01", "source": "order"},
+        ])
+        self.storage.replace_store_promotions("tivtaam", [
+            {"barcode": barcode, "promotion_id": "a", "description": description,
+             "discounted_price": deal_price, "min_qty": 1,
+             "starts_at": PAST, "ends_at": FUTURE, "observed_at": "2026-09-06"},
+        ])
+
+    def test_a_second_unit_deal_is_taken_at_two(self) -> None:
+        # "השני ב 50%": ₪12.45 is the *second* bag, so two cost ₪37.35.
+        self._feed("ברוקולי קפוא 800 גר", 24.9, "מבצע השני ב 50%", 12.45)
+        picks = dealfill.multi_buy_picks(self.storage, "tivtaam")
+        self.assertEqual([p.quantity for p in picks], [2])
+        self.assertIn("2 יחידות ב-37.35₪", picks[0].label)
+        self.assertIn("במקום 49.80₪", picks[0].label)
+
+    def test_a_pack_price_is_the_price_of_the_pack(self) -> None:
+        # "2 ב 90": ₪90 is what *both* cost, not each.
+        self._feed("יין אדום 750 מל", 65.9, "יין 2 ב 90 מועדון", 90.0)
+        picks = dealfill.multi_buy_picks(self.storage, "tivtaam")
+        self.assertIn("2 יחידות ב-90.00₪", picks[0].label)
+        self.assertIn("מחיר מועדון", picks[0].label)
+
+    def test_a_deal_that_needs_a_different_product_is_refused(self) -> None:
+        # The promotion hangs off the chips barcode and pays out on
+        # burgers. Two bags of chips earn nothing.
+        self._feed("ציפס קלאסי 1 קג", 17.9,
+                   "קנה 2 המבורגרים בל ציפס ב 5 ש\"ח", 5.0)
+        self.assertEqual(dealfill.multi_buy_picks(self.storage, "tivtaam"), [])
+
+    def test_a_weight_is_not_a_quantity(self) -> None:
+        # "300ב30" is 300 grams for ₪30, not three hundred packets.
+        self._feed("פסטרמה בדבש", 111.0, "300ב30 פסטרמה/חזה הודו", 30.0)
+        self.assertEqual(dealfill.multi_buy_picks(self.storage, "tivtaam"), [])
+
+    def test_a_trivial_saving_is_not_worth_a_second_unit(self) -> None:
+        self._feed("קרקר קטן", 4.0, "השני ב 50%", 2.0)
+        self.assertEqual(dealfill.multi_buy_picks(self.storage, "tivtaam"), [])
+
+    def test_a_perishable_is_never_taken_twice(self) -> None:
+        # The second unit is the one that rots — the whole objection.
+        self._feed("גבינה צהובה פרוסה", 25.0, "השני ב 50%", 12.5)
+        self.assertEqual(dealfill.multi_buy_picks(self.storage, "tivtaam"), [])
+
+    def test_something_never_bought_is_not_bought_twice(self) -> None:
+        self.storage.record_store_prices("tivtaam", [
+            {"barcode": "999", "name": "מוצר זר", "price": 30.0,
+             "observed_at": "2026-09-06", "source": "feed"},
+        ])
+        self.storage.replace_store_promotions("tivtaam", [
+            {"barcode": "999", "promotion_id": "z", "description": "השני ב 50%",
+             "discounted_price": 15.0, "min_qty": 1,
+             "starts_at": PAST, "ends_at": FUTURE, "observed_at": "2026-09-06"},
+        ])
+        self.assertEqual(dealfill.multi_buy_picks(self.storage, "tivtaam"), [])
+
+    def test_one_line_per_promotion_not_one_per_bottle(self) -> None:
+        # "יין 2 ב 90 מועדון" came back three times on the live feed, once
+        # per bottle in the range; the cap of three would have gone on six
+        # bottles of the same wine.
+        self.storage.record_store_prices("tivtaam", [
+            {"barcode": str(n), "name": f"יין סילק {n} 750 מל", "price": 65.9,
+             "observed_at": "2026-08-01", "source": "order"} for n in (1, 2, 3)
+        ])
+        self.storage.replace_store_promotions("tivtaam", [
+            {"barcode": str(n), "promotion_id": f"p{n}", "description": "יין 2 ב 90 מועדון",
+             "discounted_price": 90.0, "min_qty": 1,
+             "starts_at": PAST, "ends_at": FUTURE, "observed_at": "2026-09-06"}
+            for n in (1, 2, 3)
+        ])
+        self.assertEqual(len(dealfill.multi_buy_picks(self.storage, "tivtaam")), 1)
+
+    def test_an_implausible_multi_buy_is_a_feed_artefact(self) -> None:
+        self._feed("שימורים", 30.0, "2 ב 5", 5.0)
+        self.assertEqual(dealfill.multi_buy_picks(self.storage, "tivtaam"), [])
 
 
 if __name__ == "__main__":

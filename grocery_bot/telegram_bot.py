@@ -1750,7 +1750,7 @@ class GroceryBot:
         """
         headline = format_report_headline(self.storage, reports)
         details = format_report_summary(reports)
-        multi = format_multi_buy_note(self.storage, list(reports))
+        multi = format_multi_buy_note(self.storage, reports)
         if multi:
             details = f"{details}\n\n{multi}" if details else multi
         try:

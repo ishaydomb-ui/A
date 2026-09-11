@@ -579,7 +579,7 @@ def format_repeat_failures(storage: Storage, min_runs: int = 3) -> str:
     return "\n".join(lines)
 
 
-def format_multi_buy_note(storage: Storage, stores) -> str:
+def format_multi_buy_note(storage: Storage, reports) -> str:
     """The "worth taking two" block for the chains this cycle filled.
 
     Separate from the deal block above it because nothing here is in the
@@ -592,9 +592,13 @@ def format_multi_buy_note(storage: Storage, stores) -> str:
     from . import dealfill
 
     blocks = []
-    for store in stores or []:
+    stores = reports if isinstance(reports, dict) else {s: None for s in (reports or [])}
+    for store, report in stores.items():
+        # A deal the cycle actually took at the right quantity is not also
+        # a deal it declined to take.
+        taken = {r.item_name for r in getattr(report, "added", [])} if report else set()
         try:
-            offers = dealfill.multi_buy_offers(storage, store)
+            offers = dealfill.multi_buy_offers(storage, store, skip=taken)
         except Exception:  # noqa: BLE001
             logger.exception("Could not read multi-buy offers for %s", store)
             continue
