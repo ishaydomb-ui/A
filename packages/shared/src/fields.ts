@@ -177,8 +177,10 @@ export const CLASS_PROFILES: Record<DrugClassKey, readonly ProfileField[]> = {
     { key: 'adult_indications' },
     { key: 'pediatric_indications' },
     { key: 'dose_range', label: { en: 'Dosage', he: 'מינונים' } },
-    { key: 'starting_dose_adults', fallbackKeys: ['starting_dose'] },
-    { key: 'starting_dose_pediatrics' },
+    // No separate starting-dose columns on this sheet: the starting dose is
+    // written inside the titration text ("Initial 10 mg/day for a week, then
+    // 20 mg/day"). Splitting it out would mean parsing that prose into a
+    // field the source never separated, so it stays where the source put it.
     { key: 'titration_adults' },
     { key: 'titration_pediatrics' },
     { key: 'side_effects' },

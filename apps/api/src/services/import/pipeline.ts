@@ -303,7 +303,15 @@ export interface CommitResult {
 export async function commitBatch(
   batchId: string,
   actor: Actor,
-  options: { validationStatus?: string; sourceDocument?: string } = {},
+  options: {
+    validationStatus?: string;
+    sourceDocument?: string;
+    /**
+     * 'merge' (default) keeps existing content for fields the workbook
+     * leaves empty; 'replace' makes the workbook the whole record.
+     */
+    contentMode?: 'merge' | 'replace';
+  } = {},
 ): Promise<CommitResult> {
   const batch = await getBatch(batchId);
   if (!batch) throw notFound('batch_not_found', 'No such import batch.');
@@ -370,13 +378,23 @@ export async function commitBatch(
           return;
         }
 
-        // Merge: a field the workbook does not supply must not erase what the
-        // catalogue already holds.
-        const merged: MedicationData = { ...current.data };
-        for (const [fieldKey, localized] of Object.entries(row.mapped)) {
-          const incoming = localized[batch.locale];
-          if (incoming?.state !== 'provided') continue;
-          merged[fieldKey] = { ...(merged[fieldKey] ?? localized), [batch.locale]: incoming } as MedicationData[string];
+        // Merge (the default): a field the workbook does not supply must not
+        // erase what the catalogue already holds — the right behaviour when a
+        // workbook is one contribution among several.
+        //
+        // Replace: the workbook is the whole record. Used when loading a
+        // source of record, where merging would be actively misleading — a
+        // cell the clinician left empty would keep showing whatever an older
+        // import put there, under a record now attributed entirely to her
+        // workbook, with nothing on the page to say which values were hers.
+        const merged: MedicationData =
+          options.contentMode === 'replace' ? { ...row.mapped } : { ...current.data };
+        if (options.contentMode !== 'replace') {
+          for (const [fieldKey, localized] of Object.entries(row.mapped)) {
+            const incoming = localized[batch.locale];
+            if (incoming?.state !== 'provided') continue;
+            merged[fieldKey] = { ...(merged[fieldKey] ?? localized), [batch.locale]: incoming } as MedicationData[string];
+          }
         }
 
         // The version branches from the published one, which carries the

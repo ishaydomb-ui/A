@@ -107,6 +107,10 @@ async function main(): Promise<void> {
   const committed = await commitBatch(uploaded.batchId, actor, {
     validationStatus,
     sourceDocument: filename,
+    // The workbook is the record, not an addition to it. Merging would leave
+    // values from an earlier import showing in cells the clinician left
+    // empty, on a record that now credits her workbook for all of it.
+    contentMode: 'replace',
   });
   console.log(`  committed: ${committed.created} created, ${committed.updated} updated`);
 

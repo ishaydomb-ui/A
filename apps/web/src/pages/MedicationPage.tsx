@@ -155,10 +155,18 @@ export function MedicationPage() {
                 <div className="field-row" key={entry.key}>
                   <dt>{profileLabel(entry, locale, key)}</dt>
                   <dd>
+                    {/*
+                      Sources are shown while editing, not while reading. Every
+                      field of a workbook record cites the same workbook, so on
+                      the reading page it repeated one line under every entry
+                      and buried the clinical text. The citations are untouched
+                      — they still gate publication and still appear in the
+                      editorial view.
+                    */}
                     <FieldValueView
                       fieldKey={key}
                       field={detail.fields[key]}
-                      citations={detail.citations}
+                      citations={wantsDraft ? detail.citations : []}
                     />
                   </dd>
                 </div>
@@ -193,6 +201,7 @@ export function MedicationPage() {
         })
       )}
 
+      {wantsDraft && (
       <section className="field-group" aria-labelledby="group-provenance">
         <h2 id="group-provenance">{t.sources}</h2>
         {detail.source.label || detail.source.document ? (
@@ -212,6 +221,7 @@ export function MedicationPage() {
           <p className="value-state">{t.noSources}</p>
         )}
       </section>
+      )}
 
       {/*
         Provenance and the disclaimer sit below the content rather than above
