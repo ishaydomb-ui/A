@@ -336,5 +336,80 @@ class PerishableWordTests(unittest.TestCase):
         self.assertTrue(dealfill._looks_perishable("מארז ובשר טחון"))
 
 
+class ConditionNoteTests(unittest.TestCase):
+    """Conditions the feeds state only in words. The price is real; the
+    saving is real *if* the condition holds, and only a person can say."""
+
+    def test_a_minimum_basket_condition_is_named_on_the_line(self) -> None:
+        pick = dealfill.DealPick(
+            term="דבש", catalog_name="דבש טבעי לחיץ 250 גרם",
+            shelf_price=16.9, deal_price=5.0, discount=0.70,
+            description="5 דבש טבעי לחיץ 250 גרם-מות150",
+        )
+        self.assertIn("מותנה בקנייה מעל 150₪", pick.label)
+
+    def test_a_club_price_is_named_on_the_line(self) -> None:
+        # Kept rather than filtered: the household is in TivCoins. That
+        # was never checked against the account, so it is said out loud.
+        pick = dealfill.DealPick(
+            term="יין", catalog_name="יין מבעבע", shelf_price=66.9,
+            deal_price=49.9, discount=0.25, description="יין 49.90 - מועדון",
+        )
+        self.assertIn("מחיר מועדון", pick.label)
+
+    def test_an_ordinary_deal_says_nothing_extra(self) -> None:
+        pick = dealfill.DealPick(
+            term="אורז", catalog_name="אורז בסמטי", shelf_price=14.9,
+            deal_price=10.0, discount=0.33, description="10 אורז בסמטי גונאם 1 ק\"ג",
+        )
+        self.assertNotIn("·  ", pick.label)
+        self.assertTrue(pick.label.endswith("₪)"))
+
+
+class MultiBuyOfferTests(unittest.TestCase):
+    """Refused from the cart, reported anyway — see multi_buy_offers."""
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        self.storage = Storage(str(Path(self._tmpdir.name) / "t.sqlite3"))
+        self.storage.record_store_prices("tivtaam", [
+            {"barcode": "111", "name": "ברוקולי קפוא 800 גר", "price": 24.9,
+             "observed_at": "2026-08-01", "source": "order"},
+            {"barcode": "222", "name": "ציפס קלאסי 1 קג", "price": 17.9,
+             "observed_at": "2026-09-06", "source": "feed"},
+        ])
+        self.storage.replace_store_promotions("tivtaam", [
+            {"barcode": "111", "promotion_id": "a", "description": "מבצע השני ב 50%",
+             "discounted_price": 12.45, "min_qty": 1,
+             "starts_at": PAST, "ends_at": FUTURE, "observed_at": "2026-09-06"},
+            {"barcode": "222", "promotion_id": "b", "description": "קנה 2 ציפס",
+             "discounted_price": 5.0, "min_qty": 1,
+             "starts_at": PAST, "ends_at": FUTURE, "observed_at": "2026-09-06"},
+        ])
+
+    def test_a_second_unit_deal_on_a_usual_product_is_reported(self) -> None:
+        offers = dealfill.multi_buy_offers(self.storage, "tivtaam")
+        self.assertEqual([o.name for o in offers], ["ברוקולי קפוא 800 גר"])
+
+    def test_a_multi_buy_on_a_stranger_is_not_reported(self) -> None:
+        # Two units of something never bought is two units of a guess.
+        offers = dealfill.multi_buy_offers(self.storage, "tivtaam")
+        self.assertNotIn("ציפס קלאסי 1 קג", [o.name for o in offers])
+
+    def test_the_promotion_wording_is_passed_through_not_a_saving(self) -> None:
+        # The two chains mean opposite things by discounted_price, so a
+        # single computed saving would be wrong half the time.
+        text = dealfill.format_multi_buy_offers(
+            dealfill.multi_buy_offers(self.storage, "tivtaam")
+        )
+        self.assertIn("מבצע השני ב 50%", text)
+        self.assertIn("24.90", text)
+        self.assertNotIn("חיסכון", text)
+
+    def test_nothing_to_report_formats_to_nothing(self) -> None:
+        self.assertEqual(dealfill.format_multi_buy_offers([]), "")
+
+
 if __name__ == "__main__":
     unittest.main()

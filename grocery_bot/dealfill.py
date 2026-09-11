@@ -201,10 +201,34 @@ class DealPick:
     def label(self) -> str:
         """Why this is in the cart, short enough to scan in a list."""
         saved = self.shelf_price - self.deal_price
-        return (
+        base = (
             f"-{round(self.discount * 100)}% · {self.deal_price:.2f}₪ "
             f"במקום {self.shelf_price:.2f}₪ (חיסכון {saved:.2f}₪)"
         )
+        note = _condition_note(self.description)
+        return f"{base} · {note}" if note else base
+
+
+# Conditions the feeds state in words and nowhere else. The price is real
+# and the saving arithmetic is right — but only if the condition holds,
+# and only the household can confirm that. Naming it on the line is the
+# whole intervention: the alternative is a report that quietly promises a
+# discount the till may not give.
+_CLUB_WORDS = ("מועדון", "חבר מועדון", "לחברי")
+_MIN_BASKET = re.compile(r"מות\s*-?\s*(\d{2,4})")
+
+
+def _condition_note(description: str) -> str:
+    text = description or ""
+    notes = []
+    if any(word in text for word in _CLUB_WORDS):
+        # Assumed to apply: the household is in TivCoins. Never verified
+        # against the account, which is why it is said out loud.
+        notes.append("מחיר מועדון")
+    basket = _MIN_BASKET.search(text)
+    if basket:
+        notes.append(f"מותנה בקנייה מעל {basket.group(1)}₪")
+    return " · ".join(notes)
 
 
 def _barcode_picks(
@@ -416,6 +440,111 @@ def picks_for(
         else []
     )
     return familiar + novel
+
+
+@dataclass(frozen=True)
+class MultiBuyOffer:
+    """A promotion worth knowing about that the bot will not act on."""
+
+    name: str
+    shelf_price: float
+    description: str
+    familiar: bool
+
+
+# How many of these are worth naming. Higher than the cart cap because
+# nothing here is being bought — the cost of an extra line is a line.
+MAX_MULTI_BUY_NOTES = 6
+
+
+def multi_buy_offers(
+    storage, store: str, limit: int = MAX_MULTI_BUY_NOTES
+) -> list[MultiBuyOffer]:
+    """Deals that need a second unit, on things the household buys.
+
+    Reported, never added. Two reasons it stops at reporting:
+
+    Buying two of something to earn a discount is a different purchase
+    from the one that was asked for, and the whole design keeps that
+    decision with the person.
+
+    And the arithmetic genuinely cannot be done from the feeds. The two
+    chains mean opposite things by the same field: at Tiv Taam "מבצע
+    השני ב 50%" with `discounted_price` 12.45 against a ₪24.90 shelf
+    means the *second* bag costs ₪12.45, so two cost ₪37.35; at
+    Shufersal "2ב5" with `discounted_price` 5.00 against a ₪13.90 shelf
+    means *both* cost ₪5.00 together. Printing one saving figure for
+    both would be wrong half the time, so the promotion's own wording is
+    passed through verbatim and the household reads the condition.
+
+    Limited to things already bought before: a multi-buy on a stranger is
+    two units of a guess.
+    """
+    if store in BARCODE_DEAL_STORES:
+        promotions = storage.live_store_promotions(store)
+        if not promotions:
+            return []
+        prices = storage.latest_store_prices(store)
+        bought = storage.bought_barcodes(store)
+        offers = []
+        for barcode, promo in promotions.items():
+            if barcode not in bought:
+                continue
+            shelf = prices.get(barcode)
+            name = (shelf or {}).get("name") or ""
+            if not shelf or not shelf.get("price") or not name:
+                continue
+            if not _needs_more_than_one(promo.get("description"), promo.get("min_qty")):
+                continue
+            if _looks_perishable(name):
+                continue
+            offers.append(MultiBuyOffer(
+                name=name, shelf_price=float(shelf["price"]),
+                description=promo.get("description", ""), familiar=True,
+            ))
+        offers.sort(key=lambda o: -o.shelf_price)
+        return offers[:limit]
+
+    known = {_normalise(row["product_name"]) for row in storage.list_stock_items(store)}
+    offers = []
+    for product, promo in storage.catalog_deals():
+        if not product.price or not promo:
+            continue
+        if not _needs_more_than_one(promo.description, getattr(promo, "min_qty", 1)):
+            continue
+        folded = _normalise(product.name)
+        if not any(folded == k or folded in k or k in folded for k in known):
+            continue
+        if _looks_perishable(product.name):
+            continue
+        offers.append(MultiBuyOffer(
+            name=product.name, shelf_price=float(product.price),
+            description=promo.description or "", familiar=True,
+        ))
+    offers.sort(key=lambda o: -o.shelf_price)
+    return offers[:limit]
+
+
+def format_multi_buy_offers(offers: list[MultiBuyOffer]) -> str:
+    """The "worth taking two" block. Deliberately not a saving figure.
+
+    HTML, not Markdown, and every name escaped: this goes out with the
+    cycle summary, and 349 products on this branch carry a `*` as a
+    multiplication sign ("400*3ג") — which is what silently killed a
+    whole order's summary on 2026-09-07.
+    """
+    if not offers:
+        return ""
+    from .htmltext import bold as _b, escape as _esc
+
+    lines = [_b("🔁 מבצעים שדורשים יותר מיחידה אחת") + " — לא נוספו:"]
+    for offer in offers:
+        lines.append(
+            f"   • {_esc(offer.name)} — מדף {offer.shelf_price:.2f}₪"
+            f"\n      <i>{_esc(offer.description)}</i>"
+        )
+    lines.append("   <i>הבוט לא מוסיף שתיים ביוזמתו. אם שווה לכם — הוסיפו באתר.</i>")
+    return "\n".join(lines)
 
 
 def format_picks(picks: list[DealPick]) -> str:

@@ -53,6 +53,7 @@ from .learn import digest_due, sync_from_orders
 from .nlu import ParsedItem, build_meal_plan, expand_recipe, parse_message
 from .orchestrator import (
     add_terms_to_cart,
+    format_multi_buy_note,
     format_report_summary,
     format_repeat_failures,
     record_deals,
@@ -1513,6 +1514,9 @@ class GroceryBot:
         repeats = format_repeat_failures(self.storage)
         if repeats:
             summary = f"{summary}\n\n{repeats}" if summary else repeats
+        multi = format_multi_buy_note(self.storage, list(reports))
+        if multi:
+            summary = f"{summary}\n\n{multi}" if summary else multi
         # Through _send_markdown, never reply_text: this send failed on a
         # real order (2026-09-07, "can't find end of the entity") and the
         # household got no summary at all for a cart that had actually
@@ -1920,6 +1924,9 @@ class GroceryBot:
         repeats = format_repeat_failures(self.storage)
         if repeats:
             summary = f"{summary}\n\n{repeats}" if summary else repeats
+        multi = format_multi_buy_note(self.storage, list(reports))
+        if multi:
+            summary = f"{summary}\n\n{multi}" if summary else multi
         await _send_html(context, chat_id, summary or "לא היה מה להוסיף.")
         await self._send_alternatives(chat_id, context, reports)
         await self._ask_ambiguities(chat_id, context)

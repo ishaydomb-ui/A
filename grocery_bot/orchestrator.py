@@ -448,6 +448,32 @@ def format_repeat_failures(storage: Storage, min_runs: int = 3) -> str:
     return "\n".join(lines)
 
 
+def format_multi_buy_note(storage: Storage, stores) -> str:
+    """The "worth taking two" block for the chains this cycle filled.
+
+    Separate from the deal block above it because nothing here is in the
+    cart: these are promotions that only pay out on a second unit, which
+    the bot refuses to buy on the household's behalf (see
+    `dealfill.multi_buy_offers`). Reported so the choice exists, and
+    reported *with the promotion's own wording* because the two chains
+    mean different things by the same field.
+    """
+    from . import dealfill
+
+    blocks = []
+    for store in stores or []:
+        try:
+            offers = dealfill.multi_buy_offers(storage, store)
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not read multi-buy offers for %s", store)
+            continue
+        text = dealfill.format_multi_buy_offers(offers)
+        if text:
+            from .chains import display_name
+            blocks.append(f"{display_name(store)}\n{text}")
+    return "\n\n".join(blocks)
+
+
 def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
     """Human-readable (Hebrew) summary suitable for a Telegram message.
 
