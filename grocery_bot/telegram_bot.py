@@ -417,12 +417,9 @@ class GroceryBot:
         if not _authorized(self.config, update):
             return
         standingcart.mark_shopped(self.storage)
-        # His word is the trigger, and it moves every request that reached
-        # a cart to `shopped` in one step — that is exactly what the
-        # message means. The chain's own history confirms it later, about
-        # 36 hours later in the measured case, and confirms only; it never
-        # overrides what he said.
-        moved = self.storage.advance_adhoc_status("in_cart", "shopped")
+        moved = await self._mark_shop_done(update, context)
+        if moved is None:
+            return  # asked which chain; nothing marked yet
         await update.message.reply_text(
             "✅ רשמתי שסיימת. ממלא את העגלה מחדש — זה ייקח כמה דקות, "
             "ואשלח סיכום כשאסיים."
@@ -450,6 +447,66 @@ class GroceryBot:
         note = await asyncio.to_thread(standingcart.due_removal_report, self.storage)
         if note:
             await _send_markdown(context, update.effective_chat.id, note)
+
+    async def _mark_shop_done(self, update, context, store: str = "") -> int | None:
+        """Mark a finished shop, at the chain it actually happened at.
+
+        Two carts are filled every cycle and they are not paid for
+        together. Marking both bought on one "סיימתי" says the Tiv Taam
+        order arrived when nobody has placed it — the exact confusion the
+        request states were added to remove, reintroduced by applying them
+        with no chain. Found in review the same day they were built.
+
+        Returns None when a question was asked instead, so the caller
+        stops rather than reporting a shop that has not been confirmed.
+        """
+        from .chains import CART_CAPABLE, display_name
+
+        if not store:
+            typed = " ".join(getattr(context, "args", None) or [])
+            typed = typed or (update.message.text or "")
+            for chain in CART_CAPABLE:
+                if display_name(chain) in typed:
+                    store = chain
+                    break
+
+        if not store:
+            waiting = {
+                row["store"] for row in self.storage.adhoc_by_status("in_cart")
+                if row["store"]
+            }
+            if len(waiting) > 1:
+                # Only ask when the answer actually differs. One active
+                # chain, or none, needs no question.
+                await update.message.reply_text(
+                    "באיזו רשת סיימת?",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton(display_name(c), callback_data=f"shopped:{c}")
+                        for c in sorted(waiting)
+                    ] + [InlineKeyboardButton("בשתיהן", callback_data="shopped:all")]]),
+                )
+                return None
+            store = next(iter(waiting), "")
+
+        return self.storage.advance_adhoc_status("in_cart", "shopped", store)
+
+    async def on_shopped_store(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Which chain the shop was at, when both were waiting."""
+        query = update.callback_query
+        await query.answer()
+        if not _authorized(self.config, update):
+            return
+        from .chains import display_name
+
+        chain = query.data.split(":", 1)[1]
+        moved = self.storage.advance_adhoc_status(
+            "in_cart", "shopped", "" if chain == "all" else chain
+        )
+        where = "בשתי הרשתות" if chain == "all" else f"ב{display_name(chain)}"
+        await query.edit_message_text(
+            f"✅ רשמתי שסיימת {where}."
+            + (f" {moved} בקשות סומנו כנקנו." if moved else "")
+        )
 
     async def _log_removals(self, factories) -> None:
         """Record what the household deleted from each cart this shop."""
@@ -2452,6 +2509,9 @@ def build_application(config: Config, storage: Storage) -> Application:
     )
     application.add_handler(
         CallbackQueryHandler(bot.on_autochoice_button, pattern=r"^autochoice:")
+    )
+    application.add_handler(
+        CallbackQueryHandler(bot.on_shopped_store, pattern=r"^shopped:")
     )
     application.add_handler(
         CallbackQueryHandler(bot.on_card_button, pattern=r"^cardok$")

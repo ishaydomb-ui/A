@@ -94,5 +94,22 @@ class RequestLifecycleTests(unittest.TestCase):
         )
 
 
+    def test_a_shop_at_one_chain_does_not_mark_the_other(self) -> None:
+        """Two carts are filled every cycle and are not paid for together.
+        Marking both bought on one "סיימתי" says the Tiv Taam order
+        arrived when nobody has placed it."""
+        self.storage.set_adhoc_status(self.tahini, "in_cart", "shufersal")
+        self.storage.set_adhoc_status(self.cottage, "in_cart", "tivtaam")
+        moved = self.storage.advance_adhoc_status("in_cart", "shopped", "shufersal")
+        self.assertEqual(moved, 1)
+        self.assertEqual(
+            [r["text"] for r in self.storage.adhoc_by_status("shopped")],
+            ["טחינה גולמית"],
+        )
+        self.assertEqual(
+            [r["text"] for r in self.storage.adhoc_by_status("in_cart")], ["קוטג"]
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
