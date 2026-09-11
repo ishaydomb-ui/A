@@ -5,6 +5,7 @@ project decision) so grocery traffic doesn't mix with unrelated notes.
 """
 from __future__ import annotations
 
+import json
 import asyncio
 import logging
 import re
@@ -73,6 +74,11 @@ logger = logging.getLogger(__name__)
 # phone and past the rate limit for one chat. The rest wait for
 # /questions.
 MAX_QUESTIONS_PER_BURST = 8
+
+# The ids in the set currently being answered, in order. Kept in storage
+# rather than in memory because the set is answered over minutes or hours
+# and a restart in between is ordinary.
+_QUESTION_QUEUE = "question_queue"
 
 # How often to check whether the Israeli exit node came back, when a cycle
 # is waiting on it. The exit is a TV box someone switches on and off by
@@ -1762,6 +1768,40 @@ class GroceryBot:
         ) if details else None
         return headline, markup
 
+    async def _advance_question(self, query, finished_id: int) -> bool:
+        """Show the next question of the set in the same message.
+
+        Returns False when the set is done, so the caller can close it.
+        """
+        try:
+            queue = json.loads(self.storage.get_state(_QUESTION_QUEUE, "") or "[]")
+        except ValueError:
+            queue = []
+        if finished_id not in queue:
+            return False
+        remaining = [q for q in queue if q != finished_id]
+        total = len(queue)
+        while remaining:
+            nxt = self.storage.get_pending_ambiguity(remaining[0])
+            # Skip anything settled since the set was built — by another
+            # tap, by /autochoice, or by a bulk match mid-cycle.
+            if nxt is None or self.storage.preferred_for(
+                nxt["store"], nxt["original_term"]
+            ) is not None:
+                remaining.pop(0)
+                continue
+            self.storage.set_state(_QUESTION_QUEUE, json.dumps(remaining))
+            text, buttons = _format_choice(
+                nxt, total - len(remaining) + 1, total
+            )
+            await query.edit_message_text(
+                text, parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(buttons),
+            )
+            return True
+        self.storage.set_state(_QUESTION_QUEUE, "[]")
+        return False
+
     async def on_cycle_details(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """The full cycle list, when it is actually wanted."""
         query = update.callback_query
@@ -1984,8 +2024,18 @@ class GroceryBot:
         else:
             asking = list(pending)
 
-        for row in asking[:limit]:
-            text, buttons = _format_choice(row)
+        batch = asking[:limit]
+        if batch:
+            # One message for the whole set, edited in place as it is
+            # answered — the same mechanism as the live progress view.
+            # Before 2026-09-11 this loop sent one Telegram message per
+            # question: 80 of them after a single cycle, each its own
+            # notification, and answering them meant scrolling back up
+            # through eighty cards.
+            self.storage.set_state(
+                _QUESTION_QUEUE, json.dumps([row["id"] for row in batch])
+            )
+            text, buttons = _format_choice(batch[0], 1, len(batch))
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=text,
@@ -2035,7 +2085,11 @@ class GroceryBot:
 
         if action == "skip":
             self.storage.mark_ambiguity_resolved(ambiguity_id)
-            await query.edit_message_text(f"'{pending['original_term']}' — טופל.")
+            if await self._advance_question(query, ambiguity_id):
+                return
+            await query.edit_message_text(
+                f"'{pending['original_term']}' — טופל. ✅ סיימנו את הבחירות."
+            )
             return
 
         choice_index = int(choice_str)
@@ -2116,6 +2170,8 @@ class GroceryBot:
             lines += ["", "_הכול נבחר._"]
             markup = None
             self.storage.mark_ambiguity_resolved(ambiguity_id)
+            if await self._advance_question(query, ambiguity_id):
+                return
 
         try:
             await query.edit_message_text(
@@ -2191,11 +2247,21 @@ def _cycle_question_keys(reports) -> set:
     return keys
 
 
-def _format_choice(pending: dict) -> tuple[str, list[list[InlineKeyboardButton]]]:
-    """Render one ambiguity as a numbered list plus a compact button row."""
+def _format_choice(
+    pending: dict, position: int = 0, total: int = 0
+) -> tuple[str, list[list[InlineKeyboardButton]]]:
+    """Render one ambiguity as a numbered list plus a compact button row.
+
+    `position`/`total` put the question in its set — "2 מתוך 5". The whole
+    set lives in **one** message that is edited as it is answered, so the
+    counter is the only way to know how much is left.
+    """
     cards = pending.get("candidate_cards") or []
     names = pending.get("candidates") or []
-    lines = [f"*{pending['original_term']}* — איזה מהם?"]
+    lines = []
+    if total > 1:
+        lines.append(f"❓ *{total} בחירות* — {position} מתוך {total}")
+    lines.append(f"*{pending['original_term']}* — איזה מהם?")
 
     if cards:
         cheapest = _cheapest_index(cards)
