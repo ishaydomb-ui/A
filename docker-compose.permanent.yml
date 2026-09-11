@@ -1,0 +1,47 @@
+# ---------------------------------------------------------------------------
+# Adds a permanent, public HTTPS address in front of the local stack, without
+# touching its data — it is the same db/api/web containers, reached through a
+# real hostname instead of a loopback port or a temporary tunnel.
+#
+# Requires:
+#   1. SITE_HOSTNAME's DNS already pointing at this server's public IP.
+#   2. SITE_HOSTNAME and ACME_EMAIL set in .env.
+#   3. PUBLIC_URL and COOKIE_SECURE in .env updated to match (see
+#      docs/deployment.md).
+#
+# Bring up both files together:
+#
+#   docker compose -f docker-compose.local.yml -f docker-compose.permanent.yml up -d
+#
+# Ports 80 and 443 must be reachable from the internet on this server.
+#
+# If something else on the machine already holds port 443 on a specific
+# address (Tailscale Serve/Funnel, another reverse proxy) rather than on
+# every address, a plain "443:443" publish fails with "address already in
+# use" even though the ports don't actually overlap - Docker's wildcard bind
+# collides with the other process's specific one. Set PUBLIC_BIND_IP in .env
+# to the server's public IP to bind only that address instead; leave it
+# unset for the normal, no-conflict case.
+# ---------------------------------------------------------------------------
+services:
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [api, web]
+    ports:
+      - "${PUBLIC_BIND_IP:-0.0.0.0}:80:80"
+      - "${PUBLIC_BIND_IP:-0.0.0.0}:443:443"
+      - "${PUBLIC_BIND_IP:-0.0.0.0}:443:443/udp"
+    environment:
+      SITE_HOSTNAME: ${SITE_HOSTNAME:?set SITE_HOSTNAME in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+    volumes:
+      - ./ops/Caddyfile:/etc/caddy/Caddyfile:ro
+      - permanent-caddy-data:/data
+      - permanent-caddy-config:/config
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  permanent-caddy-data:
+  permanent-caddy-config:

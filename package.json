@@ -1,0 +1,27 @@
+{
+  "name": "medcatalogue",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Clinical medication catalogue for physicians",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm --filter @med/shared build && pnpm --filter @med/api build && pnpm --filter @med/web build",
+    "dev": "pnpm --filter @med/shared build && pnpm -r --parallel dev",
+    "test": "pnpm --filter @med/shared build && pnpm -r test",
+    "test:e2e": "pnpm --filter @med/shared build && pnpm --filter @med/web exec playwright test",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm --filter @med/shared build && pnpm -r typecheck",
+    "migrate": "pnpm --filter @med/api migrate",
+    "seed": "pnpm --filter @med/api seed",
+    "create-admin": "pnpm --filter @med/api create-admin"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "@node-rs/argon2"
+    ]
+  }
+}

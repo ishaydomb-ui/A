@@ -1,0 +1,120 @@
+# ---------------------------------------------------------------------------
+# Local, single-machine stack. No domain, no certificate, no hosting cost.
+#
+# Everything binds to 127.0.0.1, so nothing is reachable from another machine
+# and no firewall rule is needed. This is the right shape for evaluating the
+# catalogue on your own computer before committing to a server.
+#
+#   docker compose -f docker-compose.local.yml up -d --build
+#   open http://localhost:8080
+#
+# To expose it later, use docker-compose.yml instead — that adds TLS, a real
+# hostname and the reverse proxy.
+# ---------------------------------------------------------------------------
+name: medcatalogue-local
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-medapp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-password}
+      POSTGRES_DB: ${POSTGRES_DB:-medcat}
+    volumes:
+      - local-db-data:/var/lib/postgresql/data
+    # Bound to loopback so the database is not exposed on the network.
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-medapp} -d $${POSTGRES_DB:-medcat}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      HOST: 0.0.0.0
+      DATABASE_URL: postgres://${POSTGRES_USER:-medapp}:${POSTGRES_PASSWORD:-local-development-password}@db:5432/${POSTGRES_DB:-medcat}
+      APP_SECRET: "${APP_SECRET:?set APP_SECRET - generate with openssl rand -base64 48}"
+      # Loopback is a secure context and is not reachable off this machine, so
+      # the cookie does not need the Secure flag here. The API refuses this
+      # combination for any non-loopback address.
+      #
+      # Overridable from .env, which is how ops/expose-tunnel.sh points the app
+      # at a public HTTPS address and turns the Secure flag back on.
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
+      COOKIE_SECURE: "${COOKIE_SECURE:-false}"
+      TRUST_PROXY: "true"
+      IMPORT_STORAGE_DIR: /data/imports
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Single instance, so the schema is applied on start-up rather than as a
+      # separate step that is easy to forget.
+      RUN_MIGRATIONS_ON_START: "true"
+    volumes:
+      - local-import-data:/data
+      # The website-snapshot workbook, for seeding. Mounted rather than baked
+      # into the image: unvalidated clinical data does not belong in a release.
+      - ./apps/api/src/test/data:/seed:ro
+      # The clinical formulary workbook, read-only. Loaded deliberately by
+      # scripts/load-formulary.js, never on start-up.
+      - ./data:/formulary:ro
+    expose:
+      - "4000"
+
+  # Serves the client and proxies /api, so both are same-origin.
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      # Waits for the API to answer its health check, so the first page load
+      # does not arrive before the schema has been applied.
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./ops/nginx.local.conf:/etc/nginx/conf.d/default.conf:ro
+
+  # Telegram bot for project discussion — see docs/telegram-bot.md. Behind a
+  # profile so a plain `docker compose up` never touches it or demands its
+  # secrets: it only starts with `--profile bot` (or `up bot` by name).
+  bot:
+    profiles: ["bot"]
+    build:
+      context: .
+      dockerfile: apps/bot/Dockerfile
+    restart: unless-stopped
+    environment:
+      # Deliberately NOT required (:?) here, unlike the other services: this
+      # file backs the default `docker compose up`, which must keep working
+      # for people who never touch the bot. The bot process itself refuses
+      # to start without these two — see apps/bot/src/config.ts — so a
+      # missing value fails loudly in `docker compose logs bot`, not here.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5}
+      # Comma-separated numeric Telegram chat ids. Empty until you learn the
+      # right id from the bot's own /start reply — see docs/telegram-bot.md.
+      BOT_ALLOWED_CHAT_IDS: ${BOT_ALLOWED_CHAT_IDS:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - bot-data:/data
+    # No published port: it reaches Telegram itself via outbound long polling.
+
+volumes:
+  local-db-data:
+  local-import-data:
+  bot-data:
