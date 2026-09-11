@@ -67,6 +67,11 @@ INTENTS = {
     "add_to_cart",
     "report_waste",
     "shopped",
+    # Corrections, which only mean anything against the previous turn.
+    # Added 2026-09-11: a person says "בעצם שניים", not "תשנה את הכמות
+    # של הקוטג' ל-2".
+    "change_quantity",
+    "replace_item",
     "smalltalk",
     "unclear",
 }
@@ -108,7 +113,27 @@ _SYSTEM_PROMPT = """אתה מנתח הודעות של בוט קניות משפח
   זו בקשה להריץ מחזור מלא על כל מה שממתין. גם אם הניסוח לא מדויק — אם ברור שהכוונה לעדכן את הסל, זה start_order ולא unclear.
 - אם המשתמש מפנה ל"הפריטים האחרונים שביקשתי" או ניסוח דומה => start_order (או add_to_cart אם פירט אותם).
 - הודעה שהיא רק פריט ("חלב", "לחם ועגבניות") => add_item.
-- אפשר כמה פריטים בהודעה אחת."""
+- אפשר כמה פריטים בהודעה אחת.
+
+**הודעה אחת יכולה להכיל כמה בקשות שונות.** במקרה כזה החזר גם שדה
+actions: מערך של {"intent","items","query"} לפי הסדר שנאמר, וב-intent
+הראשי שים את הבקשה הראשונה. דוגמה: "תוסיף חלב וכמה עולה טחינה?" =>
+actions עם add_item ואז price_query. אל תוותר על אחת מהן.
+
+**תיקונים בהמשך לשיחה.** אם ההודעה מתייחסת למשהו שכבר דובר עליו:
+- "בעצם שניים" / "תעשה 3" / "רק אחד" => change_quantity, items עם
+  amount החדש. אם לא נאמר שם מוצר — השאר items ריק, ההקשר ישלים.
+- "השני במקום הראשון" / "תחליף לזה שקנינו קודם" / "לא זה, השני" =>
+  replace_item.
+- "בלי הטחינה" / "תוריד את זה" => remove_item.
+- "את זה רק הפעם" => scope="once". "תזכור את זה" => scope="always".
+  אחרת scope=null.
+- "סיימתי בשופרסל" => shopped, ובנוסף store="shufersal". "בטיב טעם עוד
+  לא" באותה הודעה — אל תסמן אותה כ-shopped.
+- store: "shufersal" / "tivtaam" אם נאמרה רשת, אחרת null.
+
+אם ההודעה היא תיקון ואין הקשר קודם — intent=unclear, ו-reply ששואל על
+מה מדובר. עדיף לשאול מאשר לנחש מוצר."""
 
 
 @dataclass
@@ -120,12 +145,29 @@ class ParsedItem:
 
 
 @dataclass
+class ParsedAction:
+    """One request inside a message. A message may carry several."""
+
+    intent: str
+    items: list[ParsedItem] = field(default_factory=list)
+    query: str = ""
+
+
+@dataclass
 class ParsedMessage:
     intent: str
     items: list[ParsedItem] = field(default_factory=list)
     query: str = ""
     reply: str = ""
     used_fallback: bool = False
+    # Every request in the message, in the order it was said. The first
+    # one is mirrored into `intent`/`items`/`query` so that every existing
+    # caller keeps working unchanged.
+    actions: list[ParsedAction] = field(default_factory=list)
+    # Which chain the message named, when it named one.
+    store: str = ""
+    # "once" / "always" / "" — whether a choice should be remembered.
+    scope: str = ""
 
 
 def _claude_cli() -> str:
@@ -150,9 +192,15 @@ def _claude_cli() -> str:
     return str(Path.home() / ".local" / "bin" / "claude")
 
 
-def _ask_model(message: str) -> str:
+def _ask_model(message: str, context: dict | None = None) -> str:
+    from . import convo
+
+    background = convo.describe(context or {})
+    prompt = _SYSTEM_PROMPT
+    if background:
+        prompt += f"\n\nרקע מהשיחה הקודמת (לא ההודעה לנתח): {background}"
     result = subprocess.run(
-        [_claude_cli(), "-p", f'{_SYSTEM_PROMPT}\n\nהודעה: "{message}"'],
+        [_claude_cli(), "-p", f'{prompt}\n\nהודעה: "{message}"'],
         capture_output=True,
         text=True,
         timeout=CLAUDE_TIMEOUT_SECONDS,
@@ -251,33 +299,9 @@ def _fallback_parse(message: str) -> ParsedMessage:
     )
 
 
-def parse_message(message: str, storage=None) -> ParsedMessage:
-    """Classify one free-text message; never raises.
-
-    `storage` is optional and only enables the second pass: when this
-    classifier gives up, `loop.reconsider` gets one attempt with the
-    standing list and pending items preloaded (see `loop.py`). The
-    common path is untouched — a confident answer is never re-litigated,
-    because the loop costs another 7-9s and the classifier is already
-    right here.
-    """
-    text = (message or "").strip()
-    if not text:
-        return ParsedMessage(intent="unclear")
-
-    try:
-        payload = _extract_json(_ask_model(text))
-    except Exception:
-        logger.warning("NLU: model unavailable, using rule-based fallback", exc_info=True)
-        return _reconsider_if_unclear(_fallback_parse(text), text, storage)
-
-    intent = str(payload.get("intent") or "").strip()
-    if intent not in INTENTS:
-        logger.warning("NLU: model returned unknown intent %r", intent)
-        return _reconsider_if_unclear(_fallback_parse(text), text, storage)
-
+def _items_from(raw_items) -> list[ParsedItem]:
     items = []
-    for raw_item in payload.get("items") or []:
+    for raw_item in raw_items or []:
         if not isinstance(raw_item, dict):
             continue
         name = str(raw_item.get("name") or "").strip()
@@ -291,13 +315,71 @@ def parse_message(message: str, storage=None) -> ParsedMessage:
                 brand=str(raw_item.get("brand") or "").strip(),
             )
         )
+    return items
 
+
+def parse_message(message: str, storage=None, context: dict | None = None) -> ParsedMessage:
+    """Classify one free-text message; never raises.
+
+    `storage` is optional and only enables the second pass: when this
+    classifier gives up, `loop.reconsider` gets one attempt with the
+    standing list and pending items preloaded (see `loop.py`). The
+    common path is untouched — a confident answer is never re-litigated,
+    because the loop costs another 7-9s and the classifier is already
+    right here.
+
+    `context` is the previous turn (see `convo.py`), handed to the model
+    on the **first** call rather than only after a failure. Without it a
+    message like "בעצם שניים" is unclassifiable in principle, not merely
+    hard — there is no product in it. With it, follow-ups behave the way
+    they do in a conversation, which is the whole point of the feature.
+    """
+    text = (message or "").strip()
+    if not text:
+        return ParsedMessage(intent="unclear")
+
+    try:
+        payload = _extract_json(_ask_model(text, context))
+    except Exception:
+        logger.warning("NLU: model unavailable, using rule-based fallback", exc_info=True)
+        return _reconsider_if_unclear(_fallback_parse(text), text, storage)
+
+    intent = str(payload.get("intent") or "").strip()
+    if intent not in INTENTS:
+        logger.warning("NLU: model returned unknown intent %r", intent)
+        return _reconsider_if_unclear(_fallback_parse(text), text, storage)
+
+    items = _items_from(payload.get("items"))
+
+    actions = []
+    for raw in payload.get("actions") or []:
+        if not isinstance(raw, dict):
+            continue
+        action_intent = str(raw.get("intent") or "").strip()
+        if action_intent not in INTENTS:
+            continue
+        actions.append(
+            ParsedAction(
+                intent=action_intent,
+                items=_items_from(raw.get("items")),
+                query=str(raw.get("query") or "").strip(),
+            )
+        )
+    query = str(payload.get("query") or "").strip()
+    if not actions:
+        actions = [ParsedAction(intent=intent, items=items, query=query)]
+
+    store = str(payload.get("store") or "").strip()
+    scope = str(payload.get("scope") or "").strip()
     return _reconsider_if_unclear(
         ParsedMessage(
-            intent=intent,
-            items=items,
-            query=str(payload.get("query") or "").strip(),
+            intent=actions[0].intent,
+            items=actions[0].items,
+            query=actions[0].query or query,
             reply=str(payload.get("reply") or "").strip(),
+            actions=actions,
+            store=store if store in ("shufersal", "tivtaam") else "",
+            scope=scope if scope in ("once", "always") else "",
         ),
         text,
         storage,

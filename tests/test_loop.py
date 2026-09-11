@@ -29,9 +29,22 @@ class TheBarrierHoldsWhateverTheModelSays(unittest.TestCase):
         self.assertEqual(result.intent, "unclear")
 
     def test_every_cart_intent_is_covered(self):
-        self.assertEqual(loop.CART_INTENTS, {"start_order", "add_to_cart", "shopped"})
+        # change_quantity and replace_item joined 2026-09-11: both rewrite
+        # a line already in the real cart, which is the same class of harm
+        # as a guessed add and easier to miss, because the cart already
+        # contained something plausible.
+        self.assertEqual(
+            loop.CART_INTENTS,
+            {"start_order", "add_to_cart", "shopped",
+             "change_quantity", "replace_item"},
+        )
         for intent in loop.CART_INTENTS:
             self.assertIn(intent, nlu.INTENTS, "a guarded intent must be a real one")
+
+    def test_a_guessed_correction_never_rewrites_the_cart(self):
+        for intent in ("change_quantity", "replace_item"):
+            result = loop.sanitise({"intent": intent, "items": [{"name": "קוטג"}]})
+            self.assertEqual(result.intent, "unclear", intent)
 
     def test_an_invented_intent_is_refused_not_passed_through(self):
         for intent in ("checkout", "pay", "confirm_purchase", "", "ADD_ITEM"):

@@ -36,7 +36,7 @@ from .catalog import (
     format_search_answer,
     refresh_catalog,
 )
-from . import basketview, standingcart
+from . import basketview, convo, standingcart
 from .cartview import (
     MIN_EDIT_INTERVAL_SECONDS,
     render_final_by_store,
@@ -401,10 +401,15 @@ class GroceryBot:
         still sat waiting for him to type /done. Requiring a command for
         something already said is the design failure his own audit brief
         named — if you have to remember the syntax, that is on the tool.
-        """
-        await self.done_shopping(update, context)
 
-    async def done_shopping(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        A chain named in the sentence is used: "סיימתי בשופרסל" finishes
+        the Shufersal shop and leaves Tiv Taam alone.
+        """
+        await self.done_shopping(update, context, store=parsed.store)
+
+    async def done_shopping(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE, store: str = ""
+    ) -> None:
         """/done — "I've paid". Records the shop and refills both carts.
 
         A told signal rather than an inferred one, chosen by Ishay
@@ -417,7 +422,7 @@ class GroceryBot:
         if not _authorized(self.config, update):
             return
         standingcart.mark_shopped(self.storage)
-        moved = await self._mark_shop_done(update, context)
+        moved = await self._mark_shop_done(update, context, store)
         if moved is None:
             return  # asked which chain; nothing marked yet
         await update.message.reply_text(
@@ -682,10 +687,69 @@ class GroceryBot:
         # (cadence digest, alerts) have somewhere to go.
         self.storage.set_state("digest_chat_id", str(update.effective_chat.id))
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-        parsed = await asyncio.to_thread(parse_message, text, self.storage)
+        # The previous turn goes in with the message, not after it fails.
+        # "בעצם שניים" carries no product at all: without context it is
+        # unclassifiable in principle, and demanding that every message
+        # restate its subject is exactly the careful phrasing this is
+        # meant to remove.
+        prior = convo.recall(self.storage)
+        parsed = await asyncio.to_thread(parse_message, text, self.storage, prior)
         requested_by = update.effective_user.first_name if update.effective_user else "unknown"
 
-        handler = {
+        # One message may carry several requests — "תוסיף חלב וכמה עולה
+        # טחינה?" is two, and collapsing it to one intent silently drops
+        # whichever came second.
+        if len(parsed.actions) > 1:
+            await self._run_actions(update, context, parsed, requested_by)
+            return
+
+        handler = self._intent_handlers().get(parsed.intent)
+
+        if handler is None:  # unclear / smalltalk
+            await update.message.reply_text(
+                parsed.reply
+                or "לא הבנתי מה צריך. אפשר למשל: 'תוסיף 300 גרם פסטרמה', "
+                "'כמה עולה קוטג', 'מה יש במבצע', 'מתכון לפאי תפוחים'."
+            )
+            return
+        await handler(update, context, parsed, requested_by)
+
+    async def _run_actions(self, update, context, parsed, requested_by: str) -> None:
+        """Carry out every request in one message, in the order it was said.
+
+        Each one runs through the same handler it would have had on its
+        own, so nothing here is a second implementation of adding or
+        pricing. What this adds is that the second request happens at all.
+        """
+        from .nlu import ParsedMessage as _Parsed
+
+        done, skipped = [], []
+        for action in parsed.actions:
+            handler = self._intent_handlers().get(action.intent)
+            if handler is None:
+                skipped.append(action.intent)
+                continue
+            one = _Parsed(
+                intent=action.intent, items=action.items, query=action.query,
+                store=parsed.store, scope=parsed.scope,
+            )
+            try:
+                await handler(update, context, one, requested_by)
+                done.append(action.intent)
+            except Exception:  # noqa: BLE001
+                logger.exception("Action %s failed inside a multi-request message",
+                                 action.intent)
+                skipped.append(action.intent)
+        if skipped:
+            # Never silent: a request that was understood and not carried
+            # out is worse than one that was never understood.
+            await update.message.reply_text(
+                "חלק מההודעה לא בוצע: " + ", ".join(skipped)
+                + ".\nאפשר לכתוב לי את החלק הזה שוב בנפרד."
+            )
+
+    def _intent_handlers(self) -> dict:
+        return {
             "add_item": self._do_add,
             "remove_item": self._do_remove,
             "price_query": self._do_price,
@@ -697,16 +761,105 @@ class GroceryBot:
             "add_to_cart": self._do_add_to_cart,
             "report_waste": self._do_report_waste,
             "shopped": self._do_shopped,
-        }.get(parsed.intent)
+            "change_quantity": self._do_change_quantity,
+            "replace_item": self._do_replace_item,
+        }
 
-        if handler is None:  # unclear / smalltalk
+    def _subject_of(self, parsed, prior: dict) -> tuple[str, dict]:
+        """What a correction is about: what it named, else the last turn."""
+        named = parsed.items[0].name if parsed.items else ""
+        if named:
+            return named, prior
+        return (prior.get("subject") or ""), prior
+
+    async def _do_change_quantity(self, update, context, parsed, requested_by: str) -> None:
+        """"בעצם שניים" — the same product, a different number of it."""
+        prior = convo.recall(self.storage)
+        subject, prior = self._subject_of(parsed, prior)
+        amount = next((i.amount for i in parsed.items if i.amount), None)
+        if not subject or not amount:
             await update.message.reply_text(
-                parsed.reply
-                or "לא הבנתי מה צריך. אפשר למשל: 'תוסיף 300 גרם פסטרמה', "
-                "'כמה עולה קוטג', 'מה יש במבצע', 'מתכון לפאי תפוחים'."
+                "כמה, ושל מה? (אפשר למשל: 'קוטג — שניים')"
             )
             return
-        await handler(update, context, parsed, requested_by)
+        quantity = max(1, int(amount))
+        store = parsed.store or prior.get("store") or ""
+        factories = _build_adapter_factories(self.config)
+        if store and store in factories:
+            # It is already in the cart: set the line to the new number
+            # rather than adding another one on top.
+            reports = await asyncio.to_thread(
+                add_terms_to_cart, self.storage, {store: factories[store]},
+                [(subject, quantity)],
+            )
+            report = reports.get(store)
+            ok = bool(report and report.added)
+            await update.message.reply_text(
+                f"✅ {subject} — {quantity} בעגלה." if ok
+                else f"לא הצלחתי לעדכן את {subject} בעגלה."
+            )
+        else:
+            self.storage.add_adhoc_request(
+                text=subject, requested_by=requested_by, quantity=quantity
+            )
+            await update.message.reply_text(f"✅ {subject} — {quantity}, ברשימה.")
+        convo.remember(
+            self.storage, subject=subject, store=store, quantity=quantity,
+            action="שונתה כמות",
+        )
+
+    async def _do_replace_item(self, update, context, parsed, requested_by: str) -> None:
+        """"השני במקום הראשון" — a correction, not a second purchase.
+
+        The distinction the third review found: a tap that adds while the
+        previous choice stays in the cart turns a correction into two
+        products. Said in words it is unambiguous, so here it is treated
+        as what it is — remove the old line, add the new one.
+        """
+        prior = convo.recall(self.storage)
+        store = parsed.store or prior.get("store") or ""
+        old = prior.get("subject") or ""
+        new = parsed.items[0].name if parsed.items else ""
+        if not new:
+            await update.message.reply_text("להחליף למה? (אפשר לכתוב את שם המוצר)")
+            return
+        if not old:
+            await update.message.reply_text(
+                f"במקום מה? לא בטוח על מה מדובר — אפשר לכתוב 'תוסיף {new}'."
+            )
+            return
+        factories = _build_adapter_factories(self.config)
+        if store and store in factories:
+            removed = await asyncio.to_thread(
+                self._remove_from_cart, factories[store], old
+            )
+            reports = await asyncio.to_thread(
+                add_terms_to_cart, self.storage, {store: factories[store]}, [(new, 1)]
+            )
+            ok = bool(reports.get(store) and reports[store].added)
+            note = "" if removed else f"\n(את {old} לא הצלחתי להסיר — בדקו בעגלה.)"
+            await update.message.reply_text(
+                (f"🔄 {new} במקום {old}." if ok
+                 else f"לא הצלחתי להוסיף את {new}.") + note
+            )
+        else:
+            self.storage.add_adhoc_request(text=new, requested_by=requested_by)
+            await update.message.reply_text(f"🔄 {new} במקום {old}, ברשימה.")
+        convo.remember(
+            self.storage, subject=new, store=store, action=f"הוחלף במקום {old}"
+        )
+
+    @staticmethod
+    def _remove_from_cart(factory, term: str) -> bool:
+        try:
+            with factory() as adapter:
+                remover = getattr(adapter, "remove_from_cart", None)
+                if remover is None:
+                    return False
+                return bool(remover(term))
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not remove %r from the cart", term)
+            return False
 
     async def _do_start_order(self, update, context, parsed, requested_by: str) -> None:
         """Let plain Hebrew start a cycle, not just the /start_order command."""
@@ -1326,6 +1479,13 @@ class GroceryBot:
                 brand=item.brand,
             )
             added.append(_describe_parsed(item))
+        # The subject of the next sentence. "בעצם שניים" means the last
+        # thing named, and this is where it gets named.
+        last = parsed.items[-1]
+        convo.remember(
+            self.storage, subject=last.name, store=parsed.store,
+            quantity=int(last.amount) if last.amount else 0, action="נוסף לרשימה",
+        )
         message = "נוסף לרשימה: " + ", ".join(added)
         if parsed.used_fallback:
             # The rule-based fallback files anything it can't classify as an

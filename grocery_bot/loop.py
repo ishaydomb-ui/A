@@ -74,7 +74,15 @@ LOOP_TIMEOUT_SECONDS = 30
 # Intents this pass may never produce, whatever the model says. Each one
 # reaches the household's real cart: start_order and add_to_cart write to
 # it directly, and `shopped` triggers a full refill of both carts.
-CART_INTENTS = frozenset({"start_order", "add_to_cart", "shopped"})
+CART_INTENTS = frozenset({
+    "start_order", "add_to_cart", "shopped",
+    # Added with the correction intents, 2026-09-11. Both rewrite a line
+    # that is already in the real cart, so a guessed one is a guessed
+    # change to what the household is about to pay for — the same class
+    # of harm as a guessed add, and easier to miss because the cart
+    # already contained something plausible.
+    "change_quantity", "replace_item",
+})
 
 # How many preloaded names to show. Enough to disambiguate a term the
 # household actually uses; not so many that the prompt becomes the list.
