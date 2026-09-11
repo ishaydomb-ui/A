@@ -113,6 +113,35 @@ from the export: her question is routing, mine is resolution.
 all (zero occurrences in the raw catalogue, 2026-09-10). "אין הטבה" is
 the truthful answer, not "לא מצאתי".
 
+## 2d. External AI review — verification in progress (2026-09-11)
+
+Ishay commissioned an outside review of the shopping flow, from
+`docs/reports/2026-09-11-shopping-flow-and-user-interface.pdf`. The
+reviewer had **no code or account access** — every claim is inference
+from that report, so each needs checking before it is acted on. Three
+checked so far:
+
+1. **VERIFIED BUG, not yet fixed.** "A perishable enters the cart
+   despite the rule." True: in `dealfill._barcode_picks` (the Tiv Taam
+   path) `_looks_perishable` is guarded by `if not familiar`, so a
+   previously-bought perishable skips the check entirely. The Shufersal
+   name path applies `pantryable` to everything, so the two chains
+   disagree. Live right now: "בצק פריך מלוח" at 41% off would be added.
+   **Fix not started — this is the first thing to pick up.**
+2. **Already handled; my report was the gap.** "A short basket can still
+   look cheap." `basketview` already compares "על N פריטים זהים",
+   includes delivery (`saving_with_delivery`), and refuses comparison
+   below `MIN_COVERAGE` with an explicit line. The PDF described only
+   the substitute exclusion, which is why the reviewer inferred a hole.
+3. **Partly right.** "Exact match by name prefix is not enough."
+   `_name_match_rank` is four-tier with word boundaries, not a blind
+   `startswith` — but the reviewer's point about **size and selling
+   unit** is unverified and still open.
+
+Not yet checked: barcode-does-not-prove-promo-applies (their 5d), and
+every recommendation in sections 1-4 and 6-10, which are design
+proposals for Ishay rather than factual claims.
+
 ## 3. Blocked, and on what
 
 - **The running bot is older than the code.** `grocery-bot.service`
