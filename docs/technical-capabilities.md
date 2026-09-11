@@ -1,6 +1,6 @@
 # Medication Catalogue — Technical Capabilities Report
 
-**Purpose of this document.** A factual, code-verified description of the system as it exists in the repository `ishaydomb-ui/A` (branch `claude/medical-drug-catalog-app-flqwce`, HEAD `40f624a`, September 2026), written for an external technical/clinical-safety reviewer. Every statement below was checked against source, migrations, configuration or test output; where something is a deliberate non-feature it is listed as such rather than omitted. Nothing here describes planned work.
+**Purpose of this document.** A factual, code-verified description of the system as it exists in the repository `ishaydomb-ui/A` (branch `claude/medical-drug-catalog-app-flqwce`, HEAD `2029880`, September 2026), written for an external technical/clinical-safety reviewer. Every statement below was checked against source, migrations, configuration or test output; where something is a deliberate non-feature it is listed as such rather than omitted. Nothing here describes planned work.
 
 **What the system is.** A private, invitation-only, bilingual (Hebrew/English, full RTL) web reference for psychiatric medications, with an editorial workflow (draft → clinical review → approved → published), a provenance/citation model, an Excel import pipeline with automated data-quality findings, and a search-and-discovery front end. It is a *reference aid*, not a decision-support or prescribing tool.
 
@@ -53,21 +53,34 @@ seed/, db/       seed workbook and DB init assets
 
 ### 2.1 Clinical field registry (`packages/shared/src/fields.ts`)
 
-A single registry defines every field a medication record contains, its bilingual label, its display group, and whether it is comparable/searchable. 23 fields in 9 groups:
+A single registry defines every field a medication record contains, its bilingual label, its display group, and whether it is comparable/searchable. 30 fields in 9 groups:
 
 | Group | Fields (key) | Comparable | Searchable | Shape |
 |---|---|---|---|---|
-| identity | `generic_name`, `trade_names` | yes | yes | trade_names is a list |
+| identity | `generic_name`, `trade_names`, `brand_names_israel`, `formulations_israel` | generic/trade only | yes | trade_names is a list; the two Israeli fields are prose, because the source writes brand names with their strengths inline |
 | taxonomy | `therapeutic_group`, `drug_class`, `drug_family`, `mechanism` | yes | yes | deliberately four independent fields — the source site conflated them |
 | administration | `starting_age`, `formulation`, `available_strengths` | yes | formulation only | |
-| dosing | `dose_range`, `starting_dose`, `titration`, `maximum_dose` | yes | no | |
+| dosing | `dose_range`, `starting_dose`, `starting_dose_adults`, `starting_dose_pediatrics`, `titration`, `titration_adults`, `titration_pediatrics`, `maximum_dose` | yes | no | the workbook keeps adult and paediatric schedules in separate columns; the undivided `starting_dose`/`titration` remain for records imported before the split |
 | pharmacokinetics | `onset`, `duration` | yes | no | |
 | indications | `adult_indications`, `pediatric_indications` | **no** (prose) | yes | |
-| safety | `qtc_adults`, `qtc_pediatrics` (comparable), `side_effects`, `contraindications` (lists, not comparable) | mixed | yes | |
+| safety | `qtc_adults`, `qtc_pediatrics` (comparable), `side_effects`, `contraindications` (lists, not comparable), `side_effect_legend` (prose) | mixed | yes | `side_effect_legend` carries the source's own key to the graded matrix (WG, AKA, PKN…), which is unreadable without it |
 | monitoring | `monitoring_tests` | yes | yes | list |
-| notes | `clinical_notes` | no (prose) | yes | |
+| notes | `clinical_notes`, `comments` | no (prose) | yes | `comments` is the workbook's own Comments column; `clinical_notes` is the app's editorial note. They are not the same thing |
 
 Max 3 medications per comparison (`MAX_COMPARE = 3`). Long prose is excluded from comparison by policy (side-by-side prose invites false equivalence between differently worded sources).
+
+### 2.1.1 Per-class presentation profiles
+
+The registry is a **superset**: it holds every field any source sheet can fill. The authoritative workbook, however, is four genuinely different tables — antipsychotics, antidepressants, mood stabilisers and ADHD each have their own columns — and rendering one universal schema over all of them was wrong in both directions. It grouped fields under headings the source never had, and it displayed fields a sheet has no column for as "not supplied", so `QTc — adults: not supplied` on an ADHD drug read as missing clinical data rather than as a column that does not exist there.
+
+`CLASS_PROFILES` therefore maps a record's therapeutic group to an ordered list of fields mirroring its sheet: its columns, in its order, under its own headings (`Dosage`, `Max dose and titration`, `Tests at baseline / during treatment`). Matching is case-insensitive, since the website snapshot writes "Mood Stabilizers" and the workbook "Mood stabilizers".
+
+Two rules keep this honest for records that predate it:
+
+- A profile entry may name **fallback keys** — older fields holding the same content. A record imported before the adult/paediatric split shows its undivided `titration` rather than an empty `Titration — adults`.
+- A value shown from a fallback is captioned with **that field's own label**. An older record's `trade_names` are not known to be the Israeli brand names, so they are never headed as though they were.
+
+A therapeutic group with no profile keeps the grouped view, so nothing is lost for records outside these four classes.
 
 ### 2.2 Value states (`packages/shared/src/values.ts`)
 
@@ -235,7 +248,7 @@ There is **no** user-delete endpoint (accounts are deactivated/suspended, never 
 |---|---|---|
 | `/` | **Explore** — search hero, quick-search chips and "clinical area" tiles derived from live facet counts (no hard-coded taxonomy), recently viewed (device-local), link to full catalogue | signed in |
 | `/catalogue` | full list: search, type-ahead, filters (sidebar ≥900 px, bottom-sheet `<dialog>` below), active-filter chips, compact scannable rows, compare checkboxes, load-more, skeleton/empty/error states | signed in |
-| `/medications/:slug` | full record grouped by clinical area, value states, citations per field, validation status in the footer, bookmark toggle; `?draft=1` for reviewers/editors shows outstanding checks and source suggestions | signed in |
+| `/medications/:slug` | full record laid out as its own source table where the class has a profile (§2.1.1), otherwise grouped by clinical area; value states, citations per field, validation status in the footer, bookmark toggle; `?draft=1` for reviewers/editors shows outstanding checks and source suggestions | signed in |
 | `/compare?slugs=a,b,c` | side-by-side table of comparable fields only (max 3) | signed in |
 | `/saved` | device-local bookmarks | signed in |
 | `/review` | data-quality findings, resolution with mandatory reason | review:read / review:resolve |
@@ -295,7 +308,7 @@ Missing defaults are restored at start-up (`ensureDefaultSettings`); existing va
 
 | Suite | Tool | Count | What it proves |
 |---|---|---|---|
-| `packages/shared` | Vitest | 17 | text normalisation (Hebrew/Latin, accents, tokenising) |
+| `packages/shared` | Vitest | 28 | text normalisation (Hebrew/Latin, accents, tokenising); per-class profiles — every field key real, no duplicates, case-insensitive class matching, legacy fallback and its labelling, QTc absent from classes whose sheet has no QTc column |
 | `apps/api` | Vitest against a real PostgreSQL | 165 | auth (invite-only, lockout, timing-equal responses, MFA enrol/verify/recovery, admin reset, MFA-requirement switch), catalogue workflow and every publication gate, evaluation mode, comparison cap, search (exact/prefix/fuzzy, drafts hidden), import pipeline end-to-end incl. all detectors, DailyMed provider, backup/restore, audit immutability, rate limiting |
 | `apps/web` E2E | Playwright + axe-core, real stack (API + Vite + seeded Postgres), projects: desktop (1280 px), mobile (Pixel 5), auth-desktop, evaluation-mode | 97 tests / **179 runs** | login wall, MFA enrolment journey, role visibility, search/filters/type-ahead/Hebrew, Explore/Saved/recently-viewed, detail/compare, editorial (review, imports, invitations end-to-end), users admin, evaluation banner, WCAG audits of every page, keyboard operation, live regions, touch targets, no sideways scroll |
 
