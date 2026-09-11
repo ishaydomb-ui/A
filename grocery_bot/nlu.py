@@ -32,6 +32,19 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# A per-SUBPROCESS timeout, not a per-message one — the two coincided
+# only while `_ask_model` was the single call in `parse_message`'s path,
+# with a failure falling through to `_fallback_parse` deterministically
+# and no second call. That coincidence is already broken, not merely at
+# risk: `_reconsider_if_unclear` (below) now chains `loop.reconsider`
+# on the failure path — a timed-out `_ask_model` call still lands on
+# `_fallback_parse`, and if that result is `unclear`, a second
+# subprocess runs with its own budget (`loop.LOOP_TIMEOUT_SECONDS`).
+# **Verified worst case for one message today: 120 + 30 = 150s**, not
+# 120. Raised by Miri 2026-09-10, who named this as a future risk from
+# a hypothetical retry; it had already happened via loop.py, added
+# earlier the same day. If a third call is ever chained here, re-check
+# this comment before assuming 120s still bounds anything.
 CLAUDE_TIMEOUT_SECONDS = 120
 
 # Ways the household says "the shop is done" — past tense, reporting a

@@ -187,3 +187,33 @@ class TheSecondPassHasABudget(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WorstCaseLatencyIsBounded(unittest.TestCase):
+    """CLAUDE_TIMEOUT_SECONDS stopped being a per-message ceiling the
+    moment the loop started chaining a second subprocess on the failure
+    path. Raised by Miri as a future risk; verified here as already
+    true, so the bound itself is locked in rather than just commented.
+    """
+
+    def test_a_classifier_timeout_still_gets_one_loop_attempt(self):
+        """The documented worst case: 120s classifier timeout, then a
+        30s loop attempt, then an answer — not silence."""
+        import subprocess
+
+        with mock.patch.object(
+            nlu, "_ask_model",
+            side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=120),
+        ):
+            with mock.patch.object(
+                loop, "_ask", return_value='{"intent":"unclear","reply":"מה?"}'
+            ):
+                result = nlu.parse_message("נגמר", storage=None)
+        self.assertEqual(result.intent, "unclear")
+        self.assertEqual(result.reply, "מה?")
+
+    def test_the_documented_worst_case_matches_the_two_constants(self):
+        """If either timeout changes, this comment's arithmetic goes
+        stale silently unless a test ties them together."""
+        worst_case = nlu.CLAUDE_TIMEOUT_SECONDS + loop.LOOP_TIMEOUT_SECONDS
+        self.assertEqual(worst_case, 150)
