@@ -166,9 +166,23 @@ checked so far:
    matched at a word start behind an optional prefix letter; 4,921 names
    flagged, the real perishables all still caught.
 
-Not yet checked: the reviewer's size/selling-unit point (item 3), and
-every recommendation in sections 1-4 and 6-10, which are design
-proposals for Ishay rather than factual claims.
+**All ten sections are now checked.** The full response —
+what was fixed, what is already handled, what is not being implemented
+and why, and the technical clarifications worth sending back to the
+reviewer — is in
+[`docs/reports/2026-09-11-external-review-response.md`](docs/reports/2026-09-11-external-review-response.md).
+
+Three things there wait on Ishay rather than on code:
+
+- **Buy two?** Multi-buy deals are reported, not bought. Adding two when
+  the promotion is unambiguous is a small change if he wants it.
+- **Three tiers instead of fill-and-delete** (reviewer §1) — a direct
+  conflict with his 2026-09-06 decision to fill from "באמת הכל" (147).
+- **Request states: added / ordered / delivered** (reviewer §7) — the
+  best recommendation in the review, and factually right:
+  `adhoc_requests` carries a binary `consumed` flag. Not done today
+  because what each state *does* is a product decision. **This is the
+  first thing to pick up next.**
 
 ## 3. Blocked, and on what
 

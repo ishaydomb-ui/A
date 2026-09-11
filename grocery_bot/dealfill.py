@@ -443,8 +443,16 @@ def picks_for(
 
 
 @dataclass(frozen=True)
-class MultiBuyOffer:
-    """A promotion worth knowing about that the bot will not act on."""
+class SecondUnitOffer:
+    """A promotion worth knowing about that the bot will not act on.
+
+    Not `multibuy.MultiBuyOffer`, which is a different question asked at a
+    different moment: that one works out the real arithmetic for products
+    **already in the cart** at Shufersal, where `min_qty` is populated and
+    `discounted_price / min_qty` gives a true per-unit price. This one is
+    about products *not* in the cart, at a chain where `min_qty` lies, so
+    it deliberately computes nothing.
+    """
 
     name: str
     shelf_price: float
@@ -459,7 +467,7 @@ MAX_MULTI_BUY_NOTES = 6
 
 def multi_buy_offers(
     storage, store: str, limit: int = MAX_MULTI_BUY_NOTES
-) -> list[MultiBuyOffer]:
+) -> list[SecondUnitOffer]:
     """Deals that need a second unit, on things the household buys.
 
     Reported, never added. Two reasons it stops at reporting:
@@ -498,7 +506,7 @@ def multi_buy_offers(
                 continue
             if _looks_perishable(name):
                 continue
-            offers.append(MultiBuyOffer(
+            offers.append(SecondUnitOffer(
                 name=name, shelf_price=float(shelf["price"]),
                 description=promo.get("description", ""), familiar=True,
             ))
@@ -517,7 +525,7 @@ def multi_buy_offers(
             continue
         if _looks_perishable(product.name):
             continue
-        offers.append(MultiBuyOffer(
+        offers.append(SecondUnitOffer(
             name=product.name, shelf_price=float(product.price),
             description=promo.description or "", familiar=True,
         ))
@@ -525,7 +533,7 @@ def multi_buy_offers(
     return offers[:limit]
 
 
-def format_multi_buy_offers(offers: list[MultiBuyOffer]) -> str:
+def format_multi_buy_offers(offers: list[SecondUnitOffer]) -> str:
     """The "worth taking two" block. Deliberately not a saving figure.
 
     HTML, not Markdown, and every name escaped: this goes out with the
