@@ -9,6 +9,13 @@ import { FIELDS, normalizeText } from '@med/shared';
 const SYNONYMS: Record<string, string[]> = {
   generic_name: ['medication', 'generic name', 'generic', 'drug', 'drug name', 'name', 'שם גנרי', 'תרופה'],
   trade_names: ['trade names', 'trade name', 'brand', 'brand names', 'commercial names', 'שמות מסחריים', 'שם מסחרי'],
+  brand_names_israel: ['brand names in israel', 'trade names in israel', 'brand names israel', 'שמות מסחריים בישראל'],
+  formulations_israel: [
+    'available formulations in israel',
+    'formulations in israel',
+    'פורמולות הקיימות בישראל',
+    'פורמולות בישראל',
+  ],
   therapeutic_group: ['therapeutic group', 'group', 'indication group', 'therapeutic area', 'קבוצה טיפולית'],
   drug_class: ['category class', 'category / class', 'class', 'category', 'drug class', 'מחלקה', 'מחלקת תרופות'],
   drug_family: ['drug family', 'family', 'משפחת תרופות'],
@@ -18,7 +25,35 @@ const SYNONYMS: Record<string, string[]> = {
   available_strengths: ['available strengths', 'strengths', 'strength', 'חוזקים', 'חוזקים זמינים'],
   dose_range: ['dose range', 'dosage range', 'range', 'טווח מינון'],
   starting_dose: ['starting dose', 'initial dose', 'start dose', 'מינון התחלתי'],
+  starting_dose_adults: ['starting dose adults', 'starting dose - adults', 'מינון התחלתי מבוגרים'],
+  starting_dose_pediatrics: [
+    'starting dose pediatrics',
+    'starting dose children',
+    'מינון התחלתי ילדים',
+  ],
   titration: ['titration', 'titration schedule', 'טיטרציה'],
+  // The workbook words these differently on every sheet ("Titration (Adults)",
+  // "טיטרציית מינון - מבוגרים", "Titration for adults"), so all three map.
+  titration_adults: [
+    'titration adults',
+    'titration (adults)',
+    'titration for adults',
+    'titration - adults',
+    'max dose and titration adults',
+    'טיטרציה מבוגרים',
+    'טיטרציית מינון - מבוגרים',
+  ],
+  titration_pediatrics: [
+    'titration pediatrics',
+    'titration (pediatrics)',
+    'titration for children',
+    'titration for children/adolescents',
+    'titration - pediatrics',
+    'max dose and titration',
+    'טיטרציה ילדים',
+    'טטרציית מינון - ילדים ונוער',
+    'טיטרציית מינון - ילדים ונוער',
+  ],
   maximum_dose: ['maximum dose', 'max dose', 'maximal dose', 'מינון מרבי', 'מינון מקסימלי'],
   onset: ['onset', 'onset of action', 'onset of effect', 'תחילת השפעה'],
   duration: ['duration', 'duration of action', 'duration of effect', 'משך השפעה'],
@@ -27,9 +62,21 @@ const SYNONYMS: Record<string, string[]> = {
   qtc_adults: ['qtc adults', 'qtc adult', 'qtc mbugarim', 'qtc מבוגרים'],
   qtc_pediatrics: ['qtc pediatrics', 'qtc paediatrics', 'qtc children', 'qtc ילדים'],
   side_effects: ['side effects', 'adverse effects', 'adverse reactions', 'תופעות לוואי'],
+  side_effect_legend: ['side effect abbreviations', 'side-effect legend', 'side effect legend', 'מקרא קיצורים'],
   contraindications: ['contraindications', 'contraindication', 'התוויות נגד'],
-  monitoring_tests: ['monitoring tests', 'monitoring', 'labs', 'lab tests', 'בדיקות ניטור'],
-  clinical_notes: ['clinical notes', 'notes', 'comments', 'remarks', 'הערות', 'הערות קליניות'],
+  monitoring_tests: [
+    'monitoring tests',
+    'monitoring',
+    'labs',
+    'lab tests',
+    'tests at baseline/during treatment',
+    'בדיקות ניטור',
+  ],
+  // "Comments" and "הערות" belong to the workbook's own Comments column, which
+  // is its own field — they used to fall into clinical_notes, which is a
+  // different thing (the app's editorial notes, not the source's).
+  clinical_notes: ['clinical notes', 'remarks', 'הערות קליניות'],
+  comments: ['comments', 'comment', 'הערות'],
 };
 
 /** Columns that are metadata rather than clinical content. */
