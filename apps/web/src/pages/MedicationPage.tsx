@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { FIELD_GROUPS, FIELD_GROUP_LABELS, fieldsInGroup } from '@med/shared';
+import { FIELD_GROUPS, FIELD_GROUP_LABELS, fieldsInGroup, profileFor, profileLabel } from '@med/shared';
 import { useI18n } from '../i18n.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { ApiError, api, qs } from '../lib/api.ts';
@@ -80,6 +80,7 @@ export function MedicationPage() {
   if (!detail) return null;
 
   const name = detail.fields['generic_name']?.value.text ?? detail.slug;
+  const profile = profileFor(detail.fields['therapeutic_group']?.value.text);
   // Either the record's own validation status says so, or it was published
   // with clinical gates still outstanding.
   const unvalidated =
@@ -124,30 +125,60 @@ export function MedicationPage() {
         </button>
       </header>
 
-      {FIELD_GROUPS.map((group) => {
-        const fields = fieldsInGroup(group);
-        if (fields.length === 0) return null;
+      {/*
+        A record whose class mirrors one of the source workbook's sheets is
+        laid out as that sheet: its columns, in its order, under its own
+        headings, and nothing else. Showing the full registry instead made
+        columns a sheet does not have (QTc on an ADHD drug) read as missing
+        data rather than not-applicable. Classes with no profile — older
+        records from the website snapshot — keep the grouped view.
+      */}
+      {profile ? (
+        <section className="field-group" aria-labelledby="record-fields">
+          <h2 id="record-fields" className="sr-only">
+            {t.recordFields}
+          </h2>
+          <dl className="field-list">
+            {profile.map((entry) => (
+              <div className="field-row" key={entry.key}>
+                <dt>{profileLabel(entry, locale)}</dt>
+                <dd>
+                  <FieldValueView
+                    fieldKey={entry.key}
+                    field={detail.fields[entry.key]}
+                    citations={detail.citations}
+                  />
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ) : (
+        FIELD_GROUPS.map((group) => {
+          const fields = fieldsInGroup(group);
+          if (fields.length === 0) return null;
 
-        return (
-          <section className="field-group" key={group} aria-labelledby={`group-${group}`}>
-            <h2 id={`group-${group}`}>{FIELD_GROUP_LABELS[group][locale]}</h2>
-            <dl className="field-list">
-              {fields.map((field) => (
-                <div className="field-row" key={field.key}>
-                  <dt>{field.label[locale]}</dt>
-                  <dd>
-                    <FieldValueView
-                      fieldKey={field.key}
-                      field={detail.fields[field.key]}
-                      citations={detail.citations}
-                    />
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-        );
-      })}
+          return (
+            <section className="field-group" key={group} aria-labelledby={`group-${group}`}>
+              <h2 id={`group-${group}`}>{FIELD_GROUP_LABELS[group][locale]}</h2>
+              <dl className="field-list">
+                {fields.map((field) => (
+                  <div className="field-row" key={field.key}>
+                    <dt>{field.label[locale]}</dt>
+                    <dd>
+                      <FieldValueView
+                        fieldKey={field.key}
+                        field={detail.fields[field.key]}
+                        citations={detail.citations}
+                      />
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          );
+        })
+      )}
 
       <section className="field-group" aria-labelledby="group-provenance">
         <h2 id="group-provenance">{t.sources}</h2>
