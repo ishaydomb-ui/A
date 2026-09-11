@@ -170,16 +170,6 @@ def _build_adapter_factories(config: Config):
     return factories
 
 
-def _added_marks(message_text: str) -> set[str]:
-    """Which variant lines are already ticked in the rendered question."""
-    added = set()
-    for line in (message_text or "").splitlines():
-        line = line.strip()
-        if line.startswith("✅"):
-            added.add(line.lstrip("✅ ").split(" · ")[0].strip())
-    return added
-
-
 def _preticked(row: dict) -> bool:
     """Pre-ticked unless the user has repeatedly removed it.
 
@@ -1985,7 +1975,9 @@ class GroceryBot:
         ) if details else None
         return headline, markup
 
-    async def _advance_question(self, query, finished_id: int) -> bool:
+    async def _advance_question(
+        self, query, finished_id: int, note: str = "", followup_for: int = 0
+    ) -> bool:
         """Show the next question of the set in the same message.
 
         Returns False when the set is done, so the caller can close it.
@@ -2011,6 +2003,12 @@ class GroceryBot:
             text, buttons = _format_choice(
                 nxt, total - len(remaining) + 1, total
             )
+            if note:
+                # The confirmation of the previous answer rides on the next
+                # question, so correcting it costs a tap only when it is
+                # actually wrong.
+                text = f"{note}\n\n{text}"
+                buttons = buttons + [_followup_row(followup_for)]
             await query.edit_message_text(
                 text, parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup(buttons),
@@ -2018,6 +2016,71 @@ class GroceryBot:
             return True
         self.storage.set_state(_QUESTION_QUEUE, "[]")
         return False
+
+    async def on_choice_followup(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """"עוד סוג", "שנה" and "רק הפעם" — the three ways a tap was wrong.
+
+        Each is deliberately separate from the tap itself. One gesture
+        carrying three meanings is what made "3% then 5%" leave both in
+        the cart and remember the wrong one.
+        """
+        query = update.callback_query
+        await query.answer()
+        if not _authorized(self.config, update):
+            return
+        action, raw_id = query.data.split(":", 1)
+        ambiguity_id = int(raw_id)
+        pending = self.storage.get_pending_ambiguity(ambiguity_id)
+        if pending is None:
+            await query.answer("השאלה כבר נסגרה.")
+            return
+        term, store = pending["original_term"], pending["store"]
+
+        if action == "once":
+            # Chosen for this shop, not for every shop from now on.
+            forgotten = self.storage.forget_choice(store, term)
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=(f"בסדר — '{term}' לא נשמר כברירת מחדל, אשאל שוב בפעם הבאה."
+                      if forgotten else f"'{term}' ממילא לא נשמר כברירת מחדל."),
+            )
+            return
+
+        if action == "undo":
+            self.storage.forget_choice(store, term)
+            removed = await asyncio.to_thread(self._undo_choice, store, term)
+            note = ("הוסר מהעגלה. " if removed else
+                    "לא הצלחתי להסיר מהעגלה — בדקו שם. ")
+            await context.bot.send_message(
+                chat_id=query.message.chat_id, text=f"↩️ {note}מה במקום?"
+            )
+
+        # Both "undo" and "reopen" end the same way: the question again.
+        self.storage.reopen_ambiguity(ambiguity_id)
+        text, buttons = _format_choice(pending)
+        await context.bot.send_message(
+            chat_id=query.message.chat_id, text=text,
+            reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown",
+        )
+
+    def _undo_choice(self, store: str, term: str) -> bool:
+        """Take back the line the last tap added, where the chain allows it."""
+        remembered = self.storage.preferred_for(store, term)
+        code = (remembered or {}).get("product_code") or ""
+        factories = _build_adapter_factories(self.config)
+        factory = factories.get(store)
+        if not code or factory is None:
+            return False
+        try:
+            with factory() as adapter:
+                remover = getattr(adapter, "remove_item", None)
+                if remover is None:
+                    logger.info("%s has no remove_item; leaving the line in place", store)
+                    return False
+                return bool(remover(code))
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not undo the choice for %r at %s", term, store)
+            return False
 
     async def on_cycle_details(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """The full cycle list, when it is actually wanted."""
@@ -2271,14 +2334,20 @@ class GroceryBot:
         return min(len(asking), limit)
 
     async def resolve_ambiguity(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Variant chooser — multi-select by design.
+        """Variant chooser. **One tap, one meaning: this is the one.**
 
-        A tap adds that variant to the cart immediately and the question
-        STAYS OPEN, because a household genuinely buys both the 5% and the
-        3% cottage cheese in one shop. "סיום" closes it. Immediate add
-        (rather than tick-then-confirm) keeps a tap meaningful on its own
-        and gives instant feedback -- the earlier flow left the user
-        pressing buttons with nothing visibly happening.
+        It used to mean three things at once — choose this, keep the
+        question open to add another, and set the permanent default for
+        the term — because a household really does buy both the 3% and
+        the 5% cottage. The cost of serving that case on the main path
+        was found in review on 2026-09-11: tapping 3% and then 5% as a
+        *correction* left both in the cart and remembered 3%, the one
+        being corrected away, with nothing on screen to say so.
+
+        So a tap now adds and moves to the next question, and the three
+        exceptions — "עוד סוג", "שנה", "רק הפעם" — ride along as buttons
+        under the confirmation. The common case costs one tap; the
+        uncommon ones cost two, instead of every case costing two.
         """
         query = update.callback_query
         action, ambiguity_id_str, choice_str = query.data.split(":")
@@ -2353,49 +2422,34 @@ class GroceryBot:
                 product_name=chosen_label,
             )
 
-        added = _added_marks(query.message.text or "") | {chosen_label}
-        header = f"*{pending['original_term']}* — איזה מהם?"
-        lines = [header, ""]
-        from .disambiguate import describe_card
+        # **A tap means one thing: this is the one.** Until 2026-09-11 the
+        # same gesture meant choose, add another, and set a permanent
+        # default all at once, so "3% and then 5%" as a correction left
+        # both in the cart and remembered the one being corrected away.
+        # Now it adds and moves on; "עוד סוג" and "שנה" sit on the next
+        # screen for the two cases that are not the common one.
+        remembered = self.storage.preferred_for(
+            pending["store"], pending["original_term"]
+        )
+        note = f"✅ {chosen_label} — נוסף לסל"
+        if remembered and remembered.get("product_code") == (
+            chosen_code or getattr(result, "product_code", "")
+        ):
+            note += "\n_נשמר כברירת מחדל למונח הזה._"
+        self.storage.mark_ambiguity_resolved(ambiguity_id)
+        convo.remember(
+            self.storage, subject=chosen_label, store=pending["store"],
+            quantity=pending["quantity"], action="נבחר מתוך שאלה",
+        )
+        if await self._advance_question(query, ambiguity_id, note, ambiguity_id):
+            return
+        await query.edit_message_text(
+            note + "\n\n_זהו, אין עוד בחירות._",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([_followup_row(ambiguity_id)]),
+        )
+        return
 
-        remaining = []
-        for position, card in enumerate(cards[:5]):
-            if card.get("name") in added:
-                # A chosen option turns into a confirmation line and loses
-                # its button: the user asked for a press to visibly do
-                # something, and a button that stays put looks ignored.
-                lines.append(f"✅ *{describe_card(card)}* — נוסף לסל")
-            else:
-                lines.append(f"{len(remaining) + 1}. {describe_card(card)}")
-                remaining.append((len(remaining) + 1, position))
-
-        if remaining:
-            lines += ["", "_אפשר לבחור עוד, או 'סיום'._"]
-            buttons = [
-                [
-                    InlineKeyboardButton(
-                        str(label), callback_data=f"resolve:{ambiguity_id}:{position}"
-                    )
-                    for label, position in remaining
-                ],
-                [InlineKeyboardButton("סיום ✓", callback_data=f"skip:{ambiguity_id}:0")],
-            ]
-            markup = InlineKeyboardMarkup(buttons)
-        else:
-            # Nothing left to choose: close the question rather than leave
-            # a dead keyboard behind.
-            lines += ["", "_הכול נבחר._"]
-            markup = None
-            self.storage.mark_ambiguity_resolved(ambiguity_id)
-            if await self._advance_question(query, ambiguity_id):
-                return
-
-        try:
-            await query.edit_message_text(
-                "\n".join(lines), parse_mode="Markdown", reply_markup=markup
-            )
-        except Exception:
-            logger.debug("Choice edit skipped", exc_info=True)
 
     async def drain_deferred_cycle(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Run a queued cycle once the Israeli exit is reachable again.
@@ -2453,6 +2507,21 @@ class GroceryBot:
 # button hides exactly the part that distinguishes the options. The detail
 # goes in the message text instead, and the buttons stay short numbers.
 _NUMBER_EMOJI = ("1\ufe0f\u20e3", "2\ufe0f\u20e3", "3\ufe0f\u20e3", "4\ufe0f\u20e3", "5\ufe0f\u20e3")
+
+
+def _followup_row(ambiguity_id: int) -> list:
+    """The two things a tap might have got wrong, one tap away each.
+
+    Not on the main path: adding a second variant is real but uncommon
+    (the 3% and the 5% cottage), and changing your mind is rarer still.
+    Making every choice walk through both, as it did until 2026-09-11,
+    charged every question for the exceptions.
+    """
+    return [
+        InlineKeyboardButton("➕ עוד סוג", callback_data=f"reopen:{ambiguity_id}"),
+        InlineKeyboardButton("↩️ שנה", callback_data=f"undo:{ambiguity_id}"),
+        InlineKeyboardButton("רק הפעם", callback_data=f"once:{ambiguity_id}"),
+    ]
 
 
 def _cycle_question_keys(reports) -> set:
@@ -2672,6 +2741,9 @@ def build_application(config: Config, storage: Storage) -> Application:
     )
     application.add_handler(
         CallbackQueryHandler(bot.on_shopped_store, pattern=r"^shopped:")
+    )
+    application.add_handler(
+        CallbackQueryHandler(bot.on_choice_followup, pattern=r"^(reopen|undo|once):")
     )
     application.add_handler(
         CallbackQueryHandler(bot.on_card_button, pattern=r"^cardok$")

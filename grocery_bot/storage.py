@@ -1607,6 +1607,20 @@ class Storage:
             ),
         }
 
+    def reopen_ambiguity(self, ambiguity_id: int) -> None:
+        """Put a settled question back, for "עוד סוג" and "שנה".
+
+        The row is reused rather than a new one written: its candidate
+        cards are what the question was built from, and re-searching the
+        store would offer a different list than the one just answered.
+        """
+        with closing(self._connect()) as conn:
+            conn.execute(
+                "UPDATE pending_ambiguities SET resolved = 0 WHERE id = ?",
+                (ambiguity_id,),
+            )
+            conn.commit()
+
     def mark_ambiguity_resolved(self, ambiguity_id: int) -> None:
         with closing(self._connect()) as conn:
             conn.execute(
