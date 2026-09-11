@@ -411,9 +411,16 @@ class GroceryBot:
         if not _authorized(self.config, update):
             return
         standingcart.mark_shopped(self.storage)
+        # His word is the trigger, and it moves every request that reached
+        # a cart to `shopped` in one step — that is exactly what the
+        # message means. The chain's own history confirms it later, about
+        # 36 hours later in the measured case, and confirms only; it never
+        # overrides what he said.
+        moved = self.storage.advance_adhoc_status("in_cart", "shopped")
         await update.message.reply_text(
             "✅ רשמתי שסיימת. ממלא את העגלה מחדש — זה ייקח כמה דקות, "
             "ואשלח סיכום כשאסיים."
+            + (f"\n📦 {moved} בקשות סומנו כנקנו." if moved else "")
         )
 
         factories = _build_adapter_factories(self.config)
@@ -1771,6 +1778,48 @@ class GroceryBot:
     ) -> None:
         await self._ask_ambiguities(update.effective_chat.id, context, reports)
 
+    async def requests_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/requests — what happened to the things people asked for.
+
+        The question `consumed` could never answer: "did the tahini
+        actually arrive?" It said the same thing about a request sitting
+        in a cart, one waiting on an unanswered choice, and one delivered
+        last week.
+        """
+        if not _authorized(self.config, update):
+            return
+        from .chains import display_name
+        from .htmltext import bold as _b, escape as _md
+
+        labels = {
+            "awaiting": "❓ ממתין לבחירה שלכם",
+            "in_cart": "🛒 בעגלה, טרם נקנה",
+            "shopped": "✅ דיווחת שנקנה — ממתין לפירוט מהחנות",
+            "confirmed": "📦 אושר בהזמנה בחנות",
+            "delivered": "🏠 סופק",
+        }
+        blocks = []
+        for state, label in labels.items():
+            rows = self.storage.adhoc_by_status(state)
+            if not rows:
+                continue
+            named = ", ".join(
+                _md(r["text"]) + (f" ({display_name(r['store'])})" if r["store"] else "")
+                for r in rows[:12]
+            )
+            extra = f" ...ועוד {len(rows) - 12}" if len(rows) > 12 else ""
+            blocks.append(f"{_b(label)} ({len(rows)})\n   {named}{extra}")
+        pending = self.storage.list_pending_adhoc()
+        if pending:
+            blocks.append(
+                _b("📝 ברשימה, עוד לא נכנס לעגלה") + f" ({len(pending)})\n   "
+                + ", ".join(_md(p.text) for p in pending[:12])
+            )
+        await _send_html(
+            context, update.effective_chat.id,
+            "\n\n".join(blocks) or "אין בקשות פתוחות.",
+        )
+
     async def questions(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/questions — work through the backlog, when *he* chooses to.
 
@@ -2094,6 +2143,7 @@ async def _register_bot_metadata(application: Application) -> None:
             BotCommand("lastdeals", "אילו מבצעים נוספו לעגלה לבד"),
             BotCommand("done", "סיימתי לקנות — מלא את העגלה מחדש"),
             BotCommand("questions", "שאלות בחירה שממתינות — לענות כשנוח"),
+            BotCommand("requests", "מה קרה למה שביקשנו — בעגלה, נקנה, סופק"),
             BotCommand("cheaper", "השוואת ₪ לק\"ג — יש חלופה זולה יותר?"),
             BotCommand("list_full", "רשימה להדבקה בהזמנה מהירה"),
             BotCommand("digest", "כל הקנייה בהודעה אחת — רשימה, מבצעים, חלופות"),
@@ -2206,6 +2256,7 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("list_full", bot.make_list))
     application.add_handler(CommandHandler("digest", bot.digest))
     application.add_handler(CommandHandler("questions", bot.questions))
+    application.add_handler(CommandHandler("requests", bot.requests_status))
     application.add_handler(CallbackQueryHandler(bot.resolve_ambiguity, pattern=r"^(resolve|skip):"))
     application.add_handler(
         CallbackQueryHandler(bot.on_proposal_button, pattern=r"^(ptoggle|pall|pnone|pconfirm):")

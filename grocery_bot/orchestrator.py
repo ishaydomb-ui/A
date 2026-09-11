@@ -137,6 +137,15 @@ def run_order_cycle(
                 # the user, and answering it is what consumes the request.
                 if result.status in ("added", "ambiguous"):
                     resolved_adhoc.add(adhoc.id)
+                    # Which of the two it was is the whole point: "in a
+                    # cart" and "waiting on a choice" are different
+                    # answers to "did you get the tahini", and `consumed`
+                    # said the same thing for both.
+                    storage.set_adhoc_status(
+                        adhoc.id,
+                        "in_cart" if result.status == "added" else "awaiting",
+                        store,
+                    )
                 done += 1
                 _progress(done, total_items, result)
 

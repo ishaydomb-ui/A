@@ -327,6 +327,15 @@ _ADDED_COLUMNS = {
         "amount": "REAL",
         "unit": "TEXT NOT NULL DEFAULT ''",
         "brand": "TEXT NOT NULL DEFAULT ''",
+        # The lifecycle, added 2026-09-11. `consumed` is a single bit and
+        # cannot answer "did that actually arrive": a request that reached
+        # a cart, one still waiting on a choice, one in an order placed
+        # yesterday and one delivered all looked identical. Kept alongside
+        # `consumed` rather than replacing it, so an older row reads
+        # correctly and nothing that queries the flag breaks.
+        "status": "TEXT NOT NULL DEFAULT ''",
+        "status_at": "TEXT NOT NULL DEFAULT ''",
+        "store": "TEXT NOT NULL DEFAULT ''",
     },
     # Full candidate detail (price/size/brand) behind each choice. The
     # older `candidates` column holds names only, which are duplicated
@@ -658,6 +667,83 @@ class Storage:
                 "UPDATE adhoc_requests SET consumed = 1 WHERE id = ?", (request_id,)
             )
             conn.commit()
+
+    # -- what happened to a request after it left the queue ---------------
+    #
+    # `consumed` answers "is it still waiting". It cannot answer "did that
+    # actually arrive", which is the question a person asks three days
+    # later, and it cannot tell a request sitting in an order placed
+    # yesterday from one that never made it into a cart.
+    #
+    # The states, and what moves between them:
+    #
+    #   in_cart      the bot put it in a cart (which cart is recorded)
+    #   awaiting     a choice was put to the household and is unanswered
+    #   shopped      the household said the shop is done — their word, and
+    #                still the only trigger, per the 2026-09-07 decision
+    #   confirmed    it turned up in the chain's own order history
+    #   delivered    the order was delivered, where that is knowable
+    #
+    # `confirmed` exists because of a measured 36-hour gap: an order placed
+    # on 09-07 was absent from Shufersal's own history for about a day and
+    # a half. So between `shopped` and `confirmed` the honest line is
+    # "דיווחת שהקנייה הושלמה; ממתין לפירוט מהחנות" — evidence arriving
+    # late, never a replacement for what the household said.
+
+    ADHOC_STATES = ("in_cart", "awaiting", "shopped", "confirmed", "delivered")
+
+    def set_adhoc_status(self, request_id: int, status: str, store: str = "") -> None:
+        if status not in self.ADHOC_STATES:
+            raise ValueError(f"unknown request status {status!r}")
+        from datetime import datetime, timezone
+
+        stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with closing(self._connect()) as conn:
+            conn.execute(
+                "UPDATE adhoc_requests SET status = ?, status_at = ?, "
+                "store = CASE WHEN ? <> '' THEN ? ELSE store END WHERE id = ?",
+                (status, stamp, store, store, request_id),
+            )
+            conn.commit()
+
+    def advance_adhoc_status(self, from_status: str, to_status: str, store: str = "") -> int:
+        """Move every request in one state to the next. Returns how many.
+
+        Used when the household reports a shop: everything that reached a
+        cart at that chain becomes `shopped` in one step, because that is
+        exactly what their message means.
+        """
+        if to_status not in self.ADHOC_STATES:
+            raise ValueError(f"unknown request status {to_status!r}")
+        from datetime import datetime, timezone
+
+        stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        sql = "UPDATE adhoc_requests SET status = ?, status_at = ? WHERE status = ?"
+        params = [to_status, stamp, from_status]
+        if store:
+            sql += " AND store = ?"
+            params.append(store)
+        with closing(self._connect()) as conn:
+            cursor = conn.execute(sql, params)
+            conn.commit()
+            return cursor.rowcount
+
+    def adhoc_by_status(self, status: str) -> list[dict]:
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT id, text, store, status, status_at, requested_by "
+                "FROM adhoc_requests WHERE status = ? ORDER BY id",
+                (status,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def adhoc_status_counts(self) -> dict:
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT status, COUNT(*) AS n FROM adhoc_requests "
+                "WHERE status <> '' GROUP BY status"
+            ).fetchall()
+        return {row["status"]: row["n"] for row in rows}
 
     # -- order cycles deferred until the Israeli exit is back --------------
 
@@ -1367,7 +1453,15 @@ class Storage:
         }
 
     def log_orders(self, orders: list[dict], store: str = "shufersal") -> int:
-        """Record placed orders (idempotent) so cadence can be learned."""
+        """Record placed orders (idempotent) so cadence can be learned.
+
+        A new order here is also the late evidence for a shop the
+        household already reported: anything sitting at `shopped` for that
+        chain moves to `confirmed`. Late by design — the measured gap
+        between paying and the order appearing in Shufersal's own history
+        was about 36 hours — so this corroborates their report and never
+        replaces it.
+        """
         added = 0
         with closing(self._connect()) as conn:
             for order in orders:
@@ -1384,6 +1478,8 @@ class Storage:
                 )
                 added += cursor.rowcount
             conn.commit()
+        if added:
+            self.advance_adhoc_status("shopped", "confirmed", store)
         return added
 
     def order_dates(self, store: str = "shufersal") -> list[str]:
