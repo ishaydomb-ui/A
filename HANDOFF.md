@@ -121,13 +121,18 @@ reviewer had **no code or account access** — every claim is inference
 from that report, so each needs checking before it is acted on. Three
 checked so far:
 
-1. **VERIFIED BUG, not yet fixed.** "A perishable enters the cart
+1. **VERIFIED BUG — FIXED 2026-09-11.** "A perishable enters the cart
    despite the rule." True: in `dealfill._barcode_picks` (the Tiv Taam
-   path) `_looks_perishable` is guarded by `if not familiar`, so a
-   previously-bought perishable skips the check entirely. The Shufersal
-   name path applies `pantryable` to everything, so the two chains
-   disagree. Live right now: "בצק פריך מלוח" at 41% off would be added.
-   **Fix not started — this is the first thing to pick up.**
+   path) `_looks_perishable` was guarded by `if not familiar`, so a
+   previously-bought perishable skipped the check entirely. The
+   Shufersal name path applies `pantryable` to everything, so the two
+   chains disagreed. `_barcode_picks` now takes `pantryable_only` and
+   applies the guard to familiar picks too; novel picks keep it
+   unconditionally, since there the name is the only evidence there is.
+   Verified against the live DB: "בצק פריך מלוח 900 גר מעדנות" at 41%
+   off was in the default Tiv Taam picks before and is not now, and
+   appears only under `pantryable_only=False`. Three tests pin it
+   (`tests/test_dealfill.py::BarcodeChainDealTests`).
 2. **Already handled; my report was the gap.** "A short basket can still
    look cheap." `basketview` already compares "על N פריטים זהים",
    includes delivery (`saving_with_delivery`), and refuses comparison

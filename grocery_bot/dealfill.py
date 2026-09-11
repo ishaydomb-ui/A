@@ -158,11 +158,24 @@ def _barcode_picks(
     limit: int,
     min_discount: float,
     familiar_only: bool,
+    pantryable_only: bool = True,
 ) -> list[DealPick]:
     """Deals at a chain that publishes promotions keyed by barcode.
 
     No name matching anywhere: the promotion and the shelf price are the
     same barcode, so either they join or they don't.
+
+    **The perishable guard applies to familiar picks too**, which it did
+    not until 2026-09-11. Having bought something before says the
+    household eats it, not that a surprise second one will be eaten
+    before it spoils — and an unasked-for perishable is precisely the
+    kind of item that gets thrown away. The bug was structural rather
+    than incidental: `_looks_perishable` sat behind `if not familiar`,
+    so this chain and Shufersal disagreed about the same rule. Shufersal
+    gates its familiar picks on `deal.pantryable` from the department
+    taxonomy; this feed carries no department, so the name check is the
+    closest equivalent available. Live example that got through: "בצק
+    פריך מלוח" at 41% off.
     """
     promotions = storage.live_store_promotions(store)
     if not promotions:
@@ -192,10 +205,9 @@ def _barcode_picks(
         name = shelf.get("name") or ""
         if not name:
             continue
-        if not familiar and (
-            _looks_perishable(name)
-            or not _plausible_novel(name, shelf_price, discount)
-        ):
+        if (pantryable_only or not familiar) and _looks_perishable(name):
+            continue
+        if not familiar and not _plausible_novel(name, shelf_price, discount):
             continue
         folded = _normalise(name)
         if any(folded == s or folded in s or s in folded for s in skip):
@@ -288,11 +300,13 @@ def picks_for(
             storage, store, skip, limit,
             min_discount=MIN_DISCOUNT,
             familiar_only=True,
+            pantryable_only=pantryable_only,
         )
         novel = (
             _barcode_picks(
                 storage, store, skip | {_normalise(p.term) for p in familiar},
                 novel_limit, min_discount=novel_min_discount, familiar_only=False,
+                pantryable_only=pantryable_only,
             )
             if novel_limit
             else []

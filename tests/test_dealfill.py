@@ -217,6 +217,55 @@ class BarcodeChainDealTests(unittest.TestCase):
             [p for p in dealfill.picks_for(self.storage, "tivtaam") if p.familiar], []
         )
 
+    def _perishable_bought_before(self) -> None:
+        """The live case: a previously-bought perishable, deeply discounted.
+
+        "בצק פריך מלוח" at 41% off was in the cart on 2026-09-11 because
+        the perishable guard only ran for unfamiliar products.
+        """
+        self.storage.record_store_prices("tivtaam", [
+            {"barcode": "333", "name": "בצק פריך מלוח 500 גר", "price": 22.9,
+             "observed_at": "2026-08-01", "source": "order"},
+        ])
+        self.storage.replace_store_promotions("tivtaam", [
+            {"barcode": "333", "promotion_id": "c", "description": "41%",
+             "discounted_price": 13.5, "min_qty": 1,
+             "starts_at": "2000-01-01T00:00:00", "ends_at": "2099-01-01T00:00:00",
+             "observed_at": "2026-09-06"},
+        ])
+
+    def test_a_perishable_bought_before_is_still_left_to_the_report(self) -> None:
+        # Having bought it once does not mean a surprise second one gets
+        # eaten in time. Same rule as the Shufersal path, which gates its
+        # familiar picks on the department taxonomy.
+        self._perishable_bought_before()
+        picks = dealfill.picks_for(self.storage, "tivtaam")
+        self.assertEqual([p.catalog_name for p in picks if p.familiar], [])
+
+    def test_asking_for_perishables_still_returns_the_familiar_one(self) -> None:
+        # pantryable_only=False is the caller saying "include them".
+        self._perishable_bought_before()
+        picks = dealfill.picks_for(self.storage, "tivtaam", pantryable_only=False)
+        self.assertEqual(
+            [p.catalog_name for p in picks if p.familiar], ["בצק פריך מלוח 500 גר"]
+        )
+
+    def test_a_novel_perishable_is_refused_even_when_perishables_are_asked_for(self) -> None:
+        # Never bought, no department data, name-only evidence: the one
+        # case where the guard is not the caller's to lift.
+        self.storage.record_store_prices("tivtaam", [
+            {"barcode": "444", "name": "יוגורט תות 150 גר", "price": 6.9,
+             "observed_at": "2026-09-06", "source": "feed"},
+        ])
+        self.storage.replace_store_promotions("tivtaam", [
+            {"barcode": "444", "promotion_id": "d", "description": "מבצע",
+             "discounted_price": 2.5, "min_qty": 1,
+             "starts_at": "2000-01-01T00:00:00", "ends_at": "2099-01-01T00:00:00",
+             "observed_at": "2026-09-06"},
+        ])
+        picks = dealfill.picks_for(self.storage, "tivtaam", pantryable_only=False)
+        self.assertEqual([p.catalog_name for p in picks if not p.familiar], [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -308,3 +308,29 @@ VictoryOnline, vicory, Vicory) — כולם נדחו בהתחברות.
 **עוד הבדל שיש לזכור:** laibcatalog נגיש רק דרך היציאה הישראלית, כך
 שבניגוד לכל שאר פידי המחירים — שרצים ישירות — הפיד של ויקטורי יצרוך
 את רוחב הפס הביתי של ישי.
+
+## A rule that holds on one chain is not a rule (2026-09-11)
+
+The household rule is "don't auto-add things that rot." It was enforced
+in two different places, because the two chains carry different data:
+Shufersal has a department taxonomy, so `find_stockup_deals` gates on
+`deal.pantryable`; Tiv Taam's feed has no department, so `dealfill`
+falls back to `_looks_perishable`, a keyword check on the product name.
+
+Both existed. They did not agree. The keyword check sat behind
+`if not familiar`, so on Tiv Taam a perishable the household had bought
+before skipped the rule entirely — "בצק פריך מלוח 900 גר מעדנות" at 41%
+off was in the cart on 2026-09-11. On Shufersal the same product would
+have been refused. Nothing failed, nothing logged; the cart just quietly
+enforced a different rule depending on which chain it was filling.
+
+An outside reviewer found it from a *description* of the flow, with no
+code access, which is the useful part: the asymmetry was visible in the
+design and invisible in the tests, because every test asked one chain
+about one path.
+
+**So, when adding a chain:** for each household rule, write down where
+it is enforced for every chain, and test the same product through each.
+If a rule is implemented twice, the two copies will drift — the fallback
+path is the one that drifts, because it is written for the data that is
+missing rather than for the rule.
