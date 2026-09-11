@@ -55,6 +55,14 @@ class ContextMemoryTests(unittest.TestCase):
         self.assertIn("טיב טעם", line)
         self.assertEqual(convo.describe({}), "")
 
+    def test_a_context_with_no_subject_is_not_a_crash(self) -> None:
+        # The planner's context dict uses "last_subject", and a dict with
+        # neither key reaches this too. A KeyError here surfaces as "the
+        # model is unavailable" and drops every message to the rule-based
+        # fallback — found on the comparison harness doing exactly that.
+        self.assertEqual(convo.describe({"pending": ["חלב"]}), "")
+        self.assertIn("קוטג", convo.describe({"last_subject": "קוטג"}))
+
 
 class MultiRequestParsingTests(unittest.TestCase):
     """One message, two requests — the second must not be dropped."""

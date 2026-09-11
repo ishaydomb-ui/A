@@ -99,9 +99,20 @@ def describe(context: dict) -> str:
         return ""
     from .chains import display_name
 
-    parts = [f"המוצר שדובר עליו לאחרונה: {context['subject']}"]
-    if context.get("store"):
-        parts.append(f"ברשת {display_name(context['store'])}")
+    # Two shapes reach this: our own stored turn ("subject") and the
+    # planner's context dict ("last_subject"). Reading either, and
+    # returning nothing when there is neither, is the difference between
+    # a line of background and a KeyError inside the parse path — where
+    # it surfaces as "the model is unavailable" and every message falls
+    # through to the rule-based fallback. Found on the comparison
+    # harness, 2026-09-11, doing exactly that.
+    subject = context.get("subject") or context.get("last_subject") or ""
+    if not subject:
+        return ""
+    parts = [f"המוצר שדובר עליו לאחרונה: {subject}"]
+    store = context.get("store") or context.get("last_store")
+    if store:
+        parts.append(f"ברשת {display_name(store)}")
     if context.get("quantity"):
         parts.append(f"בכמות {context['quantity']}")
     if context.get("action"):
