@@ -379,9 +379,20 @@ export async function commitBatch(
           merged[fieldKey] = { ...(merged[fieldKey] ?? localized), [batch.locale]: incoming } as MedicationData[string];
         }
 
+        // The version branches from the published one, which carries the
+        // previous import's provenance — so without this an updated record
+        // goes on naming the document it no longer came from. Its content is
+        // this batch's, and so is its source.
         await query(
-          'UPDATE medication_versions SET import_batch_id = $2 WHERE id = $1',
-          [versionId, batchId],
+          `UPDATE medication_versions
+              SET import_batch_id = $2, source_label = $3, source_document = $4
+            WHERE id = $1`,
+          [
+            versionId,
+            batchId,
+            batch.source_label,
+            options.sourceDocument ?? batch.original_filename,
+          ],
           db,
         );
         await query(
