@@ -58,6 +58,9 @@ services:
     volumes:
       # Uploaded workbooks and the mail outbox must outlive the container.
       - import-data:/data
+      # The clinical formulary workbook, read-only. Loaded deliberately by
+      # scripts/load-formulary.js, never on start-up.
+      - ./data:/formulary:ro
     expose:
       - "4000"
     security_opt:

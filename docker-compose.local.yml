@@ -66,6 +66,9 @@ services:
       # The website-snapshot workbook, for seeding. Mounted rather than baked
       # into the image: unvalidated clinical data does not belong in a release.
       - ./apps/api/src/test/data:/seed:ro
+      # The clinical formulary workbook, read-only. Loaded deliberately by
+      # scripts/load-formulary.js, never on start-up.
+      - ./data:/formulary:ro
     expose:
       - "4000"
 
