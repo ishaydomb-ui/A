@@ -88,12 +88,18 @@ function approvalLabel(status: CitationDto['approvalStatus'], locale: 'en' | 'he
 }
 
 /**
- * Splits a comma or semicolon separated value for chip display.
+ * Splits a comma, semicolon or line separated value for chip display.
  * Purely presentational: the stored text is untouched, and anything that does
  * not look like a list is left as one item.
+ *
+ * Lines are a separator in their own right because the graded side-effect
+ * matrix arrives one scored effect per line ("WG: ++"), and those commonly
+ * contain commas of their own.
  */
 function splitList(text: string): string[] {
   if (text.length > 400) return [text];
+  const lines = text.split('\n').map((p) => p.trim()).filter(Boolean);
+  if (lines.length > 1) return lines;
   const parts = text.split(/\s*[,;]\s*/).map((p) => p.trim()).filter(Boolean);
   return parts.length > 1 ? parts : [text];
 }

@@ -53,7 +53,11 @@ export const FIELDS: readonly FieldDef[] = [
   { key: 'drug_class', group: 'taxonomy', label: { en: 'Drug class', he: 'מחלקת תרופות' }, comparable: true, searchable: true },
   { key: 'drug_family', group: 'taxonomy', label: { en: 'Drug family', he: 'משפחת תרופות' }, comparable: true, searchable: true },
   { key: 'mechanism', group: 'taxonomy', label: { en: 'Mechanism of action', he: 'מנגנון פעולה' }, comparable: true, searchable: true },
-  { key: 'brand_names_israel', group: 'identity', label: { en: 'Brand names in Israel', he: 'שמות מסחריים בישראל' }, comparable: true, searchable: true, list: true },
+  // Prose, not a chip list: the source writes the Israeli brand names with
+  // their strengths and forms inline ("Risperdal, Rispond: 1-4 mg tablets, 1
+  // mg/ml solution."), so splitting on commas turns a sentence into chips
+  // that read as separate products, including bare numbers like "37.5".
+  { key: 'brand_names_israel', group: 'identity', label: { en: 'Brand names in Israel', he: 'שמות מסחריים בישראל' }, comparable: false, searchable: true, prose: true },
   { key: 'formulations_israel', group: 'identity', label: { en: 'Available formulations in Israel', he: 'פורמולות הקיימות בישראל' }, comparable: false, searchable: true, prose: true },
   { key: 'starting_age', group: 'administration', label: { en: 'Starting age', he: 'גיל התחלה' }, comparable: true, searchable: false },
   { key: 'formulation', group: 'administration', label: { en: 'Formulation / route', he: 'צורת מתן' }, comparable: true, searchable: true },
