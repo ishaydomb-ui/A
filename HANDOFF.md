@@ -172,7 +172,38 @@ and why, and the technical clarifications worth sending back to the
 reviewer — is in
 [`docs/reports/2026-09-11-external-review-response.md`](docs/reports/2026-09-11-external-review-response.md).
 
-Three things there wait on Ishay rather than on code:
+### 2e. UX audit — built 2026-09-11
+
+A second outside review, of the *user's* friction rather than the
+architecture (brief: `docs/reports/2026-09-11-user-friction-review-brief.md`,
+response: `docs/reports/2026-09-11-ux-audit-response.md`). Ishay: **"כן
+תבנה בהתאם להמלצות."** Shipped the same day, in the order recommended:
+
+1. **Questions are asked only about the cycle that just ran.**
+   `list_pending_ambiguities()` filtered by nothing at all, and the send
+   loop had no cap — a Shufersal-only shop would have sent **80 separate
+   Telegram messages, 73 about Tiv Taam**. Now matched on (store, term)
+   against that run, capped at 8, with the backlog counted in one line
+   and drained by `/questions`.
+2. **The cart is no longer un-edited.** `CartGuard` reads the cart before
+   filling and declines to re-add a line a person removed, or one already
+   there. Explicit requests are never guarded. Same pass fixed a trap that
+   had not fired yet: `/done` runs after a shop, a chain empties the cart
+   on checkout, and an empty cart read as *every manifest line deleted* —
+   120 of them waiting in the live manifest.
+3. **The completion message is a headline plus a button.** Counts and
+   money on one line; anything that would leave a silent gap (not found,
+   not put back, error) stays visible. Repeat failures mark the item
+   instead of forming a second block.
+4. **A request has states**: in_cart / awaiting / shopped / confirmed /
+   delivered, with `/requests`. His report still triggers `shopped`; the
+   chain's history confirms it ~36 hours later and only confirms.
+5. **`/autochoice`** offers to close questions a rule can answer — 14 of
+   80 on the real backlog, and it says why the other 66 stay.
+
+882 tests pass.
+
+Three things wait on Ishay rather than on code:
 
 - **Buy two?** Multi-buy deals are reported, not bought. Adding two when
   the promotion is unambiguous is a small change if he wants it.
