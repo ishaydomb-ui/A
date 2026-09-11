@@ -66,6 +66,13 @@ from .storage import Storage
 
 logger = logging.getLogger(__name__)
 
+# How many variant questions may arrive at once. The loop that sends them
+# had no limit: with 80 open rows on 2026-09-11 it would have sent 80
+# separate Telegram messages in sequence, which is both unanswerable on a
+# phone and past the rate limit for one chat. The rest wait for
+# /questions.
+MAX_QUESTIONS_PER_BURST = 8
+
 # How often to check whether the Israeli exit node came back, when a cycle
 # is waiting on it. The exit is a TV box someone switches on and off by
 # hand, so there is nothing to subscribe to — polling is the only option.
@@ -991,7 +998,7 @@ class GroceryBot:
         if reports is None:
             return
         await self._send_alternatives(chat_id, context, reports)
-        await self._ask_ambiguities(chat_id, context)
+        await self._ask_ambiguities(chat_id, context, reports)
 
     async def _do_add_to_cart(self, update, context, parsed, requested_by: str) -> None:
         """Add named items to the real cart now, not just to the list."""
@@ -1042,7 +1049,7 @@ class GroceryBot:
         )
         carts = await asyncio.to_thread(self._read_carts, factories)
         await self._send_cart_state(update.effective_chat.id, context, reports, carts)
-        await self._send_pending_ambiguities(update, context)
+        await self._send_pending_ambiguities(update, context, reports)
 
     async def _send_cart_state(self, chat_id, context, reports, carts) -> None:
         buttons = self._cart_buttons(reports)
@@ -1526,7 +1533,7 @@ class GroceryBot:
             context, update.effective_chat.id, summary or "לא היה מה להוסיף."
         )
         await self._send_alternatives(update.effective_chat.id, context, reports)
-        await self._send_pending_ambiguities(update, context)
+        await self._send_pending_ambiguities(update, context, reports)
 
     async def _run_cycle_with_live_view(self, chat_id: int, context, factories):
         """Run a cycle while keeping one message updated with its progress.
@@ -1729,11 +1736,45 @@ class GroceryBot:
         if message:
             await context.bot.send_message(chat_id=chat_id, text=message, parse_mode="Markdown")
 
-    async def _send_pending_ambiguities(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        await self._ask_ambiguities(update.effective_chat.id, context)
+    async def _send_pending_ambiguities(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE, reports=None
+    ) -> None:
+        await self._ask_ambiguities(update.effective_chat.id, context, reports)
 
-    async def _ask_ambiguities(self, chat_id: int, context: ContextTypes.DEFAULT_TYPE) -> None:
-        for pending in self.storage.list_pending_ambiguities():
+    async def questions(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/questions — work through the backlog, when *he* chooses to.
+
+        The other half of asking only about this cycle: the older
+        questions still exist and are still worth answering, they simply
+        stop arriving unbidden at the end of an unrelated shop.
+        """
+        if not _authorized(self.config, update):
+            return
+        sent = await self._ask_ambiguities(update.effective_chat.id, context)
+        if not sent:
+            await update.message.reply_text("אין שאלות פתוחות. 🎉")
+
+    async def _ask_ambiguities(
+        self, chat_id: int, context: ContextTypes.DEFAULT_TYPE, reports=None,
+        limit: int = MAX_QUESTIONS_PER_BURST,
+    ) -> int:
+        """Ask the variant questions, newest first. Returns how many were sent.
+
+        **Only this cycle's questions, when a cycle is what prompted it.**
+        Measured 2026-09-11: 80 questions would have been sent at the next
+        cycle, 73 of them about Tiv Taam — so a Shufersal-only shop ended
+        with 73 unrelated notifications, one Telegram message each, about
+        terms nobody had asked for that day. The queue was never filtered
+        by store, by age, or by whether the term was even in the run; every
+        unresolved row ever created went out after every cycle.
+
+        Two separate problems, both fixed here. The backlog is no longer
+        pushed — it waits for /questions. And a burst is capped, because
+        the loop had no limit at all and Telegram rate-limits a chat long
+        before eighty messages.
+        """
+        pending = [
+            row for row in self.storage.list_pending_ambiguities()
             # Do not ask what we have since learned. An unresolved row can
             # outlive its own question: the choice may have been settled
             # later by a clean resolution, a bulk match, or the history
@@ -1741,19 +1782,35 @@ class GroceryBot:
             # open rows from 08-29/30, six of which already had a
             # remembered product — the household would have been asked
             # again for answers the bot was holding.
-            if self.storage.preferred_for(pending["store"], pending["original_term"]) is not None:
-                logger.info(
-                    "Skipping stale ambiguity for %r — already remembered",
-                    pending["original_term"],
-                )
-                continue
-            text, buttons = _format_choice(pending)
+            if self.storage.preferred_for(row["store"], row["original_term"]) is None
+        ]
+        if reports is not None:
+            wanted = _cycle_question_keys(reports)
+            asking = [
+                row for row in pending
+                if (row["store"], (row["original_term"] or "").strip()) in wanted
+            ]
+        else:
+            asking = list(pending)
+
+        for row in asking[:limit]:
+            text, buttons = _format_choice(row)
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=text,
                 reply_markup=InlineKeyboardMarkup(buttons),
                 parse_mode="Markdown",
             )
+        waiting = len(pending) - min(len(asking), limit)
+        if waiting > 0:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=(
+                    f"❓ עוד {waiting} שאלות בחירה פתוחות ממחזורים קודמים.\n"
+                    "אפשר לענות עליהן מתי שנוח — /questions"
+                ),
+            )
+        return min(len(asking), limit)
 
     async def resolve_ambiguity(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Variant chooser — multi-select by design.
@@ -1929,7 +1986,7 @@ class GroceryBot:
             summary = f"{summary}\n\n{multi}" if summary else multi
         await _send_html(context, chat_id, summary or "לא היה מה להוסיף.")
         await self._send_alternatives(chat_id, context, reports)
-        await self._ask_ambiguities(chat_id, context)
+        await self._ask_ambiguities(chat_id, context, reports)
 
 
 # Telegram truncates a long inline-button label (the client showed roughly
@@ -1937,6 +1994,15 @@ class GroceryBot:
 # button hides exactly the part that distinguishes the options. The detail
 # goes in the message text instead, and the buttons stay short numbers.
 _NUMBER_EMOJI = ("1\ufe0f\u20e3", "2\ufe0f\u20e3", "3\ufe0f\u20e3", "4\ufe0f\u20e3", "5\ufe0f\u20e3")
+
+
+def _cycle_question_keys(reports) -> set:
+    """(store, term) for every question *this* run actually raised."""
+    keys = set()
+    for store, report in (reports or {}).items():
+        for result in getattr(report, "ambiguous", None) or []:
+            keys.add((store, (getattr(result, "item_name", "") or "").strip()))
+    return keys
 
 
 def _format_choice(pending: dict) -> tuple[str, list[list[InlineKeyboardButton]]]:
@@ -2002,6 +2068,7 @@ async def _register_bot_metadata(application: Application) -> None:
             BotCommand("basket", "הסל שלי בכל רשת — כולל חוסרים ותחליפים"),
             BotCommand("lastdeals", "אילו מבצעים נוספו לעגלה לבד"),
             BotCommand("done", "סיימתי לקנות — מלא את העגלה מחדש"),
+            BotCommand("questions", "שאלות בחירה שממתינות — לענות כשנוח"),
             BotCommand("cheaper", "השוואת ₪ לק\"ג — יש חלופה זולה יותר?"),
             BotCommand("list_full", "רשימה להדבקה בהזמנה מהירה"),
             BotCommand("digest", "כל הקנייה בהודעה אחת — רשימה, מבצעים, חלופות"),
@@ -2113,6 +2180,7 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("cheaper", bot.cheaper))
     application.add_handler(CommandHandler("list_full", bot.make_list))
     application.add_handler(CommandHandler("digest", bot.digest))
+    application.add_handler(CommandHandler("questions", bot.questions))
     application.add_handler(CallbackQueryHandler(bot.resolve_ambiguity, pattern=r"^(resolve|skip):"))
     application.add_handler(
         CallbackQueryHandler(bot.on_proposal_button, pattern=r"^(ptoggle|pall|pnone|pconfirm):")
