@@ -136,38 +136,48 @@ export interface ProfileField {
   key: string;
   /** Shown instead of the registry label, to match the source sheet's heading. */
   label?: { en: string; he: string };
+  /**
+   * Older keys holding the same content, used when `key` itself is empty.
+   *
+   * Records imported before these fields existed keep their content under the
+   * previous key — an undivided `titration`, `trade_names` rather than the
+   * Israeli brand names. Without this a record predating the split would show
+   * a row of "not supplied" while the text it does have sat in a field the
+   * profile no longer lists, which is worse than the layout it replaced.
+   */
+  fallbackKeys?: readonly string[];
 }
 
 export const CLASS_PROFILES: Record<DrugClassKey, readonly ProfileField[]> = {
   Antipsychotics: [
     { key: 'generic_name' },
     { key: 'drug_class' },
-    { key: 'brand_names_israel' },
+    { key: 'brand_names_israel', fallbackKeys: ['trade_names'] },
     { key: 'mechanism' },
     { key: 'starting_age' },
     { key: 'adult_indications' },
     { key: 'pediatric_indications' },
     { key: 'dose_range' },
-    { key: 'titration_adults' },
+    { key: 'titration_adults', fallbackKeys: ['titration'] },
     { key: 'titration_pediatrics' },
     { key: 'side_effects' },
     { key: 'side_effect_legend' },
     { key: 'qtc_adults', label: { en: 'QTc prolongation data — adults', he: 'נתוני הארכת QTc — מבוגרים' } },
     { key: 'qtc_pediatrics', label: { en: 'QTc prolongation data — paediatrics', he: 'נתוני הארכת QTc — ילדים' } },
-    { key: 'comments' },
+    { key: 'comments', fallbackKeys: ['clinical_notes'] },
   ],
   Antidepressants: [
     { key: 'generic_name' },
     { key: 'drug_class' },
     // The antidepressant sheet words this column "שמות מסחריים בישראל".
-    { key: 'brand_names_israel', label: { en: 'Trade names in Israel', he: 'שמות מסחריים בישראל' } },
-    { key: 'formulations_israel' },
+    { key: 'brand_names_israel', label: { en: 'Trade names in Israel', he: 'שמות מסחריים בישראל' }, fallbackKeys: ['trade_names'] },
+    { key: 'formulations_israel', fallbackKeys: ['formulation'] },
     { key: 'mechanism' },
     { key: 'starting_age' },
     { key: 'adult_indications' },
     { key: 'pediatric_indications' },
     { key: 'dose_range', label: { en: 'Dosage', he: 'מינונים' } },
-    { key: 'starting_dose_adults' },
+    { key: 'starting_dose_adults', fallbackKeys: ['starting_dose'] },
     { key: 'starting_dose_pediatrics' },
     { key: 'titration_adults' },
     { key: 'titration_pediatrics' },
@@ -175,21 +185,21 @@ export const CLASS_PROFILES: Record<DrugClassKey, readonly ProfileField[]> = {
     { key: 'side_effect_legend' },
     { key: 'qtc_adults', label: { en: 'QTc prolongation data — adults', he: 'נתוני הארכת QTc — מבוגרים' } },
     { key: 'qtc_pediatrics', label: { en: 'QTc prolongation data — paediatrics', he: 'נתוני הארכת QTc — ילדים' } },
-    { key: 'comments' },
+    { key: 'comments', fallbackKeys: ['clinical_notes'] },
   ],
   'Mood stabilizers': [
     { key: 'generic_name' },
     { key: 'drug_class', label: { en: 'Group', he: 'קבוצה' } },
-    { key: 'brand_names_israel' },
+    { key: 'brand_names_israel', fallbackKeys: ['trade_names'] },
     { key: 'mechanism' },
     { key: 'adult_indications' },
     { key: 'pediatric_indications' },
     { key: 'dose_range', label: { en: 'Dosage', he: 'מינון' } },
     { key: 'titration_pediatrics', label: { en: 'Max dose and titration', he: 'מינון מרבי וטיטרציה' } },
-    { key: 'titration_adults', label: { en: 'Max dose and titration — adults', he: 'מינון מרבי וטיטרציה — מבוגרים' } },
+    { key: 'titration_adults', label: { en: 'Max dose and titration — adults', he: 'מינון מרבי וטיטרציה — מבוגרים' }, fallbackKeys: ['titration'] },
     { key: 'side_effects' },
     { key: 'monitoring_tests', label: { en: 'Tests at baseline / during treatment', he: 'בדיקות בתחילת הטיפול ובמהלכו' } },
-    { key: 'comments' },
+    { key: 'comments', fallbackKeys: ['clinical_notes'] },
   ],
   ADHD: [
     { key: 'generic_name' },
@@ -201,20 +211,23 @@ export const CLASS_PROFILES: Record<DrugClassKey, readonly ProfileField[]> = {
     { key: 'available_strengths', label: { en: 'Dose', he: 'מינון' } },
     { key: 'dose_range' },
     { key: 'starting_dose' },
-    { key: 'titration_adults', label: { en: 'Titration for adults', he: 'טיטרציה למבוגרים' } },
+    { key: 'titration_adults', label: { en: 'Titration for adults', he: 'טיטרציה למבוגרים' }, fallbackKeys: ['titration'] },
     { key: 'titration_pediatrics', label: { en: 'Titration for children / adolescents', he: 'טיטרציה לילדים ומתבגרים' } },
     { key: 'onset' },
     { key: 'duration' },
     { key: 'maximum_dose' },
     { key: 'side_effects' },
     { key: 'contraindications' },
-    { key: 'comments' },
+    { key: 'comments', fallbackKeys: ['clinical_notes'] },
   ],
 };
 
-function isDrugClassKey(value: string): value is DrugClassKey {
-  return (DRUG_CLASSES as readonly string[]).includes(value);
-}
+// Matched case-insensitively: the website snapshot writes "Mood Stabilizers"
+// and the authoritative workbook "Mood stabilizers". They are one class, and
+// a record should not get a different layout because of a capital letter.
+const PROFILE_BY_NAME = new Map<string, readonly ProfileField[]>(
+  DRUG_CLASSES.map((name) => [name.toLowerCase(), CLASS_PROFILES[name]]),
+);
 
 /**
  * The ordered fields to show for a record, given its therapeutic group.
@@ -223,12 +236,35 @@ function isDrugClassKey(value: string): value is DrugClassKey {
  */
 export function profileFor(therapeuticGroup: string | null | undefined): readonly ProfileField[] | null {
   if (!therapeuticGroup) return null;
-  const key = therapeuticGroup.trim();
-  return isDrugClassKey(key) ? CLASS_PROFILES[key] : null;
+  return PROFILE_BY_NAME.get(therapeuticGroup.trim().toLowerCase()) ?? null;
 }
 
-/** The heading to show for a field within a profile. */
-export function profileLabel(entry: ProfileField, locale: 'en' | 'he'): string {
+/**
+ * The key to actually render for a profile entry: its own field, or the first
+ * legacy key still holding the content on an older record. Falls back to the
+ * entry's own key when nothing has a value, so an empty field is reported
+ * honestly rather than hidden.
+ */
+export function resolveProfileField(
+  entry: ProfileField,
+  hasValue: (key: string) => boolean,
+): string {
+  if (hasValue(entry.key)) return entry.key;
+  return entry.fallbackKeys?.find(hasValue) ?? entry.key;
+}
+
+/**
+ * The heading to show for a field within a profile.
+ *
+ * When the value came from a legacy key instead, that key's own label is used:
+ * an older record's `trade_names` are not known to be the Israeli brand names,
+ * and heading them "Brand names in Israel" would assert something the record
+ * does not say.
+ */
+export function profileLabel(entry: ProfileField, locale: 'en' | 'he', resolvedKey?: string): string {
+  if (resolvedKey && resolvedKey !== entry.key) {
+    return getField(resolvedKey)?.label[locale] ?? resolvedKey;
+  }
   if (entry.label) return entry.label[locale];
   return getField(entry.key)?.label[locale] ?? entry.key;
 }

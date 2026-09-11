@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { FIELD_GROUPS, FIELD_GROUP_LABELS, fieldsInGroup, profileFor, profileLabel } from '@med/shared';
+import {
+  FIELD_GROUPS,
+  FIELD_GROUP_LABELS,
+  fieldsInGroup,
+  profileFor,
+  profileLabel,
+  resolveProfileField,
+} from '@med/shared';
 import { useI18n } from '../i18n.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { ApiError, api, qs } from '../lib/api.ts';
@@ -139,18 +146,24 @@ export function MedicationPage() {
             {t.recordFields}
           </h2>
           <dl className="field-list">
-            {profile.map((entry) => (
-              <div className="field-row" key={entry.key}>
-                <dt>{profileLabel(entry, locale)}</dt>
-                <dd>
-                  <FieldValueView
-                    fieldKey={entry.key}
-                    field={detail.fields[entry.key]}
-                    citations={detail.citations}
-                  />
-                </dd>
-              </div>
-            ))}
+            {profile.map((entry) => {
+              const key = resolveProfileField(
+                entry,
+                (k) => detail.fields[k]?.value.state === 'provided',
+              );
+              return (
+                <div className="field-row" key={entry.key}>
+                  <dt>{profileLabel(entry, locale, key)}</dt>
+                  <dd>
+                    <FieldValueView
+                      fieldKey={key}
+                      field={detail.fields[key]}
+                      citations={detail.citations}
+                    />
+                  </dd>
+                </div>
+              );
+            })}
           </dl>
         </section>
       ) : (
