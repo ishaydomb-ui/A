@@ -54,6 +54,7 @@ from .nlu import ParsedItem, build_meal_plan, expand_recipe, parse_message
 from .orchestrator import (
     add_terms_to_cart,
     format_multi_buy_note,
+    format_report_headline,
     format_report_summary,
     format_repeat_failures,
     record_deals,
@@ -1518,20 +1519,15 @@ class GroceryBot:
         if reports is None:
             return
 
-        summary = format_report_summary(reports)
-        repeats = format_repeat_failures(self.storage)
-        if repeats:
-            summary = f"{summary}\n\n{repeats}" if summary else repeats
-        multi = format_multi_buy_note(self.storage, list(reports))
-        if multi:
-            summary = f"{summary}\n\n{multi}" if summary else multi
+        summary, markup = self._store_cycle_summary(reports)
         # Through _send_markdown, never reply_text: this send failed on a
         # real order (2026-09-07, "can't find end of the entity") and the
         # household got no summary at all for a cart that had actually
         # been filled. _send_markdown falls back to plain text, so a
         # formatting fault costs formatting, not the message.
         await _send_html(
-            context, update.effective_chat.id, summary or "לא היה מה להוסיף."
+            context, update.effective_chat.id, summary or "לא היה מה להוסיף.",
+            reply_markup=markup,
         )
         await self._send_alternatives(update.effective_chat.id, context, reports)
         await self._send_pending_ambiguities(update, context, reports)
@@ -1736,6 +1732,39 @@ class GroceryBot:
         message = format_cycle_alternatives(suggestions)
         if message:
             await context.bot.send_message(chat_id=chat_id, text=message, parse_mode="Markdown")
+
+    def _store_cycle_summary(self, reports):
+        """The short message, and the full one kept for the button.
+
+        The details are written to storage rather than held in memory:
+        the button can be tapped tomorrow, and a bot restart in between
+        is normal. It is also the only surviving record if the message
+        itself fails to send — which happened on a real order.
+        """
+        headline = format_report_headline(self.storage, reports)
+        details = format_report_summary(reports)
+        multi = format_multi_buy_note(self.storage, list(reports))
+        if multi:
+            details = f"{details}\n\n{multi}" if details else multi
+        try:
+            self.storage.set_state("last_cycle_details", details or "")
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not store the cycle details for the button")
+        markup = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("📋 מה נוסף ולמה", callback_data="cycledetails")]]
+        ) if details else None
+        return headline, markup
+
+    async def on_cycle_details(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """The full cycle list, when it is actually wanted."""
+        query = update.callback_query
+        await query.answer()
+        if not _authorized(self.config, update):
+            return
+        details = self.storage.get_state("last_cycle_details", "") or ""
+        await _send_html(
+            context, query.message.chat_id, details or "אין פירוט שמור למחזור האחרון."
+        )
 
     async def _send_pending_ambiguities(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE, reports=None
@@ -1978,14 +2007,9 @@ class GroceryBot:
             return
 
         self.storage.mark_deferred_cycle_done(pending["id"])
-        summary = format_report_summary(reports)
-        repeats = format_repeat_failures(self.storage)
-        if repeats:
-            summary = f"{summary}\n\n{repeats}" if summary else repeats
-        multi = format_multi_buy_note(self.storage, list(reports))
-        if multi:
-            summary = f"{summary}\n\n{multi}" if summary else multi
-        await _send_html(context, chat_id, summary or "לא היה מה להוסיף.")
+        summary, markup = self._store_cycle_summary(reports)
+        await _send_html(context, chat_id, summary or "לא היה מה להוסיף.",
+                         reply_markup=markup)
         await self._send_alternatives(chat_id, context, reports)
         await self._ask_ambiguities(chat_id, context, reports)
 
@@ -2191,6 +2215,9 @@ def build_application(config: Config, storage: Storage) -> Application:
     )
     application.add_handler(
         CallbackQueryHandler(bot.on_chain_deals_button, pattern=r"^chaindeals$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(bot.on_cycle_details, pattern=r"^cycledetails$")
     )
     application.add_handler(
         CallbackQueryHandler(bot.on_card_button, pattern=r"^cardok$")

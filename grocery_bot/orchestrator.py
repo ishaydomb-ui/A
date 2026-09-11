@@ -596,6 +596,100 @@ def format_multi_buy_note(storage: Storage, stores) -> str:
     return "\n\n".join(blocks)
 
 
+def format_report_headline(storage: Storage, reports: dict[str, OrderCycleReport]) -> str:
+    """The end of a cycle as a decision screen, not a transcript.
+
+    The completion message had grown to nine blocks — everything the run
+    did, everything it chose, everything it noticed — and the UX audit's
+    point stands: the household needs three facts immediately. Is the
+    cart ready, what is missing, and what still needs a decision.
+
+    So counts and money go on one line each, and the **full lists move
+    behind a button**. What does *not* move behind a button is anything
+    that would be a silent gap: a product that was not found, a line the
+    bot declined to put back, an error. Those are the cases where a short
+    message would send someone to a cart that is quietly missing the
+    thing they asked for.
+
+    A sum is only printed when it is actually known: the saving is summed
+    from the deal lines that really went in, and when none did, the line
+    is absent rather than showing 0.00₪.
+    """
+    from .chains import display_name
+    from .htmltext import bold as _b, escape as _md
+
+    repeats = {}
+    try:
+        for row in storage.repeat_failures(min_runs=3):
+            repeats[(row["store"], row["item_name"])] = row["runs"]
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not read repeat failures for the headline")
+
+    lines: list[str] = []
+    for store, report in reports.items():
+        lines.append(_b(display_name(store)))
+        deals = [r for r in report.added if getattr(r, "deal", "")]
+        counts = [f"✅ {len(report.added)} נוספו"]
+        if report.ambiguous:
+            counts.append(f"❓ {len(report.ambiguous)} בחירות")
+        if report.not_found:
+            counts.append(f"⚠️ {len(report.not_found)} לא נמצאו")
+        lines.append(" · ".join(counts))
+
+        saved = _deal_saving(deals)
+        if deals:
+            note = f"🏷️ {len(deals)} מבצעים"
+            # Only when every line carries a readable figure. A partial
+            # sum presented as the total is the failure this project
+            # keeps meeting.
+            if saved is not None:
+                note += f" · חיסכון {saved:.2f}₪"
+            lines.append(note)
+
+        # Everything below is a gap. None of it goes behind a button.
+        if report.not_found:
+            named = []
+            for r in report.not_found:
+                runs = repeats.get((store, r.item_name))
+                named.append(
+                    f"{_md(r.item_name)} <i>({runs} מחזורים)</i>" if runs
+                    else _md(r.item_name)
+                )
+            lines.append(
+                f"⚠️ לא נמצא: " + ", ".join(named)
+                + "\n   <i>נשאר ברשימה — אנסה שוב בפעם הבאה.</i>"
+            )
+        removed = [r for r in report.skipped if "הוסר" in (r.detail or "")]
+        if removed:
+            lines.append(
+                f"✋ לא הוחזרו — הוסרו מהעגלה ידנית: "
+                + ", ".join(_md(r.item_name) for r in removed)
+            )
+        if report.errors:
+            lines.append(
+                f"🛑 שגיאה ({len(report.errors)}): "
+                + ", ".join(_md(r.item_name) for r in report.errors)
+            )
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
+def _deal_saving(deals) -> float | None:
+    """Total saving across deal lines, or None when any figure is missing."""
+    total = 0.0
+    for result in deals:
+        text = getattr(result, "deal", "") or ""
+        marker = "חיסכון "
+        start = text.find(marker)
+        if start < 0:
+            return None
+        try:
+            total += float(text[start + len(marker):].split("₪")[0].strip())
+        except ValueError:
+            return None
+    return total if deals else None
+
+
 def format_report_summary(reports: dict[str, OrderCycleReport]) -> str:
     """Human-readable (Hebrew) summary suitable for a Telegram message.
 
