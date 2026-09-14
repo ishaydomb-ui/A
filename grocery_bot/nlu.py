@@ -40,11 +40,18 @@ logger = logging.getLogger(__name__)
 # on the failure path — a timed-out `_ask_model` call still lands on
 # `_fallback_parse`, and if that result is `unclear`, a second
 # subprocess runs with its own budget (`loop.LOOP_TIMEOUT_SECONDS`).
-# **Verified worst case for one message today: 120 + 30 = 150s**, not
-# 120. Raised by Miri 2026-09-10, who named this as a future risk from
-# a hypothetical retry; it had already happened via loop.py, added
-# earlier the same day. If a third call is ever chained here, re-check
-# this comment before assuming 120s still bounds anything.
+# **Verified worst case for one message: 120 + 60 + 30 = 210s.** Raised
+# by Miri 2026-09-10 as a future risk from a hypothetical retry; it had
+# already happened via loop.py, added earlier the same day, at 120 + 30
+# = 150s. The third call arrived on 2026-09-14 — `hybrid.reconsider`
+# runs the planner before the loop — which is exactly the "if a third
+# call is ever chained here" this comment warned about, so the number is
+# updated rather than the warning repeated. A test ties the three
+# constants together so the arithmetic cannot go stale silently.
+#
+# It is a worst case, not a typical one: all three fire only when the
+# classifier times out *and* the planner declines. Measured median for a
+# message is ~17s.
 CLAUDE_TIMEOUT_SECONDS = 120
 
 # Ways the household says "the shop is done" — past tense, reporting a
@@ -196,7 +203,13 @@ def _ask_model(message: str, context: dict | None = None) -> str:
     from . import convo
 
     background = convo.describe(context or {})
+    exchange = (context or {}).get("transcript") or ""
     prompt = _SYSTEM_PROMPT
+    if exchange:
+        # The exchange, not just the last subject. "לא זה, השני" refers to
+        # what the previous *answer* offered, which a one-line subject
+        # cannot carry.
+        prompt += "\n\nהשיחה עד כה (רקע, לא ההודעה לנתח):\n" + exchange
     if background:
         prompt += f"\n\nרקע מהשיחה הקודמת (לא ההודעה לנתח): {background}"
     result = subprocess.run(
@@ -397,19 +410,38 @@ def _reconsider_if_unclear(parsed: ParsedMessage, text: str, storage) -> ParsedM
     """
     if parsed.intent != "unclear":
         return parsed
-    try:
-        from .loop import reconsider
-    except Exception:  # noqa: BLE001
-        return parsed
-    try:
-        second = reconsider(text, storage)
-    except Exception:  # noqa: BLE001
-        logger.warning("NLU: second pass failed, keeping unclear", exc_info=True)
-        return parsed
-    if second is None:
-        return parsed
-    logger.info("NLU: second pass resolved %r -> %s", text[:40], second.intent)
-    return second
+
+    # The planner first, the second classifier behind it. Measured on 25
+    # message shapes (2026-09-11): where the taxonomy has no slot, the
+    # planner answers and the classifier files a whole sentence as a
+    # grocery item. Where the message is terse the classifier wins, but
+    # that case never reaches here — it was classified confidently.
+    # Falling back to `loop.reconsider` keeps the old behaviour whenever
+    # the planner declines, so this is strictly additive.
+    for name, call in (("planner", _plan_pass), ("loop", _loop_pass)):
+        try:
+            second = call(text, storage)
+        except Exception:  # noqa: BLE001
+            logger.warning("NLU: %s pass failed", name, exc_info=True)
+            continue
+        if second is not None:
+            logger.info(
+                "NLU: %s pass resolved %r -> %s", name, text[:40], second.intent
+            )
+            return second
+    return parsed
+
+
+def _plan_pass(text: str, storage):
+    from .hybrid import reconsider
+
+    return reconsider(text, storage)
+
+
+def _loop_pass(text: str, storage):
+    from .loop import reconsider
+
+    return reconsider(text, storage)
 
 
 _RECIPE_PROMPT = """אתה עוזר קניות. קיבלת בקשה למנה. החזר JSON בלבד:

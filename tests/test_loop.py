@@ -129,6 +129,15 @@ class OnlyUnclearReachesTheLoop(unittest.TestCase):
     def _classifier_returns(self, payload):
         return mock.patch.object(nlu, "_ask_model", return_value=payload)
 
+    def setUp(self):
+        # The planner runs first from 2026-09-14 and the loop behind it
+        # (see hybrid.py). Silenced here so these tests keep asserting
+        # what they are about — the loop's own contract — and so no test
+        # spawns a real planner subprocess.
+        patcher = mock.patch("grocery_bot.hybrid.reconsider", return_value=None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_a_confident_result_never_calls_the_loop(self):
         with self._classifier_returns('{"intent":"add_item","items":[{"name":"חלב"}]}'):
             with mock.patch("grocery_bot.loop.reconsider") as second:
@@ -217,7 +226,7 @@ class WorstCaseLatencyIsBounded(unittest.TestCase):
         with mock.patch.object(
             nlu, "_ask_model",
             side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=120),
-        ):
+        ), mock.patch("grocery_bot.hybrid.reconsider", return_value=None):
             with mock.patch.object(
                 loop, "_ask", return_value='{"intent":"unclear","reply":"מה?"}'
             ):
@@ -225,8 +234,32 @@ class WorstCaseLatencyIsBounded(unittest.TestCase):
         self.assertEqual(result.intent, "unclear")
         self.assertEqual(result.reply, "מה?")
 
-    def test_the_documented_worst_case_matches_the_two_constants(self):
-        """If either timeout changes, this comment's arithmetic goes
-        stale silently unless a test ties them together."""
-        worst_case = nlu.CLAUDE_TIMEOUT_SECONDS + loop.LOOP_TIMEOUT_SECONDS
-        self.assertEqual(worst_case, 150)
+    def test_the_documented_worst_case_matches_the_three_constants(self):
+        """If any timeout changes, the comment's arithmetic goes stale
+        silently unless a test ties them together. It has gone stale once
+        already: the planner became a third chained call on 2026-09-14."""
+        from grocery_bot import planner
+
+        worst_case = (
+            nlu.CLAUDE_TIMEOUT_SECONDS
+            + planner.PLANNER_TIMEOUT_SECONDS
+            + loop.LOOP_TIMEOUT_SECONDS
+        )
+        self.assertEqual(worst_case, 210)
+
+    def test_the_planner_runs_before_the_loop(self):
+        """Order matters: the planner is strictly more capable, and the
+        loop stays behind it only as the fallback that was already
+        there."""
+        calls = []
+        with mock.patch.object(nlu, "_ask_model", return_value='{"intent":"unclear"}'):
+            with mock.patch(
+                "grocery_bot.hybrid.reconsider",
+                side_effect=lambda *a, **k: calls.append("planner"),
+            ):
+                with mock.patch(
+                    "grocery_bot.loop.reconsider",
+                    side_effect=lambda *a, **k: calls.append("loop"),
+                ):
+                    nlu.parse_message("???", storage=None)
+        self.assertEqual(calls, ["planner", "loop"])

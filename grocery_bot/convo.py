@@ -33,6 +33,18 @@ logger = logging.getLogger(__name__)
 STATE_KEY = "conversation_context"
 CONTEXT_TTL_SECONDS = 45 * 60
 
+# The rolling exchange, added 2026-09-14. One remembered subject answers
+# "בעצם שניים" and nothing else: "לא זה, השני" needs to know what the
+# *previous answer* offered, and "את כל השאר כרגיל" needs to know what
+# "the rest" was. A session is what makes a bot a conversation, and this
+# is the cheap form of one — the last few turns, not an Agent SDK.
+#
+# Six turns because it is three exchanges: what was asked, what was
+# answered, and the correction. Longer buys little and costs prompt.
+TRANSCRIPT_KEY = "conversation_transcript"
+MAX_TURNS = 6
+MAX_TURN_CHARS = 200
+
 
 def remember(
     storage,
@@ -81,8 +93,65 @@ def recall(storage, now: datetime | None = None) -> dict:
     return data
 
 
+def remember_turn(storage, role: str, text: str, when: datetime | None = None) -> None:
+    """Append one line of the exchange. `role` is "user" or "bot"."""
+    line = " ".join(str(text or "").split())[:MAX_TURN_CHARS]
+    if not line:
+        return
+    stamp = (when or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+    turns = _turns(storage)
+    turns.append({"role": role, "text": line, "at": stamp})
+    try:
+        storage.set_state(
+            TRANSCRIPT_KEY, json.dumps(turns[-MAX_TURNS:], ensure_ascii=False)
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not store the conversation transcript")
+
+
+def _turns(storage) -> list:
+    try:
+        raw = storage.get_state(TRANSCRIPT_KEY, "") or ""
+        data = json.loads(raw) if raw else []
+    except Exception:  # noqa: BLE001
+        return []
+    return data if isinstance(data, list) else []
+
+
+def transcript(storage, now: datetime | None = None) -> list:
+    """The recent exchange, dropping anything past the TTL.
+
+    Stale turns are dropped rather than the whole transcript: a pause in
+    the middle of a conversation is ordinary, and throwing away the part
+    that is still fresh would lose exactly the turn a correction refers
+    to.
+    """
+    moment = now or datetime.now(timezone.utc)
+    fresh = []
+    for turn in _turns(storage):
+        try:
+            stamp = datetime.fromisoformat(turn["at"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+        if moment - stamp <= timedelta(seconds=CONTEXT_TTL_SECONDS):
+            fresh.append(turn)
+    return fresh
+
+
+def format_transcript(storage, now: datetime | None = None) -> str:
+    """The exchange as lines a model can read, or "" when there is none."""
+    lines = [
+        f"{'אני' if t['role'] == 'user' else 'הבוט'}: {t['text']}"
+        for t in transcript(storage, now)
+    ]
+    return "\n".join(lines)
+
+
 def forget(storage) -> None:
     try:
+        storage.set_state(TRANSCRIPT_KEY, "")
         storage.set_state(STATE_KEY, "")
     except Exception:  # noqa: BLE001
         logger.exception("Could not clear conversation context")
@@ -99,9 +168,20 @@ def describe(context: dict) -> str:
         return ""
     from .chains import display_name
 
-    parts = [f"המוצר שדובר עליו לאחרונה: {context['subject']}"]
-    if context.get("store"):
-        parts.append(f"ברשת {display_name(context['store'])}")
+    # Two shapes reach this: our own stored turn ("subject") and the
+    # planner's context dict ("last_subject"). Reading either, and
+    # returning nothing when there is neither, is the difference between
+    # a line of background and a KeyError inside the parse path — where
+    # it surfaces as "the model is unavailable" and every message falls
+    # through to the rule-based fallback. Found on the comparison
+    # harness, 2026-09-11, doing exactly that.
+    subject = context.get("subject") or context.get("last_subject") or ""
+    if not subject:
+        return ""
+    parts = [f"המוצר שדובר עליו לאחרונה: {subject}"]
+    store = context.get("store") or context.get("last_store")
+    if store:
+        parts.append(f"ברשת {display_name(store)}")
     if context.get("quantity"):
         parts.append(f"בכמות {context['quantity']}")
     if context.get("action"):

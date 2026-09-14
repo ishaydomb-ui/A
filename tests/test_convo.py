@@ -55,6 +55,14 @@ class ContextMemoryTests(unittest.TestCase):
         self.assertIn("טיב טעם", line)
         self.assertEqual(convo.describe({}), "")
 
+    def test_a_context_with_no_subject_is_not_a_crash(self) -> None:
+        # The planner's context dict uses "last_subject", and a dict with
+        # neither key reaches this too. A KeyError here surfaces as "the
+        # model is unavailable" and drops every message to the rule-based
+        # fallback — found on the comparison harness doing exactly that.
+        self.assertEqual(convo.describe({"pending": ["חלב"]}), "")
+        self.assertIn("קוטג", convo.describe({"last_subject": "קוטג"}))
+
 
 class MultiRequestParsingTests(unittest.TestCase):
     """One message, two requests — the second must not be dropped."""
@@ -122,6 +130,57 @@ class MultiRequestParsingTests(unittest.TestCase):
                 self._install,
             )
             self.assertEqual(parsed.scope, expected, value)
+
+
+class TranscriptTests(unittest.TestCase):
+    """A session is what makes a bot a conversation. This is the cheap
+    form of one: the last few turns, not an Agent SDK."""
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        self.storage = Storage(str(Path(self._tmpdir.name) / "t.sqlite3"))
+
+    def test_the_exchange_comes_back_in_order(self) -> None:
+        convo.remember_turn(self.storage, "user", "תוסיף קוטג")
+        convo.remember_turn(self.storage, "bot", "נוסף לרשימה: קוטג")
+        convo.remember_turn(self.storage, "user", "בעצם שניים")
+        text = convo.format_transcript(self.storage)
+        self.assertEqual(
+            text.splitlines(),
+            ["אני: תוסיף קוטג", "הבוט: נוסף לרשימה: קוטג", "אני: בעצם שניים"],
+        )
+
+    def test_only_the_last_few_turns_are_kept(self) -> None:
+        for n in range(convo.MAX_TURNS + 4):
+            convo.remember_turn(self.storage, "user", f"הודעה {n}")
+        self.assertEqual(len(convo.transcript(self.storage)), convo.MAX_TURNS)
+
+    def test_stale_turns_drop_out_but_fresh_ones_stay(self) -> None:
+        """A pause mid-conversation is ordinary; throwing away the whole
+        transcript would lose the turn a correction refers to."""
+        old = datetime.now(timezone.utc) - timedelta(
+            seconds=convo.CONTEXT_TTL_SECONDS + 60
+        )
+        convo.remember_turn(self.storage, "user", "משהו ישן", when=old)
+        convo.remember_turn(self.storage, "user", "משהו טרי")
+        kept = [t["text"] for t in convo.transcript(self.storage)]
+        self.assertEqual(kept, ["משהו טרי"])
+
+    def test_an_empty_message_is_not_a_turn(self) -> None:
+        convo.remember_turn(self.storage, "user", "   ")
+        self.assertEqual(convo.transcript(self.storage), [])
+
+    def test_forgetting_clears_the_exchange_too(self) -> None:
+        convo.remember_turn(self.storage, "user", "תוסיף קוטג")
+        convo.remember(self.storage, subject="קוטג")
+        convo.forget(self.storage)
+        self.assertEqual(convo.transcript(self.storage), [])
+        self.assertEqual(convo.recall(self.storage), {})
+
+    def test_corrupt_state_is_not_an_error(self) -> None:
+        self.storage.set_state(convo.TRANSCRIPT_KEY, "{not json")
+        self.assertEqual(convo.transcript(self.storage), [])
 
 
 if __name__ == "__main__":

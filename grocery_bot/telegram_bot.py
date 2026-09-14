@@ -682,8 +682,14 @@ class GroceryBot:
         # unclassifiable in principle, and demanding that every message
         # restate its subject is exactly the careful phrasing this is
         # meant to remove.
-        prior = convo.recall(self.storage)
+        convo.remember_turn(self.storage, "user", text)
+        prior = dict(convo.recall(self.storage))
+        exchange = convo.format_transcript(self.storage)
+        if exchange:
+            prior["transcript"] = exchange
         parsed = await asyncio.to_thread(parse_message, text, self.storage, prior)
+        if parsed.reply:
+            convo.remember_turn(self.storage, "bot", parsed.reply)
         requested_by = update.effective_user.first_name if update.effective_user else "unknown"
 
         # One message may carry several requests — "תוסיף חלב וכמה עולה
