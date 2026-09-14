@@ -269,9 +269,13 @@ def validate(payload: dict) -> Plan:
     a model that never proposed it, and that ambiguity has already cost
     this project two rounds of guessing elsewhere.
     """
+    from .readback import verify
+
+    # Same rule as the classifier's reply: the planner writes free Hebrew
+    # and nothing here computed a price, so no figure in it is backed.
     plan = Plan(
-        question=str(payload.get("question") or "").strip(),
-        reply=str(payload.get("reply") or "").strip(),
+        question=verify(str(payload.get("question") or "").strip()),
+        reply=verify(str(payload.get("reply") or "").strip()),
     )
     for raw in (payload.get("steps") or [])[:MAX_STEPS]:
         if not isinstance(raw, dict):

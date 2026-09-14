@@ -312,6 +312,18 @@ def _fallback_parse(message: str) -> ParsedMessage:
     )
 
 
+def _verified_reply(raw) -> str:
+    """The model's own sentence, minus any price it made up.
+
+    The classifier is told not to invent figures. This is the rule rather
+    than the request — see readback.py. Nothing this turn computed a
+    price, so nothing is allowed through.
+    """
+    from .readback import verify
+
+    return verify(str(raw or "").strip())
+
+
 def _items_from(raw_items) -> list[ParsedItem]:
     items = []
     for raw_item in raw_items or []:
@@ -389,7 +401,7 @@ def parse_message(message: str, storage=None, context: dict | None = None) -> Pa
             intent=actions[0].intent,
             items=actions[0].items,
             query=actions[0].query or query,
-            reply=str(payload.get("reply") or "").strip(),
+            reply=_verified_reply(payload.get("reply")),
             actions=actions,
             store=store if store in ("shufersal", "tivtaam") else "",
             scope=scope if scope in ("once", "always") else "",
