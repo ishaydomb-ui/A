@@ -146,6 +146,37 @@ MALLS = (
         numberless_terms=("קניון רמת אביב",),
     ),
     Mall(
+        name="קניון איילון, רמת גן",
+        # Ramat Gan, not Tel Aviv — added on Ishay's instruction
+        # 2026-09-14, "למרות שהוא טכנית ברמת גן", because it is one of
+        # the places the household actually shops at and a municipal
+        # boundary is not a fact about where anybody goes.
+        city_terms=("רמת גן",),
+        # The street is written six ways across 43 rows: "אבא הלל 301",
+        # "אבא הילל 301", "דרך אבא הלל 301", "אבא הלל סילבר 301", "דרך
+        # אבא הלל סילבר 301", with varying spacing. Matching the stem
+        # covers all of them; the house number does the narrowing.
+        address_terms=("אבא הלל", "אבא הילל", "קניון איילון", "קניון אילון"),
+        # Three other streets carry the word איילון — עמק איילון in
+        # Shoham, פנחס איילון in Holon, נחל איילון in Tsur Yitzhak. The
+        # city test already excludes them; these make it explicit, because
+        # a later widening of the city terms would otherwise pull them in
+        # silently.
+        exclude_terms=("שוהם", "חולון", "צור יצחק", "עמק איילון",
+                       "פנחס איילון", "נחל איילון"),
+        name_hints=("איילון", "אילון"),
+        aliases=("קניון איילון", "קניון אילון", "איילון", "אילון",
+                 "ayalon", "ayalon mall"),
+        # 43 of the 46 אבא הלל rows are at 301. The other three are a
+        # Haifa address and two unrelated Ramat Gan businesses at 16 and
+        # 101 — the street runs well past the mall.
+        house_numbers=(301,),
+        # One row gives the complex and a house number of 0
+        # ("קניון איילון  0 רמת גן"), which the number rule would
+        # otherwise refuse.
+        numberless_terms=("קניון איילון", "קניון אילון"),
+    ),
+    Mall(
         name="TLV פאשן מול (גינדי), תל אביב",
         city_terms=("תל אביב",),
         address_terms=("החשמונאים",),
@@ -275,7 +306,11 @@ _FILLER = ("קניון", "הקניון", "בקניון", "מתחם", "במתחם
 
 # City names that can appear in a question. Used only to *veto* a match
 # whose city contradicts the question, never to make one.
-_CITIES = ("תל אביב", "הרצליה", "רמת השרון", "חיפה", "ירושלים", "באר שבע",
+# רמת גן joined 2026-09-14 with קניון איילון. A city listed here is a
+# *veto*: naming it in a question rules out every mall that is not in it,
+# so a city with a mall must be here or "קניון איילון ברמת גן" would
+# match nothing.
+_CITIES = ("תל אביב", "רמת גן", "הרצליה", "רמת השרון", "חיפה", "ירושלים", "באר שבע",
            "אילת", "נתניה", "חולון", "רמלה", "מודיעין", "עכו", "אשדוד",
            "ראשון לציון", "פתח תקווה", "רעננה", "כפר סבא", "גבעתיים",
            "הוד השרון", "טבריה", "נס ציונה", "רחובות", "עפולה", "בת ים",

@@ -176,7 +176,10 @@ class NamesPeopleActuallyUse(unittest.TestCase):
         self.assertEqual(malls.resolve("שבעת הכוכבים אילת"), "")
 
     def test_an_unknown_mall_returns_nothing(self):
-        for query in ("יש לי הנחה בקניון מלחה", "קניון איילון", "בסופר", ""):
+        # קניון איילון was the example here until 2026-09-14, when Ishay
+        # asked for it to be mapped. Replaced with malls that really are
+        # unmapped, so the test keeps testing what it is named after.
+        for query in ("יש לי הנחה בקניון מלחה", "קניון הזהב", "בסופר", ""):
             self.assertEqual(malls.resolve(query), "", query)
 
     def test_chains_for_query_pairs_the_mall_with_its_chains(self):
@@ -187,7 +190,7 @@ class NamesPeopleActuallyUse(unittest.TestCase):
         self.assertEqual([c[0] for c in found], ["פוקס"])
 
     def test_an_unresolvable_query_yields_no_mall_and_no_chains(self):
-        self.assertEqual(malls.chains_for_query("קניון איילון", []), ("", []))
+        self.assertEqual(malls.chains_for_query("קניון הזהב", []), ("", []))
 
 
 class Api(unittest.TestCase):
@@ -200,6 +203,57 @@ class Api(unittest.TestCase):
             {"chainID": "1", "חנות": "פוקס", "סניף": "פוקס ב", "כתובת": "שבעת הכוכבים 8 הרצליה"},
         ]
         self.assertEqual(len(malls.chains_in("קניון שבעת הכוכבים, הרצליה", rows)), 1)
+
+
+class AyalonIsRamatGanAndThatIsFine(unittest.TestCase):
+    """Added on Ishay's instruction 2026-09-14: "תוסיף למרות שהוא טכנית
+    ברמת גן". A municipal boundary is not a fact about where anyone
+    goes."""
+
+    def test_every_way_he_might_name_it(self):
+        for query in ("קניון איילון", "קניון אילון", "איילון",
+                      "מה יש לי בקניון איילון", "ayalon mall",
+                      "בקניון איילון ברמת גן"):
+            with self.subTest(query):
+                self.assertEqual(malls.resolve(query), "קניון איילון, רמת גן")
+
+    def test_naming_ramat_gan_does_not_veto_its_own_mall(self):
+        # A city in the question vetoes malls elsewhere, so a city with a
+        # mall must be in _CITIES or the question matches nothing.
+        self.assertIn("רמת גן", malls._CITIES)
+
+    def test_a_tel_aviv_question_is_not_answered_with_ayalon(self):
+        self.assertNotEqual(
+            malls.resolve("קניון בתל אביב"), "קניון איילון, רמת גן"
+        )
+
+    def test_the_other_ayalon_streets_are_not_this_mall(self):
+        """עמק איילון is in Shoham, פנחס איילון in Holon, נחל איילון in
+        Tsur Yitzhak — three streets carrying the word."""
+        rows = [
+            {"חנות": "חנות א", "סניף": "שוהם", "כתובת": "עמק איילון 30 שוהם"},
+            {"חנות": "חנות ב", "סניף": "חולון", "כתובת": "פנחס איילון 13 חולון"},
+            {"חנות": "חנות ג", "סניף": "רמת גן", "כתובת": "אבא הלל 301 רמת גן"},
+        ]
+        _, chains = malls.chains_for_query("קניון איילון", rows)
+        self.assertEqual([c[0] for c in chains], ["חנות ג"])
+
+    def test_the_rest_of_abba_hillel_street_is_not_the_mall(self):
+        # 43 of 46 rows on that street are at 301; the street runs on.
+        rows = [
+            {"חנות": "במספר 301", "סניף": "", "כתובת": "דרך אבא הלל 301 רמת גן"},
+            {"חנות": "במספר 16", "סניף": "", "כתובת": "אבא הילל  16 רמת גן"},
+            {"חנות": "במספר 101", "סניף": "", "כתובת": "דרך אבא הלל 101 רמת גן"},
+        ]
+        _, chains = malls.chains_for_query("איילון", rows)
+        self.assertEqual([c[0] for c in chains], ["במספר 301"])
+
+    def test_the_row_that_names_the_complex_with_no_number_is_kept(self):
+        # "קניון איילון  0 רמת גן" — a house number of 0 would otherwise
+        # be refused by the number rule.
+        rows = [{"חנות": "Carter's", "סניף": "", "כתובת": "קניון איילון  0 רמת גן"}]
+        _, chains = malls.chains_for_query("קניון איילון", rows)
+        self.assertEqual([c[0] for c in chains], ["Carter's"])
 
 
 if __name__ == "__main__":

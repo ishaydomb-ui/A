@@ -27,7 +27,7 @@ A corpus of well-formed requests measures nothing, because well-formed
 requests were never the problem.
 """
 
-# --- Malls: the six modelled sites, said however a person says them ---
+# --- Malls: the modelled sites, said however a person says them ---
 # (phrase, expected canonical mall name or "" for "must not resolve")
 MALLS = [
     ("יש לי הנחה בקניון רמת אביב", "קניון רמת אביב, תל אביב"),
@@ -57,13 +57,19 @@ MALLS = [
     ("גינדי", "TLV פאשן מול (גינדי), תל אביב"),
     ("פאשן מול", "TLV פאשן מול (גינדי), תל אביב"),
     ("tlv fashion mall", "TLV פאשן מול (גינדי), תל אביב"),
+    # Ramat Gan, mapped on Ishay's instruction 2026-09-14 — it was in the
+    # "we don't model that one" list below until he asked for it.
+    ("קניון איילון", "קניון איילון, רמת גן"),
+    ("קניון אילון", "קניון איילון, רמת גן"),
+    ("איילון", "קניון איילון, רמת גן"),
+    ("אני בקניון איילון", "קניון איילון, רמת גן"),
+    ("ayalon mall", "קניון איילון, רמת גן"),
     # Must refuse rather than answer with the wrong branch of a brand.
     ("קניון עזריאלי חיפה", ""),
     ("עזריאלי ירושלים", ""),
     ("שבעת הכוכבים אילת", ""),
     # Malls we simply do not model. "I don't know that one" is correct.
     ("יש לי הנחה בקניון מלחה", ""),
-    ("קניון איילון", ""),
     ("קניון בראשון לציון", ""),
     ("קניון הזהב", ""),
     ("בסופר", ""),

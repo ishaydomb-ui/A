@@ -12,7 +12,7 @@ import json
 import unittest
 from contextlib import redirect_stdout
 
-from grocery_bot import cli
+from grocery_bot import cli, malls
 
 
 def _run(*args):
@@ -38,7 +38,9 @@ class UnknownMallIsNotAnEmptyMall(unittest.TestCase):
         _, text = _run("קניון בראשון לציון", "--json")
         known = json.loads(text)["known_malls"]
         self.assertIn("קניון רמת אביב, תל אביב", known)
-        self.assertEqual(len(known), 6)
+        # Tied to the list itself rather than to a number, which went
+        # stale the first time a mall was added (איילון, 2026-09-14).
+        self.assertEqual(len(known), len(malls.MALLS))
 
     def test_a_recognized_mall_is_flagged_as_such(self):
         code, text = _run("רמת אביב", "--json")
