@@ -6,15 +6,41 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-07 09:10 (host time, CEST)
+**Last anchored:** 2026-09-14 16:45 (host time, CEST)
 **Session:** https://claude.ai/code/session_01AR7esAYdoXQ71HXtqJPpQV
 **Branch:** `claude/online-grocery-automation-b7pq4g`
 **Status is in `git log`, not hand-typed here.**
 
-**Since the last anchor (`c178749`):** a field audit of the whole
-Telegram surface, a **real order placed by Ishay on 2026-09-07** that
-went partly wrong and was dissected, and the build that came out of it.
-Eleven commits, `53ec0f7`..`e600e91`. 663 tests pass.
+**Since the last anchor (`c178749`):** 78 commits, `53ec0f7`..`68f34ea`.
+**964 tests pass.** Three outside reviews were commissioned by Ishay and
+answered; most of this work came out of verifying them rather than
+accepting them. In rough order:
+
+- **Two money bugs in the deal picker**, both found by checking a
+  reviewer's inference against the live feeds. Perishables were exempt
+  from the freshness guard whenever the household had bought the product
+  before. And every one of the twelve Tiv Taam picks that day was a
+  "השני ב־" promotion: the run advertised **₪161.87 of savings on a
+  ₪135.93 cart that would really have cost ₪297.80** and saved nothing.
+  `min_qty` cannot detect those — 1,530 live promotions are worded
+  multi-buy and carry `min_qty = 1` — so the wording is read too. Ishay
+  then approved buying two, so the ones whose arithmetic can be read are
+  now taken at the right quantity and the rest are reported.
+- **The interface stopped being one message per item.** 80 variant
+  questions would have gone out after a single cycle, 73 about a chain
+  that shop did not touch. Now: only the questions this run raised,
+  capped at 8, the whole set in one message edited forward, and the rest
+  behind `/questions`.
+- **The cart is no longer treated as ours alone.** `CartGuard` reads it
+  before filling and declines to undo a person's edit. Same pass caught
+  `/done` reading an empty post-purchase cart as "120 items deleted".
+- **A request has a life**: in_cart → awaiting → shopped → confirmed →
+  delivered, scoped to the chain the shop happened at.
+- **Understanding**: several requests per message, a rolling transcript,
+  correction intents, and the planner picking up where `unclear` used to
+  be. See §2f.
+- **קניון איילון mapped** (46 chains) on Ishay's instruction, though it
+  is in Ramat Gan.
 
 ## 1. Where things stand
 
@@ -30,7 +56,7 @@ Eleven commits, `53ec0f7`..`e600e91`. 663 tests pass.
 | Shufersal | own feed, 5,820 products | yes (`catalog_promotions`) | yes |
 | **Tiv Taam** | **portal feed, 20,889 products** | **yes, 25,642** | yes |
 | Politzer / Osher Ad / Rami Levy / Fresh Market / Keshet | portal feed | Politzer + Osher Ad only | no |
-| Yohananof | refused — feed 618 days stale | — | no |
+| Yohananof | refused — feed 600+ days stale | — | no |
 
 **Tiv Taam publishes a public feed and always did.** This file said for
 a week that it had none ("checked: prices.tivtaam.co.il does not exist,
@@ -65,17 +91,39 @@ across both chains; that is fine because it runs immediately after
 
 ## 2. In flight
 
-Nothing half-built. The order-history comparison Ishay asked for is
-**waiting on data, not on work**: his 2026-09-07 order had still not
-appeared in Shufersal's own order history hours later, so "what was
-actually bought vs what the list proposed" cannot be computed yet. The
-nightly sync will pick it up.
+Nothing half-built. Four items are queued and none started, all from the
+2026-09-11 reviews, in the order I would do them:
+
+1. **Removals read from the order contents, not the emptied cart.** This
+   one is a capability that broke while being fixed: an empty cart no
+   longer reads as "everything was deleted" (correct), but after a real
+   shop the cart is *always* empty, so removals are now never recorded at
+   all. The reliable observation is what the order actually contained
+   against the manifest, ~36 hours later.
+2. **Promotion conditions re-checked at hand-off**, including whether
+   "מעל 150₪" still holds after deletions, and separating *added spend*
+   from *verified discount* in the summary.
+3. **A repeat failure should change strategy**, not just raise a counter:
+   check the search term, the pack size, an allowed substitute, the other
+   chain.
+4. **💰 by unit price.** `_cheapest_index` ranks absolute price, so a
+   small pack wins over the better buy.
+
+**A live gap, found 2026-09-13:** a Tiv Taam shop is invisible end to
+end. `order_log` only ever tracks Shufersal and there is no Tiv Taam
+order-history reader, so the `shopped → confirmed` step can never fire
+for that chain and nothing recovers what was deleted before paying.
 
 ## 2b. Malls — answering "which shops here have a discount" (2026-09-09)
 
-`grocery_bot/malls.py` + `benefits-mall` in the CLI. Six malls modelled:
-שבעת הכוכבים הרצליה 52 chains, דיזנגוף סנטר 41, ביג פאשן גלילות 37,
-עזריאלי ת"א 35, רמת אביב 32, TLV גינדי 23.
+`grocery_bot/malls.py` + `benefits-mall` in the CLI. Seven malls modelled:
+שבעת הכוכבים הרצליה 52 chains, **קניון איילון רמת גן 46**, דיזנגוף סנטר
+41, ביג פאשן גלילות 37, עזריאלי ת"א 35, רמת אביב 32, TLV גינדי 23.
+
+איילון was added 2026-09-14 on Ishay's instruction, "למרות שהוא טכנית
+ברמת גן". Adding it forced רמת גן into `_CITIES`: a city named in a
+question is a **veto** on malls elsewhere, so a city holding a mall must
+be listed or its own name matches nothing.
 
 **The rule that matters if you extend it:** a mall is decided by the
 *address*, never by what a branch calls itself. Measured — "עזריאלי" in
@@ -214,6 +262,52 @@ Three things wait on Ishay rather than on code:
   `adhoc_requests` carries a binary `consumed` flag. Not done today
   because what each state *does* is a product decision. **This is the
   first thing to pick up next.**
+
+## 2f. Understanding: conversation, planner, readback (2026-09-11/14)
+
+Ishay set the goal plainly: *"זה צריך להיות בדיוק כמו שיחה פה"* — no
+careful phrasing to make a message fall inside a definition.
+
+**Several requests per message.** `parse_message` returns every request
+in the order it was said; each runs through the handler it would have had
+alone, and anything not carried out is named rather than dropped.
+
+**A rolling transcript** (`convo.py`). Six turns, 45-minute TTL, stale
+turns dropped individually. Goes to both the classifier and the planner.
+One remembered subject answered "בעצם שניים" and nothing else — "לא זה,
+השני" refers to what the previous *answer* offered.
+
+**The planner picks up where `unclear` used to be** (`hybrid.py`,
+`planner.py`, `plancontext.py`). This was decided by measurement, not
+taste: `scripts/compare_understanding.py` ran 25 real message shapes
+through both paths (results in `docs/EXPERIMENT_DIRECT_PLANNER.md`).
+Neither won. The classifier is better at terse follow-ups; the planner is
+better at everything the taxonomy has no slot for, including two messages
+the classifier does not miss but **files as grocery items**. And the
+planner alone returned neither a step nor a question for "נגמר הקוטג",
+the plainest message in the set — which is why it is a second pass and
+not the path.
+
+**The cart barrier is the same barrier.** `hybrid.CART_TOOLS` refuses
+every tool marked `touches_cart` on the guessing path, and a test ties
+the two lists together so a new cart tool cannot quietly become runnable
+there.
+
+**Worst case for one message is now 120 + 60 + 30 = 210s**, up from 150,
+and it fires only when the classifier times out *and* the planner
+declines. Measured median ~17s. A test ties all three constants to the
+documented arithmetic — the previous version of that test is what caught
+the number going stale.
+
+**Readback** (`readback.py`): a number the bot says must be a number the
+bot computed. Money is always redacted from model-authored text; a
+percentage only inside a saving claim, because "קוטג 5% שומן" is a
+product name.
+
+**Declined, and recorded as Ishay's decision rather than the bot's
+judgement:** an approval gate before cart writes. GOALS.md holds "בלי
+שלב אישור"; the cart is the proposal and his review before paying is the
+approval. Reversible by him saying so.
 
 ## 3. Blocked, and on what
 
