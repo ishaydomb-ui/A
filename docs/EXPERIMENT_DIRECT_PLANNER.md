@@ -214,3 +214,62 @@ is not correctness*.
   "חלב" becomes a specific carton.
 - Nothing here measures the household's effort, which is the thing the
   whole review said to measure.
+
+---
+
+# Decision and what shipped, 2026-09-14
+
+Ishay: *"תבנה מה שאתה באמת ממליץ."* Four recommendations, three built, one
+declined with its reason. All on the main branch; this branch stays as
+the record of the comparison that decided it.
+
+## Built
+
+**1. The hybrid seam** (`hybrid.py`). The planner takes over at exactly
+one point — where `unclear` used to be returned — and the loop stays
+behind it, so nothing that worked before can stop working. Confident
+classifications are never re-litigated and the common path pays none of
+the planner's latency.
+
+The cart barrier is the same barrier: this is the guessing path, so a
+plan reached from an unclassifiable message cannot write to the real
+cart. The tools are *refused*, not removed, so the bot says what it
+understood instead of claiming it understood nothing. A test ties
+`hybrid.CART_TOOLS` to every tool marked `touches_cart`.
+
+**2. A rolling transcript** (`convo.py`). One remembered subject answered
+"בעצם שניים" and nothing else: "לא זה, השני" refers to what the previous
+*answer* offered. Six turns, 45-minute TTL, stale turns dropped
+individually rather than the whole exchange, fed to both the classifier
+and the planner.
+
+**3. The readback guard** (`readback.py`). A number the bot says must be
+a number the bot computed. Money is always redacted from model-authored
+text; a percentage only inside a saving claim, because "קוטג 5% שומן" is
+a product name.
+
+## Declined, with the reason
+
+**4. An action gateway — proposal → approval → execution — for cart
+writes.** GOALS.md records *"בלי שלב אישור"* as Ishay's architectural
+decision, and the whole design follows from it: the cart is the proposal
+and his review before paying is the approval. Per-write approval would
+turn every item into a question, which is the friction three consecutive
+reviews asked us to remove. The shared-cart concern that motivated it is
+real and was solved differently on 2026-09-11 by `CartGuard`, which
+declines to undo a person's edit without asking anyone.
+
+Not declined on the bot's judgement: recorded as his decision, reversible
+by him saying so.
+
+## The cost, stated
+
+Worst case for one message is now **120 + 60 + 30 = 210s**, up from 150.
+All three fire only when the classifier times out *and* the planner
+declines; the measured median is ~17s. The planner's own timeout was cut
+from 90s to 60s for this reason — the sweep's median was 18s and its
+worst was 74s.
+
+A test ties all three constants to the documented arithmetic. The
+previous version of that test is what caught this going stale, which is
+exactly what it was written for.
