@@ -24,7 +24,7 @@ import logging
 
 from .catalog import find_cheaper_equivalents
 from .mdtext import escape as md
-from .learn import days_since_last_order, typical_gap_days
+from .learn import ALL_CHAINS, days_since_last_order, typical_gap_days
 from .listbuilder import available_lists, build as build_list
 from .radar import find_stockup_deals
 from .unitprice import for_product
@@ -43,8 +43,10 @@ MAX_SWAPS = 3
 def compose(storage, store: str = "shufersal") -> tuple[str, str]:
     """Build the digest. Returns (message, paste_block)."""
     now = datetime.datetime.now()
-    since = days_since_last_order(storage, store)
-    gap = typical_gap_days(storage, store)
+    # `store` is which cart this digest is about; how long since they
+    # shopped is a household question and spans both chains.
+    since = days_since_last_order(storage, ALL_CHAINS)
+    gap = typical_gap_days(storage, ALL_CHAINS)
 
     lines: list[str] = [f"🛒 *הגיע זמן קנייה* · {now.strftime('%d.%m')}"]
     if since is not None:

@@ -34,6 +34,13 @@ logger = logging.getLogger(__name__)
 # user said weekly-to-ten-days anyway.
 MIN_GAP_DAYS, MAX_GAP_DAYS, DEFAULT_GAP_DAYS = 4, 21, 8
 
+# Passed as `store` to mean "every chain". Cadence is a household fact:
+# measured over 2026 on 2026-09-15, Shufersal alone gives 6 orders at a
+# 27-day median with one 135-day hole, and both chains together give 29
+# at a 7-day median. The first describes Shufersal's share of the shop;
+# only the second describes how often this household buys food.
+ALL_CHAINS = ""
+
 
 def sync_from_orders(storage, adapter, store: str = "shufersal") -> dict:
     """One learning pass. Returns a small report of what changed."""
@@ -107,7 +114,14 @@ def typical_gap_days(storage, store: str = "shufersal") -> float:
     return float(min(MAX_GAP_DAYS, max(MIN_GAP_DAYS, gap)))
 
 
-def days_since_last_order(storage, store: str = "shufersal") -> float | None:
+def days_since_last_order(storage, store: str = ALL_CHAINS) -> float | None:
+    """How long since the household last ordered anywhere.
+
+    Across chains by default. "When did you last shop" is a question
+    about the fridge, and answering it from one chain is how the nudge
+    came to tell Ishay "8 days" two days after he shopped Tiv Taam
+    (2026-09-15). The digest asked the same question the same way.
+    """
     dates = storage.order_dates(store)
     if not dates:
         return None
@@ -127,10 +141,12 @@ def digest_due(storage, store: str = "shufersal") -> tuple[bool, str]:
     one waits for either a new order or three more days — a reminder,
     not a nag.
     """
-    since = days_since_last_order(storage, store)
+    # Both across chains: `store` here names which cart the digest will
+    # be about, not which shop counts as having happened.
+    since = days_since_last_order(storage, ALL_CHAINS)
     if since is None:
         return False, "אין עדיין היסטוריית הזמנות"
-    gap = typical_gap_days(storage, store)
+    gap = typical_gap_days(storage, ALL_CHAINS)
     if since < gap:
         return False, f"עברו {since:.0f} ימים; הקצב שלכם הוא ~{gap:.0f}"
 

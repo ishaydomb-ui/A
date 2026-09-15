@@ -6,13 +6,13 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-14 16:45 (host time, CEST)
+**Last anchored:** 2026-09-15 09:05 (host time, CEST)
 **Session:** https://claude.ai/code/session_01AR7esAYdoXQ71HXtqJPpQV
 **Branch:** `claude/online-grocery-automation-b7pq4g`
 **Status is in `git log`, not hand-typed here.**
 
 **Since the last anchor (`c178749`):** 78 commits, `53ec0f7`..`68f34ea`.
-**964 tests pass.** Three outside reviews were commissioned by Ishay and
+**994 tests pass.** Three outside reviews were commissioned by Ishay and
 answered; most of this work came out of verifying them rather than
 accepting them. In rough order:
 
@@ -109,13 +109,55 @@ Nothing half-built. Four items are queued and none started, all from the
 4. **💰 by unit price.** `_cheapest_index` ranks absolute price, so a
    small pack wins over the better buy.
 
-**A live gap, found 2026-09-13 — and it reached the household on
-2026-09-15.** A Tiv Taam shop is invisible end to end. `order_log` only
-ever tracks Shufersal and there is no Tiv Taam order-history reader, so
-the `shopped → confirmed` step can never fire for that chain and nothing
-recovers what was deleted before paying.
+**CLOSED 2026-09-15 — Tiv Taam's order history is read.** This was the
+"live gap, found 2026-09-13" that used to sit here. `order_log` was
+written only by the Shufersal reader, so nothing at the second chain
+could confirm a reported shop, feed the cadence counter, or say what was
+deleted before paying.
 
-What that cost: on 09-15 at 09:00 the nudge told Ishay *"עברו 8 ימים —
+It turned out to be wiring, not building: `TivTaamApi.orders()` and
+`.order()` were written on 08-31 with the rest of the Self-Point client
+and never called by anything. **40 orders back to 2020, with full line
+items, had been sitting unread.** `grocery_bot/tivtaamhistory.py`
+normalises them; `nightly_learn` syncs them after the Shufersal pass, in
+its own try/except so a failure there cannot cost a Shufersal sync that
+already succeeded. First real sync: 40 orders written.
+
+**The measurement that changes how to read everything else here.** Over
+2026: Shufersal alone is 6 orders, 27-day median, one 135-day hole. Tiv
+Taam alone is **23 orders, 8.5-day median**. Together, 29 orders at a
+**7-day median**. The bot had been computing "your rhythm" from the chain
+the household uses *least* — **Tiv Taam is the primary chain.**
+`days_since_last_order` and `typical_gap_days` now span chains
+(`learn.ALL_CHAINS`); the product list stays per chain. `typical_gap_days`
+is unaffected in practice because `target_gap_days=9` is set and a stated
+rhythm beats a measured one.
+
+Four traps, all from the real order 17655403 of 09-12 (₪382.29, 25
+items, ₪70.65 discount, delivered 09-13): weights are **kilograms** here
+and grams on Shufersal; a substitution is **two** lines (`status: 5` is
+the original that never arrived); product names contain embedded
+newlines; the delivery fee arrives as an ordinary line item. All four in
+`docs/ADDING_A_STORE.md`.
+
+**Privacy boundary, asserted not described.** The order payload carries
+the household's street address, building entry code, floor, apartment,
+phone, email, and the picker's and driver's names.
+`tivtaamhistory.summarise_order` whitelists five fields and a test
+asserts the address and phone do not survive it. Card data is stripped
+upstream by `tivtaam_api.strip_payment`.
+
+**Still not automatic:** the household's *own report* of a shop is what
+`/done` and free text record. The order history corroborates it late —
+Tiv Taam's own API had the 09-12 order the same day, which is much faster
+than Shufersal's ~36 hours, so the backstop is now worth extending to
+this chain. Not done yet; `shop_detected_since_refill` is still
+Shufersal-only.
+
+---
+
+What the invisibility cost, kept because the message reached the family
+group: on 09-15 at 09:00 the nudge told Ishay *"עברו 8 ימים —
 העגלה כבר מוכנה, 120 פריטים בשופרסל ו-1 פריטים בטיב טעם"*, two days
 after he shopped Tiv Taam and said so in the chat on 09-13 at 19:19. He
 pushed back on it. Three fixes, all shipped, full log entry in `GOALS.md`:
@@ -135,11 +177,8 @@ pushed back on it. Three fixes, all shipped, full log entry in `GOALS.md`:
   there). `last_shop(storage, store)` returns "" for a chain with no shop
   on record rather than falling back to the global date.
 
-**Still open after this:** the fix depends on *something* recording the
-shop. `/done` does, and so does the order-log backstop for Shufersal. A
-Tiv Taam shop nobody mentions is still invisible — the underlying gap is
-unchanged, only its loudest symptom is gone. Ishay's 09-13 shop was
-recorded by hand from his own message.
+Ishay's 09-13 shop was recorded by hand from his own message; the 09-12
+order then arrived through the new reader and corroborates it.
 
 ## 2b. Malls — answering "which shops here have a discount" (2026-09-09)
 

@@ -927,6 +927,25 @@ class GroceryBot:
         logger.info("Digest due: %s", reason)
         await self._send_digest(int(chat_id), context)
 
+    def _sync_tivtaam_orders(self) -> dict | None:
+        """Read Tiv Taam's order history into `order_log`. Blocking.
+
+        Returns None when there is no stored session — that is the
+        ordinary state after the captcha login expires, not an error, and
+        it must not stop the rest of the nightly pass.
+        """
+        from .adapters.tivtaam_api import (
+            TivTaamApi, TivTaamAuthError, TivTaamSession,
+        )
+        from . import tivtaamhistory
+
+        try:
+            api = TivTaamApi(TivTaamSession.from_storage_state())
+        except (FileNotFoundError, TivTaamAuthError) as exc:
+            logger.info("Tiv Taam order sync skipped: %s", exc)
+            return None
+        return tivtaamhistory.sync(self.storage, api)
+
     async def nightly_learn(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Nightly: learn from the store's own order history.
 
@@ -954,6 +973,19 @@ class GroceryBot:
             report = await asyncio.to_thread(_sync)
             if report:
                 logger.info("Nightly learn done: %s", report)
+
+            # The other chain, which until 2026-09-15 was never read at
+            # all. Its own JSON API answers the whole history, so this
+            # needs no browser and no adapter — and it is what lets a Tiv
+            # Taam shop confirm a reported one, and count towards the
+            # cadence the nudge uses. Failing here must not cost the
+            # Shufersal sync above, which has already succeeded.
+            try:
+                tivtaam = await asyncio.to_thread(self._sync_tivtaam_orders)
+                if tivtaam:
+                    logger.info("Nightly learn (tivtaam): %s", tivtaam)
+            except Exception:
+                logger.exception("Tiv Taam order sync failed; Shufersal is done")
 
             # The backstop: an order nobody told us about. Free text and
             # /done are faster and cover the normal case; this catches a

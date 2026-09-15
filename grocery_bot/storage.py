@@ -1483,10 +1483,25 @@ class Storage:
         return added
 
     def order_dates(self, store: str = "shufersal") -> list[str]:
+        """Order dates, oldest first. `store=""` means every chain.
+
+        The combined view exists because the household's rhythm is a
+        household fact, not a per-chain one: measured 2026-09-15 over
+        2026, Shufersal alone has 6 orders at a 27-day median and one
+        135-day hole, while the two chains together have 29 at a 7-day
+        median. Asking one chain "how often do they shop" gets an answer
+        about that chain's share, not about the fridge.
+        """
         with closing(self._connect()) as conn:
-            rows = conn.execute(
-                "SELECT placed_at FROM order_log WHERE store = ? ORDER BY placed_at", (store,)
-            ).fetchall()
+            if store:
+                rows = conn.execute(
+                    "SELECT placed_at FROM order_log WHERE store = ? ORDER BY placed_at",
+                    (store,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT placed_at FROM order_log ORDER BY placed_at"
+                ).fetchall()
         return [row["placed_at"] for row in rows]
 
     def get_state(self, key: str, default: str = "") -> str:

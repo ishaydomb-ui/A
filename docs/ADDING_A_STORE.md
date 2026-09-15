@@ -352,3 +352,60 @@ repertoire instead of only on strangers:
   number is a price ("19.90 מרק בצל/פטריות"), so the same pattern must
   not read it as a quantity. A new chain will word it a third way:
   read a few hundred real descriptions before trusting `min_qty`.
+
+## Order history is a second parser, with its own traps (2026-09-15)
+
+A cart reader is not an order-history reader, and a chain is not "wired
+up" until both exist. Tiv Taam had a working cart for two weeks while its
+order history was never read once — `order_log` was written only by the
+Shufersal reader, so nothing at the second chain could confirm a reported
+shop, feed the cadence counter, or say what was deleted before paying.
+The household found out on 2026-09-15, when the reminder announced "8
+days since your last order" two days after they shopped Tiv Taam and said
+so. See the `GOALS.md` entry.
+
+Worth checking before writing anything: **the client may already have the
+method.** `TivTaamApi.orders()` and `.order()` had been written on
+08-31 alongside the rest of the Self-Point client and never called by
+anything — 40 orders back to 2020, with full line items, sitting unread.
+The work was wiring, not building.
+
+Four traps, all from the single real order 17655403 of 2026-09-12:
+
+1. **Weight units differ by chain, and nothing warns you.** Shufersal's
+   `BY_WEIGHT` sends grams (500 = half a kilo); Self-Point sends
+   `quantity: 0.5` with `isWeightable: true`, in kilograms. The two look
+   identical in a debugger and differ by a factor of 1000. Keep each
+   chain's own unit and label it, rather than normalising in a place the
+   next reader will not think to look.
+2. **A substitution is two lines.** The original comes back with
+   `status: 5` and `actualQuantity: 0`; the replacement is a separate
+   line carrying `substituteId`. Count both and the item is doubled;
+   count the `status: 5` line and you record something that never
+   arrived. `quantity` is what was ordered, `actualQuantity` what was
+   picked — for weighed items they differ on nearly every line (0.5 kg of
+   bananas came back as 0.332).
+3. **Product names contain embedded newlines.** "טבעפרוסט תרד 800 גרם\n"
+   is the real name in the feed. Same class of bug as the asterisks in
+   Shufersal names that broke Telegram messages.
+4. **The delivery fee arrives as a line item** ("משלוח אינטרנט", ₪29.90),
+   exactly as on Shufersal. Unfiltered it becomes the household's
+   most-purchased product.
+
+And one thing that is not a trap but a boundary. The Self-Point order
+payload carries the household's street address, entrance code, floor,
+apartment, phone number, email, and the first and last names of the
+picker and the delivery driver. None of it is needed to know what was
+bought. `tivtaamhistory.summarise_order` whitelists five fields and that
+whitelist *is* the boundary — a test asserts the address and phone do
+not survive it. Card data is already stripped upstream by
+`tivtaam_api.strip_payment`; do not add a field here casually, because
+the question is what the database holds about someone's home.
+
+**A consequence worth knowing when a second chain lands:** cadence
+becomes a household question, not a per-chain one. Measured over 2026
+once both chains were readable, Shufersal alone gives 6 orders at a
+27-day median with one 135-day hole, and the two together give 29 at a
+7-day median. Anything asking "how often do they shop" or "when did they
+last shop" must span chains — `learn.ALL_CHAINS`. Anything asking "what
+is in this cart" must not.
