@@ -7,7 +7,7 @@ import {
   TEST_PASSWORD, closeTestApp, createTestApp, loginAs, loginAsAdmin, mailbox,
   resetDatabase, seedUser, sessionCookie, shutdown,
 } from '../test/helpers.js';
-import { setTransport } from '../services/mail.js';
+import { outboxTransport, setTransport } from '../services/mail.js';
 
 /** A mail server that is down, or credentials that are wrong. */
 const brokenTransport = {
@@ -835,6 +835,31 @@ describe('password reset', () => {
     expect(a.statusCode).toBe(200);
     expect(b.statusCode).toBe(a.statusCode);
     expect(b.json()).toEqual(a.json());
+  });
+
+  it('says so plainly when the site cannot send email at all', async () => {
+    const known = await seedUser({ email: 'doc@example.org', role: 'physician' });
+
+    setTransport(outboxTransport);
+    let a, b;
+    try {
+      a = await app.inject({
+        method: 'POST', url: '/api/auth/password/forgot', payload: { email: known.email },
+      });
+      b = await app.inject({
+        method: 'POST', url: '/api/auth/password/forgot', payload: { email: 'ghost@example.org' },
+      });
+    } finally {
+      setTransport(mailbox);
+    }
+
+    // Still identical, because whether mail works is a fact about the
+    // deployment and not about any one address.
+    expect(b.json()).toEqual(a.json());
+    // But not the claim that something was sent: nothing was, and someone
+    // locked out would wait on an inbox that never receives anything.
+    expect(a.json().message).not.toMatch(/has been sent/);
+    expect(a.json().message).toMatch(/cannot send email/i);
   });
 
   it('refuses to reuse a reset token', async () => {

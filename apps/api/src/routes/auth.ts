@@ -6,7 +6,7 @@ import { badRequest, unauthorized } from '../lib/errors.js';
 import { clearSessionCookie, setSessionCookie } from '../plugins/auth.js';
 import { audit, auditContext, clientIp } from '../services/audit.js';
 import * as auth from '../services/auth.js';
-import { passwordResetMail, tryDeliver } from '../services/mail.js';
+import { mailIsConfigured, passwordResetMail, tryDeliver } from '../services/mail.js';
 import * as limits from '../services/rateLimit.js';
 import { findById, toPublicUser } from '../services/users.js';
 import QRCode from 'qrcode';
@@ -162,7 +162,18 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
     }
     // Identical response either way: a caller cannot learn whether the
     // address is registered.
-    return { status: 'ok', message: 'If that address has an account, a reset link has been sent.' };
+    //
+    // Except for the one thing that is true of every address equally. With no
+    // mail server configured, 'a reset link has been sent' is simply false,
+    // and someone locked out is left refreshing an inbox that will never
+    // receive anything. Saying so reveals nothing about who has an account —
+    // it describes the deployment, not the address.
+    return {
+      status: 'ok',
+      message: mailIsConfigured()
+        ? 'If that address has an account, a reset link has been sent.'
+        : 'This site cannot send email yet, so no message will arrive. If that address has an account, the reset link was written to the server instead — ask an administrator for it, or to set a new password for you.',
+    };
   });
 
   app.post('/password/reset', async (req) => {

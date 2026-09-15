@@ -113,6 +113,16 @@ export async function initMail(): Promise<void> {
   }
 }
 
+/**
+ * Whether anything can actually leave this server.
+ *
+ * A property of the deployment, not of any one address, so telling a caller
+ * about it reveals nothing about who has an account.
+ */
+export function mailIsConfigured(): boolean {
+  return active !== outboxTransport;
+}
+
 /** Test hook; also used to force the outbox transport in dry-run deployments. */
 export function setTransport(transport: Transport): void {
   active = transport;
