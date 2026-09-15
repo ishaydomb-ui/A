@@ -1,6 +1,6 @@
 import { authenticator } from 'otplib';
 import type { Role } from '@med/shared';
-import { mfaRequiredForRole } from '@med/shared';
+import { MIN_PASSWORD_LENGTH, mfaRequiredForRole } from '@med/shared';
 import { config } from '../config.js';
 import { query, withTransaction, type Queryable } from '../db/pool.js';
 import {
@@ -41,10 +41,20 @@ export interface ClientInfo {
  * Length-first policy, per NIST SP 800-63B: long passphrases beat short
  * complex ones. Composition rules are intentionally not imposed.
  */
-export const MIN_PASSWORD_LENGTH = 12;
+export { MIN_PASSWORD_LENGTH };
 const COMMON_PASSWORDS = new Set([
-  'password', 'password1', 'passw0rd', '123456789012', 'qwertyuiop12',
-  'letmein12345', 'administrator', 'welcome12345', 'iloveyou1234',
+  // Written against the eight-character floor: every entry here is something
+  // a person could now actually type. A list built for a twelve-character
+  // minimum rejects nothing once the minimum is eight, because none of the
+  // passwords it names are short enough to be chosen any more.
+  'password', 'password1', 'password123', 'passw0rd', 'p@ssw0rd',
+  '12345678', '123456789', '1234567890', '123456789012',
+  'qwerty123', 'qwertyui', 'qwertyuiop', 'qwertyuiop12',
+  'letmein1', 'letmein123', 'letmein12345',
+  'welcome1', 'welcome123', 'welcome12345',
+  'iloveyou', 'iloveyou1', 'iloveyou1234',
+  'admin123', 'administrator', 'catalogue', 'medication',
+  'sunshine', 'princess', 'football', 'baseball', 'monkey123', 'abc12345',
 ]);
 
 export function validatePassword(password: string, email?: string): void {

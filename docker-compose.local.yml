@@ -55,7 +55,31 @@ services:
       # at a public HTTPS address and turns the Secure flag back on.
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
       COOKIE_SECURE: "${COOKIE_SECURE:-false}"
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
       TRUST_PROXY: "true"
+      # How long a sign-in lasts. The defaults here are far longer than the
+      # production file's, deliberately: this is the single-clinic path, read
+      # on a phone between patients, and a colleague thrown back to the
+      # sign-in form every half hour stops opening the app at all. What the
+      # session protects is published reference text and a list of who may
+      # read it — no patient-identifiable information is entered anywhere in
+      # this system — so the balance sits differently than it would elsewhere.
+      # Both are overridable from .env, and signing out still ends a session
+      # immediately, on that device.
+      SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-43200}
+      SESSION_ABSOLUTE_HOURS: ${SESSION_ABSOLUTE_HOURS:-2160}
+      # Everything below is read by the API from the environment. A setting
+      # that is not listed here never reaches the container, however carefully
+      # it was written into .env — which is a silent failure, so the list is
+      # kept complete rather than minimal.
+      LOGIN_MAX_ATTEMPTS: ${LOGIN_MAX_ATTEMPTS:-5}
+      LOGIN_LOCKOUT_MINUTES: ${LOGIN_LOCKOUT_MINUTES:-15}
+      INVITE_EXPIRY_HOURS: ${INVITE_EXPIRY_HOURS:-72}
+      RESET_EXPIRY_MINUTES: ${RESET_EXPIRY_MINUTES:-60}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-26214400}
+      DB_POOL_MAX: ${DB_POOL_MAX:-10}
+      SOURCE_LOOKUP_ENABLED: ${SOURCE_LOOKUP_ENABLED:-false}
+      SOURCE_LOOKUP_TIMEOUT_MS: ${SOURCE_LOOKUP_TIMEOUT_MS:-8000}
       IMPORT_STORAGE_DIR: /data/imports
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Outbound mail. Left empty, invitations and password resets are written

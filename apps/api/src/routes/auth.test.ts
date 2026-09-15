@@ -8,6 +8,7 @@ import {
   resetDatabase, seedUser, sessionCookie, shutdown,
 } from '../test/helpers.js';
 import { outboxTransport, setTransport } from '../services/mail.js';
+import { MIN_PASSWORD_LENGTH } from '@med/shared';
 
 /** A mail server that is down, or credentials that are wrong. */
 const brokenTransport = {
@@ -143,6 +144,45 @@ describe('invitation lifecycle', () => {
     const res = await app.inject({
       method: 'POST', url: '/api/auth/invitations/accept',
       payload: { token: invite.token, password: 'short' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('weak_password');
+  });
+
+  it('accepts a password at the minimum length but not one below it', async () => {
+    const { inviteUser } = await import('../services/auth.js');
+    const admin = await seedUser({ email: 'admin5@example.org', role: 'admin' });
+
+    const tooShort = await inviteUser({
+      email: 'seven@example.org', displayName: 'Seven', role: 'physician', invitedBy: admin.id,
+    });
+    const short = await app.inject({
+      method: 'POST', url: '/api/auth/invitations/accept',
+      payload: { token: tooShort.token, password: 'a'.repeat(MIN_PASSWORD_LENGTH - 1) },
+    });
+    expect(short.statusCode).toBe(400);
+
+    const exact = await inviteUser({
+      email: 'eight@example.org', displayName: 'Eight', role: 'physician', invitedBy: admin.id,
+    });
+    const ok = await app.inject({
+      method: 'POST', url: '/api/auth/invitations/accept',
+      payload: { token: exact.token, password: 'vv7qLp2r'.slice(0, MIN_PASSWORD_LENGTH) },
+    });
+    expect(ok.statusCode).toBe(200);
+  });
+
+  it('still refuses an obvious password of the allowed length', async () => {
+    const { inviteUser } = await import('../services/auth.js');
+    const admin = await seedUser({ email: 'admin6@example.org', role: 'admin' });
+    const invite = await inviteUser({
+      email: 'obvious@example.org', displayName: 'Obvious', role: 'physician', invitedBy: admin.id,
+    });
+    // Long enough to pass the length rule, which is exactly why the list of
+    // rejected passwords has to name things this short.
+    const res = await app.inject({
+      method: 'POST', url: '/api/auth/invitations/accept',
+      payload: { token: invite.token, password: '12345678' },
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().error.code).toBe('weak_password');

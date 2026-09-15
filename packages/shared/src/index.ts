@@ -1,4 +1,5 @@
 export * from './roles.js';
+export * from './passwords.js';
 export * from './values.js';
 export * from './fields.js';
 export * from './workflow.js';

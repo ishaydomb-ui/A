@@ -1,7 +1,9 @@
 import { useId } from 'react';
 import { useI18n } from '../i18n.ts';
 
-export const MIN_PASSWORD_LENGTH = 12;
+import { MIN_PASSWORD_LENGTH } from '@med/shared';
+
+export { MIN_PASSWORD_LENGTH };
 
 /**
  * New-password entry with confirmation. Validation messages are tied to the
