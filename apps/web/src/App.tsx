@@ -22,6 +22,7 @@ import { ComparePage } from './pages/ComparePage.tsx';
 import { ReviewPage } from './pages/ReviewPage.tsx';
 import { ImportsPage } from './pages/ImportsPage.tsx';
 import { UsersPage } from './pages/UsersPage.tsx';
+import { UsagePage } from './pages/UsagePage.tsx';
 import { AccountPage } from './pages/AccountPage.tsx';
 import { LegalPage } from './pages/LegalPage.tsx';
 import { NotFoundPage } from './pages/NotFoundPage.tsx';
@@ -124,6 +125,14 @@ function AppRoutes() {
           element={
             <RequireCapability capability="import:create">
               <ImportsPage />
+            </RequireCapability>
+          }
+        />
+        <Route
+          path="/usage"
+          element={
+            <RequireCapability capability="audit:read">
+              <UsagePage />
             </RequireCapability>
           }
         />

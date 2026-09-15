@@ -19,7 +19,8 @@ import { ThemeToggle } from './ThemeToggle.tsx';
 function UserActions({ onNavigate }: { onNavigate?: () => void }) {
   const { session, signOut, can } = useAuth();
   const { t } = useI18n();
-  const hasAdminSection = can('review:read') || can('import:create') || can('users:manage');
+  const hasAdminSection =
+    can('review:read') || can('import:create') || can('users:manage') || can('audit:read');
 
   return (
     <>
@@ -34,6 +35,11 @@ function UserActions({ onNavigate }: { onNavigate?: () => void }) {
           {can('import:create') && (
             <Link to="/imports" className="btn btn-sm btn-secondary" onClick={onNavigate}>
               {t.navImports}
+            </Link>
+          )}
+          {can('audit:read') && (
+            <Link to="/usage" className="btn btn-sm btn-secondary" onClick={onNavigate}>
+              {t.usageTitle}
             </Link>
           )}
           {can('users:manage') && (

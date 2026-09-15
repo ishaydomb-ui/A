@@ -1226,3 +1226,75 @@ dialog::backdrop { background: rgb(8 12 18 / 55%); }
 .record-internal { margin-block-start: var(--space-3); }
 .record-internal summary { cursor: pointer; font-weight: 600; }
 .record-internal ul { margin: var(--space-2) 0 0; padding-inline-start: var(--space-5); }
+
+/* ---- Usage ------------------------------------------------------------ */
+
+.usage-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 10px;
+  margin: 1.25rem 0 2rem;
+}
+.usage-tile {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.usage-tile strong {
+  display: block;
+  font-size: 1.7rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.usage-tile span {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.usage-bars { list-style: none; margin: 0 0 2rem; padding: 0; }
+.usage-bars li {
+  display: grid;
+  grid-template-columns: 3.2rem 1fr 1.6rem;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0;
+}
+.usage-bar-day, .usage-bar-count {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.usage-bar-count { text-align: end; }
+.usage-bar-track {
+  background: var(--border);
+  border-radius: 999px;
+  block-size: 8px;
+  overflow: hidden;
+}
+.usage-bar-fill {
+  display: block;
+  background: var(--accent);
+  block-size: 100%;
+  border-radius: 999px;
+}
+
+.usage-table { inline-size: 100%; border-collapse: collapse; }
+.usage-table th, .usage-table td {
+  text-align: start;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 400;
+}
+.usage-table thead th {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.usage-table tbody th { font-weight: 600; }
+.usage-table .num { text-align: end; font-variant-numeric: tabular-nums; }
+.usage-table .badge { margin-inline-start: 6px; }
+.usage-footnote { margin-top: 1.5rem; font-size: 0.88rem; }

@@ -13,6 +13,7 @@ import catalogueRoutes from './routes/catalogue.js';
 import importRoutes from './routes/imports.js';
 import metaRoutes from './routes/meta.js';
 import reviewRoutes from './routes/review.js';
+import usageRoutes from './routes/usage.js';
 import searchRoutes from './routes/search.js';
 import userRoutes from './routes/users.js';
 
@@ -101,6 +102,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(catalogueRoutes, { prefix: '/api/medications' });
   await app.register(importRoutes, { prefix: '/api/imports' });
   await app.register(reviewRoutes, { prefix: '/api/review' });
+  await app.register(usageRoutes, { prefix: '/api/admin' });
 
   return app;
 }
