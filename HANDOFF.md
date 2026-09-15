@@ -12,7 +12,7 @@ need to know?*
 **Status is in `git log`, not hand-typed here.**
 
 **Since the last anchor (`c178749`):** 78 commits, `53ec0f7`..`68f34ea`.
-**994 tests pass.** Three outside reviews were commissioned by Ishay and
+**999 tests pass.** Three outside reviews were commissioned by Ishay and
 answered; most of this work came out of verifying them rather than
 accepting them. In rough order:
 
@@ -147,12 +147,19 @@ phone, email, and the picker's and driver's names.
 asserts the address and phone do not survive it. Card data is stripped
 upstream by `tivtaam_api.strip_payment`.
 
-**Still not automatic:** the household's *own report* of a shop is what
-`/done` and free text record. The order history corroborates it late —
-Tiv Taam's own API had the 09-12 order the same day, which is much faster
-than Shufersal's ~36 hours, so the backstop is now worth extending to
-this chain. Not done yet; `shop_detected_since_refill` is still
-Shufersal-only.
+**The backstop now covers both chains too.**
+`shops_detected_since_refill` returns `{store: date}` and judges each
+chain against its own last refill, so a shop nobody mentions is caught
+wherever it happened and only that chain's cart is refilled. Tiv Taam is
+the *faster* source here, not the straggler: its API had the 09-12 order
+the same day, against Shufersal's measured ~36 hours.
+
+One migration hazard, guarded and tested: per-chain shop records start
+empty, so without a fallback to the global date every historical order
+would read as new on the first run and refill a cart nobody emptied.
+Verified against the live database — nothing is falsely detected. Note
+this is the opposite default from `manifest_is_stale`, which treats an
+unknown chain as *not* shopped; both err towards not acting.
 
 ---
 

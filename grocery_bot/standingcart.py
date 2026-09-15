@@ -204,6 +204,48 @@ def removals(storage, store: str, cart_items) -> list[dict]:
     ]
 
 
+def shops_detected_since_refill(storage, stores=None) -> dict:
+    """Which chains have an order newer than their own last refill.
+
+    Returns ``{store: order date}``, empty when nothing is new. The
+    per-chain version of `shop_detected_since_refill`, and the reason it
+    exists: until 2026-09-15 `order_log` held only Shufersal, so this
+    backstop could only ever fire for one chain. Tiv Taam's own API had
+    the 09-12 order the same day it was placed — against Shufersal's
+    measured ~36 hours — which makes it the *faster* of the two, not a
+    straggler.
+
+    The comparison falls back to the global shop date for a chain with no
+    record of its own. Without that, every pre-2026-09-15 order would read
+    as new the first time this runs and refill a cart nobody emptied.
+    Note this is the opposite default from `manifest_is_stale`, which
+    treats an unknown chain as *not* shopped — both choices err towards
+    not acting on something we do not know.
+    """
+    from contextlib import closing
+
+    from .chains import CART_CAPABLE
+
+    with closing(storage._connect()) as conn:  # noqa: SLF001 - storage-internal
+        rows = conn.execute(
+            "SELECT store, MAX(placed_at) AS newest FROM order_log GROUP BY store"
+        ).fetchall()
+
+    wanted = set(stores or CART_CAPABLE)
+    global_last = last_shop(storage)
+    detected = {}
+    for row in rows:
+        store = row["store"]
+        newest = row["newest"] or ""
+        if store not in wanted or not newest:
+            continue
+        last = last_shop(storage, store) or global_last
+        if last and newest[:10] <= last:
+            continue
+        detected[store] = newest
+    return detected
+
+
 def shop_detected_since_refill(storage, store: str = "shufersal") -> str:
     """A newer order than our last refill means a shop happened. Returns
     the order date, or "" when there is nothing new.

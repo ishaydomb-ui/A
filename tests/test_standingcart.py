@@ -337,3 +337,58 @@ class DealTaggingTests(unittest.TestCase):
         record_deals(self.storage, {"shufersal": report})
         stored = json.loads(self.storage.get_state("last_deal_picks"))
         self.assertEqual([p["name"] for p in stored["picks"]], ["דבש טבעי לחיץ"])
+
+
+class PerChainDetectionTests(unittest.TestCase):
+    """The backstop, once both chains are readable.
+
+    Until 2026-09-15 `order_log` held only Shufersal, so this could fire
+    for one chain and silently never for the other. Tiv Taam's API turned
+    out to be the *faster* source — it had the 09-12 order the same day,
+    against Shufersal's measured ~36 hours.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.storage = Storage(str(Path(self._tmp.name) / "t.sqlite3"))
+
+    def _order(self, store, code, placed_at):
+        self.storage.log_orders(
+            [{"code": code, "placed_at": placed_at, "item_count": 25}], store=store
+        )
+
+    def test_a_shop_at_the_second_chain_is_detected(self):
+        standingcart.mark_shopped(self.storage, date(2026, 9, 8), store="tivtaam")
+        self._order("tivtaam", "T1", "2026-09-12T16:48:25")
+        self.assertEqual(
+            standingcart.shops_detected_since_refill(self.storage),
+            {"tivtaam": "2026-09-12T16:48:25"},
+        )
+
+    def test_each_chain_is_judged_against_its_own_refill(self):
+        standingcart.mark_shopped(self.storage, date(2026, 9, 8), store="shufersal")
+        standingcart.mark_shopped(self.storage, date(2026, 9, 14), store="tivtaam")
+        self._order("shufersal", "S1", "2026-09-12T08:00:00")
+        self._order("tivtaam", "T1", "2026-09-12T16:48:25")
+        # Shufersal's order is newer than its refill; Tiv Taam's is not.
+        self.assertEqual(list(standingcart.shops_detected_since_refill(self.storage)),
+                         ["shufersal"])
+
+    def test_an_old_order_is_not_re_detected_on_the_first_per_chain_run(self):
+        """The migration hazard, guarded.
+
+        Per-chain records start empty. Without a fallback to the global
+        date, every historical order would read as new the first time
+        this runs and refill a cart nobody emptied.
+        """
+        self._order("shufersal", "S1", "2026-08-24T09:46:00")
+        standingcart.mark_shopped(self.storage, date(2026, 9, 8))  # global only
+        self.assertEqual(standingcart.shops_detected_since_refill(self.storage), {})
+
+    def test_nothing_new_is_silence(self):
+        self.assertEqual(standingcart.shops_detected_since_refill(self.storage), {})
+
+    def test_a_chain_we_do_not_fill_is_ignored(self):
+        self._order("victory", "V1", "2026-09-12T10:00:00")
+        self.assertEqual(standingcart.shops_detected_since_refill(self.storage), {})

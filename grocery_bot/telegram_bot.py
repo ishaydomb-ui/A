@@ -992,26 +992,35 @@ class GroceryBot:
             # shop that was simply never mentioned, and refills rather
             # than leaving the household to find an empty cart days later
             # — which is exactly what happened on 2026-09-07.
-            placed = await asyncio.to_thread(
-                standingcart.shop_detected_since_refill, self.storage
+            # Per chain since 2026-09-15: `order_log` used to hold only
+            # Shufersal, so this could fire for one chain and silently
+            # never for the other. Naming the chain also means only the
+            # cart that was actually emptied gets refilled.
+            detected = await asyncio.to_thread(
+                standingcart.shops_detected_since_refill, self.storage
             )
-            if placed:
+            if detected:
                 chat_id = self.storage.get_state("digest_chat_id")
                 if chat_id:
-                    logger.info("Unannounced shop detected (%s); refilling", placed)
-                    # The detection reads `order_log`, which only ever
-                    # holds Shufersal, so the chain is known exactly.
-                    await asyncio.to_thread(
-                        standingcart.mark_shopped, self.storage, None, "shufersal"
-                    )
+                    from .chains import display_name
+
+                    logger.info("Unannounced shop detected: %s; refilling", detected)
+                    for store in detected:
+                        await asyncio.to_thread(
+                            standingcart.mark_shopped, self.storage, None, store
+                        )
+                    where = " ו".join(display_name(s) for s in sorted(detected))
                     await context.bot.send_message(
                         chat_id=int(chat_id),
                         text=(
-                            "ראיתי שהייתה הזמנה שלא סיפרתם לי עליה — "
+                            f"ראיתי שהייתה הזמנה ב{where} שלא סיפרתם לי עליה — "
                             "ממלא את העגלה מחדש כרגיל."
                         ),
                     )
-                    await self._refill_carts(int(chat_id), context, factories)
+                    await self._refill_carts(
+                        int(chat_id), context,
+                        {s: f for s, f in factories.items() if s in detected},
+                    )
         except Exception:
             logger.exception("Nightly learn failed; will retry tomorrow")
 
