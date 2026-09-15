@@ -22,6 +22,12 @@ export function UsersPage() {
   // is editable at a time, so a half-finished edit cannot be left behind on a
   // row that has scrolled out of sight.
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
+  // A role change saves the moment it is picked, with no button to press, so
+  // without a mark in the row there is nothing to tell a success from a
+  // selection that never reached the server. The page-level success notice
+  // sits above the table and is out of sight on a phone, so this one belongs
+  // beside the control that changed.
+  const [roleSaved, setRoleSaved] = useState<string | null>(null);
   const [handedOver, setHandedOver] = useState<string | null>(null);
   // Sharing is a phone capability; on a desktop browser the button would
   // simply not work, so it is only offered where it exists.
@@ -191,8 +197,10 @@ export function UsersPage() {
     try {
       await api.patch(`/api/users/${id}`, patch);
       setRenaming(null);
+      if (patch.role) setRoleSaved(id);
       load();
     } catch (err) {
+      setRoleSaved(null);
       setError(err instanceof ApiError ? err.message : t.errorGeneric);
     }
   }
@@ -389,6 +397,11 @@ export function UsersPage() {
                           </option>
                         ))}
                       </select>
+                      {roleSaved === user.id && (
+                        <span className="saved-mark" role="status">
+                          Saved
+                        </span>
+                      )}
                     </td>
                     <td>
                       <span

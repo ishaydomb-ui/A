@@ -1067,6 +1067,15 @@ dialog.sheet::backdrop { background: rgb(8 12 18 / 45%); }
 /* --- Tables ---------------------------------------------------------------- */
 
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* Confirms a change that saved itself without a button being pressed. */
+.saved-mark {
+  display: inline-block;
+  margin-inline-start: 6px;
+  font-size: 0.78rem;
+  color: var(--success, var(--text-muted));
+  white-space: nowrap;
+}
+.saved-mark::before { content: '✓ '; }
 table { border-collapse: collapse; inline-size: 100%; font-size: 0.875rem; }
 th, td {
   text-align: start;
