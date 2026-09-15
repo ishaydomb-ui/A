@@ -2,11 +2,17 @@ import { LOCALES, normalizeText, resolveField, type Locale, type MedicationData 
 import { query, type Queryable } from '../db/pool.js';
 
 /** Fields that make up each weight class of the search index. */
-const NAME_FIELDS = ['generic_name', 'trade_names'];
+// A clinician searches for the name on the box. For most of the catalogue
+// that is now brand_names_israel rather than trade_names, so leaving it out
+// made every Israeli brand unfindable — "Abilify" and "Zyprexa" returned
+// nothing at all, while "Risperdal" appeared to work only because it happens
+// to resemble "Risperidone" closely enough for the fuzzy pass.
+const NAME_FIELDS = ['generic_name', 'trade_names', 'brand_names_israel'];
 const CLASS_FIELDS = ['therapeutic_group', 'drug_class', 'drug_family', 'mechanism'];
 const BODY_FIELDS = [
   'adult_indications', 'pediatric_indications', 'side_effects',
-  'contraindications', 'monitoring_tests', 'clinical_notes', 'formulation',
+  'contraindications', 'monitoring_tests', 'clinical_notes', 'comments',
+  'formulation', 'formulations_israel',
 ];
 
 /** Facets offered as filters in the UI. */
