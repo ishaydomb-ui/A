@@ -80,6 +80,13 @@ export default async function catalogueRoutes(app: FastifyInstance): Promise<voi
       FIELD_KEYS.map((key) => [key, resolveField(version.data, key, q.locale)]),
     );
 
+    await audit({
+      ...auditContext(req),
+      action: 'catalogue.viewed',
+      entityType: 'medication',
+      entityId: version.slug,
+    });
+
     return {
       slug: version.slug,
       versionId: version.id,

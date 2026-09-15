@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { LOCALES, MAX_COMPARE, roleHasCapability } from '@med/shared';
 import * as limits from '../services/rateLimit.js';
 import * as search from '../services/search.js';
+import { audit, auditContext } from '../services/audit.js';
 
 /** Accepts either repeated params or a comma-separated list. */
 const listParam = z
@@ -52,6 +53,17 @@ export default async function searchRoutes(app: FastifyInstance): Promise<void> 
       offset: q.offset,
       includeUnpublished,
     });
+
+    // Recorded so the pilot can see whether the catalogue is being used and
+    // what people look for and do not find. A search that returns nothing is
+    // the most useful row here: it names content the catalogue is missing.
+    if (q.q.trim()) {
+      await audit({
+        ...auditContext(req),
+        action: 'catalogue.searched',
+        detail: { q: q.q.trim(), results: result.total },
+      });
+    }
 
     return { ...result, limit: q.limit, offset: q.offset, maxCompare: MAX_COMPARE };
   });

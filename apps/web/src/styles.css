@@ -1298,3 +1298,20 @@ dialog::backdrop { background: rgb(8 12 18 / 55%); }
 .usage-table .num { text-align: end; font-variant-numeric: tabular-nums; }
 .usage-table .badge { margin-inline-start: 6px; }
 .usage-footnote { margin-top: 1.5rem; font-size: 0.88rem; }
+
+/* The people table carries more columns than a phone has room for, so it
+   scrolls in its own box rather than pushing the page sideways. */
+.usage-scroll { overflow-x: auto; }
+.usage-table + h2, .usage-scroll + h2 { margin-top: 2.25rem; }
+.usage-scroll .usage-table { min-inline-size: 44rem; }
+.usage-scope { margin: 0 0 0.5rem; font-size: 0.85rem; }
+.usage-person { font-weight: 600; }
+.usage-person-meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.usage-trouble { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.usage-term { font-weight: 400; font-family: var(--font-mono, ui-monospace, monospace); }
