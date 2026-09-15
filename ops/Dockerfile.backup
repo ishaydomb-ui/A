@@ -1,0 +1,11 @@
+# Nightly encrypted database backups.
+FROM alpine:3.20
+
+RUN apk add --no-cache postgresql16-client gnupg tzdata coreutils busybox-suid
+
+COPY backup.sh /usr/local/bin/backup.sh
+COPY restore.sh /usr/local/bin/restore.sh
+COPY backup-entrypoint.sh /usr/local/bin/backup-entrypoint.sh
+RUN chmod +x /usr/local/bin/backup.sh /usr/local/bin/restore.sh /usr/local/bin/backup-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/backup-entrypoint.sh"]
