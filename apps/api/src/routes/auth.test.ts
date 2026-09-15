@@ -603,6 +603,137 @@ describe('account administration', () => {
     expect(accepted.statusCode).toBe(200);
   });
 
+  describe('an invitation addressed to nobody', () => {
+    async function makeLink(role = 'physician') {
+      await seedUser({ email: 'linkadmin@example.org', role: 'admin' });
+      const cookie = await loginAsAdmin(app, 'linkadmin@example.org');
+      const res = await app.inject({
+        method: 'POST', url: '/api/users/invitations/link', headers: { cookie },
+        payload: { role },
+      });
+      expect(res.statusCode).toBe(200);
+      return new URL(res.json().invitationLink).searchParams.get('token')!;
+    }
+
+    it('names nobody until it is opened, then creates that person', async () => {
+      const token = await makeLink();
+
+      // The page has to know to ask, so the description carries no address.
+      const described = await app.inject({
+        method: 'GET', url: `/api/auth/invitations/${encodeURIComponent(token)}`,
+      });
+      expect(described.json().email).toBeNull();
+      expect(described.json().role).toBe('physician');
+
+      const accepted = await app.inject({
+        method: 'POST', url: '/api/auth/invitations/accept',
+        payload: {
+          token, password: TEST_PASSWORD,
+          email: 'Resident@Example.org', displayName: 'A Resident',
+        },
+      });
+      expect(accepted.statusCode).toBe(200);
+      expect(accepted.json().user).toMatchObject({
+        email: 'Resident@Example.org', displayName: 'A Resident',
+        role: 'physician', status: 'active',
+      });
+
+      await loginAs(app, 'resident@example.org', TEST_PASSWORD);
+    });
+
+    it('does not let the holder attach themselves to an existing address', async () => {
+      // The whole risk of a link that anyone can open is that its holder
+      // claims somebody else. An address that is already known is the one
+      // they must not be able to take.
+      await seedUser({ email: 'already@example.org', role: 'physician' });
+      const token = await makeLink();
+
+      const res = await app.inject({
+        method: 'POST', url: '/api/auth/invitations/accept',
+        payload: {
+          token, password: TEST_PASSWORD,
+          email: 'ALREADY@example.org', displayName: 'Impostor',
+        },
+      });
+      expect(res.statusCode).toBe(409);
+      expect(res.json().error.code).toBe('user_exists');
+
+      // And the original account is untouched.
+      const { rows } = await query(
+        `SELECT display_name FROM users WHERE email_normalized = 'already@example.org'`,
+      );
+      expect(rows[0].display_name).not.toBe('Impostor');
+    });
+
+    it('works exactly once', async () => {
+      const token = await makeLink();
+      const first = await app.inject({
+        method: 'POST', url: '/api/auth/invitations/accept',
+        payload: { token, password: TEST_PASSWORD, email: 'one@example.org', displayName: 'One' },
+      });
+      expect(first.statusCode).toBe(200);
+
+      const second = await app.inject({
+        method: 'POST', url: '/api/auth/invitations/accept',
+        payload: { token, password: TEST_PASSWORD, email: 'two@example.org', displayName: 'Two' },
+      });
+      expect(second.statusCode).toBe(400);
+
+      const { rows } = await query(
+        `SELECT id FROM users WHERE email_normalized = 'two@example.org'`,
+      );
+      expect(rows).toHaveLength(0);
+    });
+
+    it('refuses to proceed without a name and address', async () => {
+      const token = await makeLink();
+      const res = await app.inject({
+        method: 'POST', url: '/api/auth/invitations/accept',
+        payload: { token, password: TEST_PASSWORD },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.code).toBe('details_required');
+    });
+
+    it('does not mark the self-supplied address as verified', async () => {
+      const token = await makeLink();
+      await app.inject({
+        method: 'POST', url: '/api/auth/invitations/accept',
+        payload: { token, password: TEST_PASSWORD, email: 'self@example.org', displayName: 'Self' },
+      });
+      // Nobody proved they control this mailbox — they typed it themselves —
+      // so it must not carry the same standing as an address an invitation
+      // was actually delivered to.
+      const { rows } = await query<{ email_verified_at: Date | null }>(
+        `SELECT email_verified_at FROM users WHERE email_normalized = 'self@example.org'`,
+      );
+      expect(rows[0].email_verified_at).toBeNull();
+    });
+
+    it('records which account the link became', async () => {
+      const token = await makeLink();
+      await app.inject({
+        method: 'POST', url: '/api/auth/invitations/accept',
+        payload: { token, password: TEST_PASSWORD, email: 'became@example.org', displayName: 'Became' },
+      });
+      const { rows } = await query<{ email: string }>(
+        `SELECT u.email FROM invitations i JOIN users u ON u.id = i.accepted_user_id
+          WHERE i.email_normalized IS NULL AND i.accepted_at IS NOT NULL`,
+      );
+      expect(rows.map((r) => r.email)).toContain('became@example.org');
+    });
+
+    it('is not something a physician can create', async () => {
+      await seedUser({ email: 'plaindoc@example.org', role: 'physician' });
+      const cookie = await loginAs(app, 'plaindoc@example.org', TEST_PASSWORD);
+      const res = await app.inject({
+        method: 'POST', url: '/api/users/invitations/link',
+        headers: { cookie }, payload: { role: 'admin' },
+      });
+      expect(res.statusCode).toBe(403);
+    });
+  });
+
   it('re-inviting someone who never accepted updates their details in place', async () => {
     await seedUser({ email: 'admin@example.org', role: 'admin' });
     const cookie = await loginAsAdmin(app, 'admin@example.org');

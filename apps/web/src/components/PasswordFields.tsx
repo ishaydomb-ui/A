@@ -49,11 +49,11 @@ export function PasswordFields({
           aria-invalid={showShort || undefined}
         />
         <p className="hint" id={hintId}>
-          {t.passwordMinLength}
+          {t.passwordMinLength.replace('{n}', String(MIN_PASSWORD_LENGTH))}
         </p>
         {showShort && (
           <p className="error-text" id={errorId}>
-            {t.passwordMinLength}
+            {t.passwordMinLength.replace('{n}', String(MIN_PASSWORD_LENGTH))}
           </p>
         )}
       </div>

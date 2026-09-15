@@ -51,6 +51,31 @@ export default async function userRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
+  /**
+   * An invitation with no address on it, for sending by hand.
+   *
+   * The administrator picks only the role; whoever opens the link says who
+   * they are. Nothing is emailed, because there is nowhere to send it — the
+   * link is the whole thing, and it is returned once.
+   */
+  app.post('/invitations/link', { onRequest: [requireUserAdmin] }, async (req) => {
+    const { role } = z.object({ role: roleSchema }).parse(req.body);
+    const result = await auth.createInvitationLink({ role, invitedBy: req.currentUser!.id });
+    const link = `${config.publicUrl}/accept-invitation?token=${encodeURIComponent(result.token)}`;
+    await audit({
+      ...auditContext(req),
+      action: 'users.invitation_link_created',
+      detail: { role, invitationId: result.invitationId },
+    });
+    return {
+      status: 'ok',
+      invitationId: result.invitationId,
+      expiresAt: result.expiresAt.toISOString(),
+      invitationLink: link,
+      role,
+    };
+  });
+
   app.post('/:id/invitations/resend', { onRequest: [requireUserAdmin] }, async (req) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const user = await findById(id);

@@ -11,8 +11,9 @@ import { MIN_PASSWORD_LENGTH, PasswordFields } from '../components/PasswordField
 import { Spinner } from '../components/Spinner.tsx';
 
 interface InvitationSummary {
-  email: string;
-  displayName: string;
+  /** Null for an open link, which names nobody until it is opened. */
+  email: string | null;
+  displayName: string | null;
   role: string;
   expiresAt: string;
 }
@@ -30,6 +31,9 @@ export function AcceptInvitationPage() {
   const [invitation, setInvitation] = useState<InvitationSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [invalid, setInvalid] = useState(false);
+  // Filled in by the recipient when the invitation names nobody.
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -52,17 +56,22 @@ export function AcceptInvitationPage() {
 
   if (session && !challenge) return <Navigate to="/" replace />;
 
+  const open = invitation !== null && invitation.email === null;
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setSubmitted(true);
     if (password.length < MIN_PASSWORD_LENGTH || password !== confirm) return;
+    if (open && (!email.trim() || !name.trim())) return;
 
     setBusy(true);
     setError(null);
     try {
       const result = await api.post<Session & { status: string; challengeToken?: string }>(
         '/api/auth/invitations/accept',
-        { token, password },
+        open
+          ? { token, password, email: email.trim(), displayName: name.trim() }
+          : { token, password },
       );
       if (result.status === 'ok') setSession(result);
       else if (result.challengeToken) {
@@ -112,10 +121,12 @@ export function AcceptInvitationPage() {
     <AuthShell title={t.acceptHeading}>
       <p className="muted small">{t.acceptHelp}</p>
       <dl className="field-list" style={{ marginBlockEnd: 16 }}>
-        <div className="field-row">
-          <dt>{t.email}</dt>
-          <dd>{invitation.email}</dd>
-        </div>
+        {invitation.email !== null && (
+          <div className="field-row">
+            <dt>{t.email}</dt>
+            <dd>{invitation.email}</dd>
+          </div>
+        )}
         <div className="field-row">
           <dt>Role</dt>
           <dd>{invitation.role.replace(/_/g, ' ')}</dd>
@@ -124,6 +135,35 @@ export function AcceptInvitationPage() {
 
       <form onSubmit={submit} noValidate>
         {error && <Notice tone="error">{error}</Notice>}
+        {open && (
+          <>
+            <div className="field">
+              <label htmlFor="claim-name">{t.fullName}</label>
+              <input
+                id="claim-name"
+                type="text"
+                value={name}
+                autoComplete="name"
+                required
+                maxLength={200}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="claim-email">{t.email}</label>
+              <input
+                id="claim-email"
+                type="email"
+                value={email}
+                autoComplete="email"
+                required
+                maxLength={320}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <p className="hint">{t.acceptOwnEmailHint}</p>
+            </div>
+          </>
+        )}
         <PasswordFields
           password={password}
           confirm={confirm}

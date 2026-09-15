@@ -141,16 +141,54 @@ export async function inviteUser(
   return client ? run(client) : withTransaction(run);
 }
 
+/**
+ * An invitation addressed to no one: it carries a role, and the person who
+ * opens it supplies their own name and address.
+ *
+ * The address was being asked for at the one moment nobody has it to hand —
+ * an administrator writing to a colleague on their phone — and moving it to
+ * the person who actually knows it removes both the guessing and the typos.
+ *
+ * What it costs is that the link, not the mailbox, is the credential: whoever
+ * holds it can take the one account it admits. It is single-use and expires
+ * like any other invitation, so a forwarded link is a race rather than an open
+ * door, and the account it created is named in the user list and the audit log
+ * from the moment it exists. That is the right trade for a link sent by hand
+ * to one named colleague; it would not be for a link posted somewhere public.
+ */
+export async function createInvitationLink(
+  params: { role: Role; invitedBy: string },
+): Promise<{ invitationId: string; token: string; expiresAt: Date }> {
+  const token = generateToken();
+  const expiresAt = new Date(Date.now() + config.inviteExpiryMs);
+  const { rows } = await query<{ id: string }>(
+    `INSERT INTO invitations (email_normalized, display_name, role, token_hash, expires_at, invited_by)
+     VALUES (NULL, NULL, $1, $2, $3, $4) RETURNING id`,
+    [params.role, hashToken(token), expiresAt, params.invitedBy],
+  );
+  return { invitationId: rows[0].id, token, expiresAt };
+}
+
 export interface AcceptedInvitation {
   user: UserRow;
   /** True when the account's role makes MFA mandatory. */
   mfaRequired: boolean;
 }
 
-export async function acceptInvitation(token: string, password: string): Promise<AcceptedInvitation> {
+/** Supplied by the recipient when the invitation names no one. */
+export interface InvitationClaim {
+  email: string;
+  displayName: string;
+}
+
+export async function acceptInvitation(
+  token: string,
+  password: string,
+  claim?: InvitationClaim,
+): Promise<AcceptedInvitation> {
   return withTransaction(async (db) => {
     const { rows } = await query<{
-      id: string; email_normalized: string; role: Role; display_name: string;
+      id: string; email_normalized: string | null; role: Role; display_name: string | null;
       expires_at: Date; accepted_at: Date | null; revoked_at: Date | null;
     }>(
       `SELECT id, email_normalized, role, display_name, expires_at, accepted_at, revoked_at
@@ -164,6 +202,12 @@ export async function acceptInvitation(token: string, password: string): Promise
     if (invitation.accepted_at) throw badRequest('invalid_token', 'This invitation has already been used.');
     if (invitation.expires_at.getTime() < Date.now()) {
       throw badRequest('expired_token', 'This invitation has expired. Ask an administrator for a new one.');
+    }
+
+    // An invitation addressed to nobody: the person opening it says who they
+    // are, and an account is created here rather than waiting for them.
+    if (invitation.email_normalized === null) {
+      return acceptOpenInvitation(db, invitation.id, invitation.role, password, claim);
     }
 
     validatePassword(password, invitation.email_normalized);
@@ -182,7 +226,11 @@ export async function acceptInvitation(token: string, password: string): Promise
       [user.id, passwordHash],
       db,
     );
-    await query('UPDATE invitations SET accepted_at = now() WHERE id = $1', [invitation.id], db);
+    await query(
+      'UPDATE invitations SET accepted_at = now(), accepted_user_id = $2 WHERE id = $1',
+      [invitation.id, user.id],
+      db,
+    );
     await audit(
       { action: 'auth.invitation_accepted', actorId: user.id, actorEmail: user.email, entityType: 'user', entityId: user.id },
       db,
@@ -190,6 +238,67 @@ export async function acceptInvitation(token: string, password: string): Promise
 
     return { user: updated[0], mfaRequired: await mfaMandatoryForRole(updated[0].role) };
   });
+}
+
+/**
+ * Claiming an open invitation: the recipient names themselves, and the account
+ * is created at that moment.
+ */
+async function acceptOpenInvitation(
+  db: Queryable,
+  invitationId: string,
+  role: Role,
+  password: string,
+  claim: InvitationClaim | undefined,
+): Promise<AcceptedInvitation> {
+  if (!claim) {
+    throw badRequest('details_required', 'This invitation needs your name and email address.');
+  }
+  const displayName = claim.displayName.trim();
+  if (!displayName) throw badRequest('details_required', 'Enter your full name.');
+
+  const emailNormalized = normalizeEmail(claim.email);
+  validatePassword(password, emailNormalized);
+
+  // The one thing an open link must never do is let its holder attach
+  // themselves to somebody else's address. Refusing an address that is
+  // already known keeps the link's reach to accounts that did not exist
+  // before it was opened.
+  const existing = await findByEmail(emailNormalized, db);
+  if (existing) {
+    throw conflict('user_exists', 'An account already exists for that email address. Sign in instead.');
+  }
+
+  const passwordHash = await hashPassword(password);
+  // Deliberately not marking the address verified: nothing here proves the
+  // person controls it. They typed it themselves.
+  const { rows } = await query<UserRow>(
+    `INSERT INTO users (email, email_normalized, display_name, role, status,
+                        password_hash, password_changed_at)
+     VALUES ($1, $2, $3, $4, 'active', $5, now()) RETURNING *`,
+    [claim.email.trim(), emailNormalized, displayName, role, passwordHash],
+    db,
+  );
+  const user = rows[0];
+
+  await query(
+    'UPDATE invitations SET accepted_at = now(), accepted_user_id = $2 WHERE id = $1',
+    [invitationId, user.id],
+    db,
+  );
+  await audit(
+    {
+      action: 'auth.invitation_accepted',
+      actorId: user.id, actorEmail: user.email,
+      entityType: 'user', entityId: user.id,
+      // Recorded because it is the only place the distinction survives: this
+      // account named itself, and its address is unverified.
+      detail: { via: 'open_link', emailVerified: false },
+    },
+    db,
+  );
+
+  return { user, mfaRequired: await mfaMandatoryForRole(user.role) };
 }
 
 // --- Sessions ---------------------------------------------------------------
@@ -636,8 +745,9 @@ export async function issueMfaChallengeFor(userId: string): Promise<string> {
 }
 
 export interface InvitationSummary {
-  email: string;
-  displayName: string;
+  /** Null for an open link: the page asks the recipient instead. */
+  email: string | null;
+  displayName: string | null;
   role: Role;
   expiresAt: string;
 }
@@ -645,7 +755,7 @@ export interface InvitationSummary {
 /** Describes a pending invitation for the acceptance page. */
 export async function describeInvitation(token: string): Promise<InvitationSummary | null> {
   const { rows } = await query<{
-    email_normalized: string; display_name: string; role: Role;
+    email_normalized: string | null; display_name: string | null; role: Role;
     expires_at: Date; accepted_at: Date | null; revoked_at: Date | null;
   }>(
     `SELECT email_normalized, display_name, role, expires_at, accepted_at, revoked_at

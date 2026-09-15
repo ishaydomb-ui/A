@@ -116,10 +116,21 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/invitations/accept', async (req, reply) => {
     const body = z
-      .object({ token: z.string().min(10), password: passwordSchema })
+      .object({
+        token: z.string().min(10),
+        password: passwordSchema,
+        // Present only for an open link, where the invitation names nobody
+        // and the recipient supplies their own details.
+        email: emailSchema.optional(),
+        displayName: z.string().trim().min(1).max(200).optional(),
+      })
       .parse(req.body);
     await limits.enforce('inviteAccept', `ip:${clientIp(req) ?? 'unknown'}`);
-    const { user, mfaRequired } = await auth.acceptInvitation(body.token, body.password);
+    const claim =
+      body.email && body.displayName
+        ? { email: body.email, displayName: body.displayName }
+        : undefined;
+    const { user, mfaRequired } = await auth.acceptInvitation(body.token, body.password, claim);
 
     // A role that mandates MFA must complete enrolment before it gets a
     // session, so we hand back a challenge rather than a cookie.

@@ -156,7 +156,7 @@ Authorisation is capability-based; the API enforces capabilities on every route,
 ### 3.2 Authentication
 
 - **Invitation-only.** No `POST /register` exists. An administrator creates an account and gets a single-use invitation link (72 h default); accepting it sets the password and verifies the address. Re-inviting an unaccepted account updates it in place; reissuing revokes the previous link. Links are shareable from a phone (Web Share API / clipboard).
-- **Passwords:** Argon2id; length-first policy per NIST SP 800-63B (≥12 characters, no forced composition). Timing-equalised "unknown user vs wrong password". Lockout after 8 failed attempts for 15 min (configurable).
+- **Passwords:** Argon2id; length-first policy per NIST SP 800-63B (≥8 characters, no forced composition). Timing-equalised "unknown user vs wrong password". Lockout after 8 failed attempts for 15 min (configurable).
 - **Sessions:** opaque token, hashed at rest, `HttpOnly; SameSite=Lax; Secure` (production) cookie, persistent with an explicit `expires`. **Idle timeout 30 min (sliding), absolute 12 h** — both configurable (`SESSION_IDLE_MINUTES`, `SESSION_ABSOLUTE_HOURS`). No "remember me" by design. Role change or suspension revokes all sessions immediately. `logout-all` endpoint exists.
 - **MFA (TOTP):** 30-second step, ±1 window; secrets encrypted at rest with `APP_SECRET`; 10 single-use recovery codes; enrolment via QR *and* an `otpauth://` one-tap link (a phone cannot scan its own screen). Enrolment is idempotent (a reload does not rotate the secret behind an already-scanned QR).
   - Mandatory for the `admin` role **when the setting `security.mfa_required_for_admin` is on** (default on; admin-toggleable in Users → Security, migration `0010`). Voluntary for other roles.

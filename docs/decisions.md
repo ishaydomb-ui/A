@@ -152,8 +152,15 @@ byte-identical for the audit trail.
 - **No analytics or third-party scripts.** A clinical tool behind a login
   should not phone anyone.
 - **No "remember me".** Sessions expire on both idle and absolute deadlines.
-- **No password complexity rules.** Length-first, per NIST SP 800-63B:
-  12 characters minimum, no forced symbols.
+  The single-clinic deployment sets those deadlines long (30 days idle, 90
+  days absolute) because it is read on a phone between patients; the
+  production defaults stay short.
+- **No password complexity rules.** Length-first, per NIST SP 800-63B: eight
+  characters minimum, no forced symbols. Lowered from twelve deliberately,
+  against what this system holds — published reference text and a list of who
+  may read it, with no patient-identifiable information entered anywhere. The
+  defences against guessing are rate limiting, lockout and an audit trail, and
+  those are unchanged.
 - **No email on every event.** Only invitations and password resets.
 
 ## Part 3 — Status

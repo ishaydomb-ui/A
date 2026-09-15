@@ -1076,6 +1076,15 @@ dialog.sheet::backdrop { background: rgb(8 12 18 / 45%); }
   white-space: nowrap;
 }
 .saved-mark::before { content: '✓ '; }
+
+/* The second way to invite someone, set apart from the form rather than
+   competing with its submit button. */
+.invite-alt {
+  margin-block-start: var(--space-4);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--border);
+}
+.invite-alt .hint { margin-block-start: var(--space-2); }
 table { border-collapse: collapse; inline-size: 100%; font-size: 0.875rem; }
 th, td {
   text-align: start;

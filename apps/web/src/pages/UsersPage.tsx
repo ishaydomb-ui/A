@@ -36,6 +36,9 @@ export function UsersPage() {
   const [roleSaved, setRoleSaved] = useState<string | null>(null);
   const [handedOver, setHandedOver] = useState<string | null>(null);
   const [invitedAddress, setInvitedAddress] = useState<string | null>(null);
+  // True when the invitation on screen is an open link, which names nobody
+  // and so has no address to have been emailed to.
+  const [openLink, setOpenLink] = useState(false);
   // Sharing is a phone capability; on a desktop browser the button would
   // simply not work, so it is only offered where it exists.
   const [canShare, setCanShare] = useState(false);
@@ -110,9 +113,38 @@ export function UsersPage() {
       setInvitationLink(result.invitationLink);
       setDelivery(result.delivery);
       setInvitedAddress(email.trim());
+      setOpenLink(false);
       setHandedOver(null);
       setEmail('');
       setDisplayName('');
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.errorGeneric);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Creates an invitation that names nobody, for sending by hand.
+   *
+   * Deliberately a button rather than a second form: the address and name
+   * fields above are required, and the whole point here is not having to fill
+   * them in.
+   */
+  async function createLink() {
+    setBusy(true);
+    setError(null);
+    setInvitationLink(null);
+    try {
+      const result = await api.post<{ invitationLink: string }>('/api/users/invitations/link', {
+        role,
+      });
+      setInvitationLink(result.invitationLink);
+      setOpenLink(true);
+      setDelivery(null);
+      setInvitedAddress(null);
+      setHandedOver(null);
       load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.errorGeneric);
@@ -139,6 +171,7 @@ export function UsersPage() {
       setInvitationLink(result.invitationLink);
       setDelivery(result.delivery);
       setInvitedAddress(user?.email ?? null);
+      setOpenLink(false);
       load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.errorGeneric);
@@ -273,18 +306,32 @@ export function UsersPage() {
           </button>
         </form>
 
+        <div className="invite-alt">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={busy}
+            onClick={() => void createLink()}
+          >
+            {t.inviteByLink}
+          </button>
+          <p className="hint">{t.inviteByLinkHelp}</p>
+        </div>
+
         <div ref={invitationRef}>
           {invitationLink && (
             <Notice
               tone={delivery === 'failed' ? 'warning' : 'success'}
-              title="Invitation created"
+              title={openLink ? t.inviteLinkCreated : 'Invitation created'}
             >
               <p>
-                {delivery === 'sent'
+                {openLink
+                  ? t.inviteLinkNote
+                  : delivery === 'sent'
                   ? `Emailed to ${invitedAddress ?? 'them'}. If it does not arrive — a wrong address, a spam folder — this is the same single-use link:`
-                  : delivery === 'failed'
-                    ? 'The account is ready, but the email could not be sent. The server log says why. Deliver this single-use link yourself in the meantime:'
-                    : 'No mail server is configured, so nothing was sent. Deliver this single-use link to the person yourself:'}
+                    : delivery === 'failed'
+                      ? 'The account is ready, but the email could not be sent. The server log says why. Deliver this single-use link yourself in the meantime:'
+                      : 'No mail server is configured, so nothing was sent. Deliver this single-use link to the person yourself:'}
               </p>
               <p className="mono" style={{ wordBreak: 'break-all' }}>
                 {invitationLink}
