@@ -74,6 +74,19 @@ class RemovalTests(unittest.TestCase):
             ))
         standingcart.record_manifest(self.storage, {"shufersal": report})
 
+    def _fill_stores(self, by_store: dict):
+        from grocery_bot.models import CartAddResult, OrderCycleReport
+
+        reports = {}
+        for store, names in by_store.items():
+            report = OrderCycleReport(store=store)
+            for name in names:
+                report.record(CartAddResult(
+                    item_name=name, store=store, status="added", product_code=name
+                ))
+            reports[store] = report
+        standingcart.record_manifest(self.storage, reports)
+
     def test_what_is_gone_from_the_cart_was_removed_by_a_person(self):
         self._fill(("P_1", "חלב 3%"), ("P_2", "קורנפלקס"))
         gone = standingcart.removals(
@@ -116,6 +129,43 @@ class RemovalTests(unittest.TestCase):
     def test_marking_a_shop_is_recorded(self):
         standingcart.mark_shopped(self.storage, date(2026, 9, 7))
         self.assertEqual(standingcart.last_shop(self.storage), "2026-09-07")
+
+    def test_a_manifest_older_than_the_shop_describes_an_emptied_cart(self):
+        # The manifest is normally rewritten by the refill that follows a
+        # shop. When a shop is recorded late, it is not — and on
+        # 2026-09-15 the nudge announced "120 items, the cart is ready"
+        # from a manifest written a week earlier and two days before the
+        # household checked out.
+        self._fill(("P_1", "חלב"), ("P_2", "לחם"))
+        standingcart.mark_shopped(self.storage, date(2099, 1, 1), store="shufersal")
+        self.assertTrue(standingcart.manifest_is_stale(self.storage, "shufersal"))
+        self.assertEqual(standingcart.cart_contents(self.storage), [])
+
+    def test_a_manifest_newer_than_the_shop_is_the_current_cart(self):
+        standingcart.mark_shopped(self.storage, date(2026, 9, 7), store="shufersal")
+        self._fill(("P_1", "חלב"), ("P_2", "לחם"))
+        self.assertFalse(standingcart.manifest_is_stale(self.storage, "shufersal"))
+        self.assertEqual(standingcart.cart_contents(self.storage), [("shufersal", 2)])
+
+    def test_no_shop_on_record_is_not_staleness(self):
+        self._fill(("P_1", "חלב"))
+        self.assertFalse(standingcart.manifest_is_stale(self.storage, "shufersal"))
+
+    def test_a_shop_at_one_chain_does_not_empty_the_other_chains_cart(self):
+        # The whole point of the per-chain split. Ishay shopped Tiv Taam
+        # on 2026-09-13; his 120 Shufersal items were untouched.
+        self._fill_stores({"shufersal": ["חלב", "לחם"], "tivtaam": ["טחינה"]})
+        standingcart.mark_shopped(self.storage, date(2099, 1, 1), store="tivtaam")
+        self.assertEqual(standingcart.cart_contents(self.storage), [("shufersal", 2)])
+
+    def test_a_global_shop_date_alone_empties_nothing(self):
+        # "Someone shopped somewhere" is not grounds for telling the
+        # household a particular cart is gone.
+        self._fill(("P_1", "חלב"))
+        standingcart.mark_shopped(self.storage, date(2099, 1, 1))
+        self.assertEqual(standingcart.last_shop(self.storage), "2099-01-01")
+        self.assertEqual(standingcart.last_shop(self.storage, "shufersal"), "")
+        self.assertFalse(standingcart.manifest_is_stale(self.storage, "shufersal"))
 
 
 

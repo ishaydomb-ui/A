@@ -411,7 +411,9 @@ class GroceryBot:
         """
         if not _authorized(self.config, update):
             return
-        standingcart.mark_shopped(self.storage)
+        # Recorded inside `_mark_shop_done`, once the chain is known —
+        # marking here ran even on the branch that asks "which chain?"
+        # and returns without confirming anything.
         moved = await self._mark_shop_done(update, context, store)
         if moved is None:
             return  # asked which chain; nothing marked yet
@@ -483,6 +485,12 @@ class GroceryBot:
                 return None
             store = next(iter(waiting), "")
 
+        # The chain is known here and nowhere earlier, so this is where
+        # the shop gets recorded against it. Without it the nudge can
+        # only say "a cart was emptied somewhere", which on 2026-09-15
+        # meant describing 120 Shufersal items as gone, or one Tiv Taam
+        # item as still waiting.
+        standingcart.mark_shopped(self.storage, store=store)
         return self.storage.advance_adhoc_status("in_cart", "shopped", store)
 
     async def on_shopped_store(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -494,6 +502,13 @@ class GroceryBot:
         from .chains import display_name
 
         chain = query.data.split(":", 1)[1]
+        if chain == "all":
+            from .chains import CART_CAPABLE
+
+            for one in CART_CAPABLE:
+                standingcart.mark_shopped(self.storage, store=one)
+        else:
+            standingcart.mark_shopped(self.storage, store=chain)
         moved = self.storage.advance_adhoc_status(
             "in_cart", "shopped", "" if chain == "all" else chain
         )
@@ -952,7 +967,11 @@ class GroceryBot:
                 chat_id = self.storage.get_state("digest_chat_id")
                 if chat_id:
                     logger.info("Unannounced shop detected (%s); refilling", placed)
-                    await asyncio.to_thread(standingcart.mark_shopped, self.storage)
+                    # The detection reads `order_log`, which only ever
+                    # holds Shufersal, so the chain is known exactly.
+                    await asyncio.to_thread(
+                        standingcart.mark_shopped, self.storage, None, "shufersal"
+                    )
                     await context.bot.send_message(
                         chat_id=int(chat_id),
                         text=(

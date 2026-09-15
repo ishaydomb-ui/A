@@ -109,10 +109,37 @@ Nothing half-built. Four items are queued and none started, all from the
 4. **💰 by unit price.** `_cheapest_index` ranks absolute price, so a
    small pack wins over the better buy.
 
-**A live gap, found 2026-09-13:** a Tiv Taam shop is invisible end to
-end. `order_log` only ever tracks Shufersal and there is no Tiv Taam
-order-history reader, so the `shopped → confirmed` step can never fire
-for that chain and nothing recovers what was deleted before paying.
+**A live gap, found 2026-09-13 — and it reached the household on
+2026-09-15.** A Tiv Taam shop is invisible end to end. `order_log` only
+ever tracks Shufersal and there is no Tiv Taam order-history reader, so
+the `shopped → confirmed` step can never fire for that chain and nothing
+recovers what was deleted before paying.
+
+What that cost: on 09-15 at 09:00 the nudge told Ishay *"עברו 8 ימים —
+העגלה כבר מוכנה, 120 פריטים בשופרסל ו-1 פריטים בטיב טעם"*, two days
+after he shopped Tiv Taam and said so in the chat on 09-13 at 19:19. He
+pushed back on it. Three fixes, all shipped, full log entry in `GOALS.md`:
+
+- `nudge.last_order_date` now also reads `standingcart.last_shop`. The
+  two tables it read before are Shufersal-only in practice, so a Tiv Taam
+  shop could never move the count — the docstring said "from any chain"
+  before that was true. With the 09-13 shop recorded the count is 2 days
+  and the message is not sent at all.
+- `standingcart.manifest_is_stale(storage, store)`: a manifest written
+  before that chain's last shop describes a cart already paid for, and is
+  left out of `cart_contents`.
+- **Shop records are per chain now.** `mark_shopped` kept only a date
+  even though `/done` has known the chain since the 09-11 fix. Without it
+  both available messages were wrong — "both carts ready" (false for Tiv
+  Taam) or "neither" (false for Shufersal's 120 items, genuinely still
+  there). `last_shop(storage, store)` returns "" for a chain with no shop
+  on record rather than falling back to the global date.
+
+**Still open after this:** the fix depends on *something* recording the
+shop. `/done` does, and so does the order-log backstop for Shufersal. A
+Tiv Taam shop nobody mentions is still invisible — the underlying gap is
+unchanged, only its loudest symptom is gone. Ishay's 09-13 shop was
+recorded by hand from his own message.
 
 ## 2b. Malls — answering "which shops here have a discount" (2026-09-09)
 

@@ -48,6 +48,15 @@ DEFAULT_LIST = "everything"
 
 _MANIFEST_KEY = "standing_cart_manifest"
 _LAST_SHOP_KEY = "standing_cart_last_shop"
+# Per chain, because a shop at one chain says nothing about the other's
+# cart. `/done` has always known which chain it was — `done_shopping`
+# takes a `store` and `_mark_shop_done` scopes the requests by it — and
+# then dropped it on the floor here. That cost a real message on
+# 2026-09-15: Ishay shopped Tiv Taam on 09-13, and the only honest
+# options left were to describe both carts as ready (wrong for Tiv Taam,
+# which he had just emptied) or neither (wrong for Shufersal, whose 120
+# items were still sitting there untouched).
+_LAST_SHOP_BY_STORE_KEY = "standing_cart_last_shop_by_store"
 _REMOVAL_LOG_KEY = "standing_cart_removal_log"
 _REMOVAL_REPORTED_KEY = "standing_cart_removals_reported"
 
@@ -122,12 +131,16 @@ def tag_deal_results(report, plan) -> int:
     return tagged
 
 
-def record_manifest(storage, reports) -> None:
+def record_manifest(storage, reports, at: datetime | None = None) -> None:
     """Remember what we put in, so a later removal can be recognised.
 
     Keyed by the store's own product code where we have one. A name is
     kept alongside because the monthly note has to be readable, and a
     product code means nothing to a person.
+
+    `at` overrides the timestamp, which exists so a test can place a
+    manifest *before* a shop. That ordering is the whole of
+    `manifest_is_stale` and it cannot be reproduced with a wall clock.
     """
     manifest = {}
     for store, report in (reports or {}).items():
@@ -138,7 +151,10 @@ def record_manifest(storage, reports) -> None:
     storage.set_state(
         _MANIFEST_KEY,
         json.dumps(
-            {"at": datetime.now(timezone.utc).isoformat(), "stores": manifest},
+            {
+                "at": (at or datetime.now(timezone.utc)).isoformat(),
+                "stores": manifest,
+            },
             ensure_ascii=False,
         ),
     )
@@ -224,6 +240,31 @@ def shop_detected_since_refill(storage, store: str = "shufersal") -> str:
     return newest
 
 
+def manifest_is_stale(storage, store: str) -> bool:
+    """Whether the manifest describes a cart this chain has since emptied.
+
+    A manifest written *before* a shop at this chain describes items that
+    left the cart at checkout. Saying "the cart is ready" from it is not
+    a small inaccuracy — it is a claim about the present tense built from
+    a snapshot the household already paid for.
+
+    Measured 2026-09-15: the nudge told Ishay "120 items in Shufersal and
+    1 in Tiv Taam, the cart is ready" from a manifest dated 09-08, two
+    days after he had shopped Tiv Taam. Normally a refill follows a shop
+    and rewrites the manifest, so the two stay in step; that only holds
+    while every shop is actually recorded, and this is the guard for when
+    one is not.
+
+    Scoped per chain because that message was wrong about exactly one of
+    the two: the 120 Shufersal items really were still in the cart.
+    """
+    at = str(_manifest(storage).get("at") or "")[:10]
+    last = last_shop(storage, store)
+    if not at or not last:
+        return False
+    return at < last
+
+
 def cart_contents(storage) -> list[tuple[str, int]]:
     """What we last put in each cart: (store key, item count).
 
@@ -231,19 +272,57 @@ def cart_contents(storage) -> list[tuple[str, int]]:
     the nudge is composed by a CLI with no browser, no store session and
     no Israeli exit, and making a reminder depend on all three would
     mean no reminder whenever any of them is down.
+
+    A chain whose manifest predates its own last shop is left out — see
+    `manifest_is_stale`. Describing nothing is recoverable; describing a
+    cart that was emptied at checkout is not.
     """
     stores = _manifest(storage).get("stores", {})
-    return [(store, len(items)) for store, items in stores.items() if items]
+    return [
+        (store, len(items))
+        for store, items in stores.items()
+        if items and not manifest_is_stale(storage, store)
+    ]
 
 
-def mark_shopped(storage, today: date | None = None) -> str:
-    """Record that a shop finished, which is what triggers a refill."""
+def mark_shopped(storage, today: date | None = None, store: str = "") -> str:
+    """Record that a shop finished, which is what triggers a refill.
+
+    `store` names the chain when it is known — pass it whenever the
+    caller has it. The global date is still written either way, because
+    every existing reader depends on it and because the household having
+    shopped *somewhere* is the fact the nudge needs.
+    """
     day = (today or date.today()).isoformat()
     storage.set_state(_LAST_SHOP_KEY, day)
+    if store:
+        by_store = _last_shop_by_store(storage)
+        by_store[store] = day
+        storage.set_state(_LAST_SHOP_BY_STORE_KEY, json.dumps(by_store, ensure_ascii=False))
     return day
 
 
-def last_shop(storage) -> str:
+def _last_shop_by_store(storage) -> dict:
+    raw = storage.get_state(_LAST_SHOP_BY_STORE_KEY)
+    if not raw:
+        return {}
+    try:
+        loaded = json.loads(raw)
+    except ValueError:
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def last_shop(storage, store: str = "") -> str:
+    """The last shop date — overall, or at one chain when `store` is given.
+
+    A chain with no shop of its own on record returns "" rather than
+    falling back to the global date: "we do not know" and "they shopped
+    here" are different answers, and only one of them justifies telling
+    the household their cart was emptied.
+    """
+    if store:
+        return str(_last_shop_by_store(storage).get(store) or "")
     return storage.get_state(_LAST_SHOP_KEY) or ""
 
 

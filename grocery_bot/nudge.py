@@ -82,6 +82,8 @@ def last_order_date(storage, store: str = "shufersal") -> date | None:
     """When the household last actually ordered, from any chain."""
     from contextlib import closing
 
+    from . import standingcart
+
     with closing(storage._connect()) as conn:  # noqa: SLF001 - storage-internal
         row = conn.execute(
             "SELECT MAX(placed_at) AS newest FROM order_log"
@@ -94,7 +96,19 @@ def last_order_date(storage, store: str = "shufersal") -> date | None:
     # run reported the last order as 24 August while 1 September sat in
     # the other table.
     dates = [d for d in storage.last_purchase_dates(store).values() if d]
-    candidates = [d for d in (logged, max(dates) if dates else None) if d]
+    # And the household's own word, which is the only one of the three
+    # that can ever reflect a chain we cannot read. Both tables above are
+    # Shufersal-only in practice — `order_log` is written by a Shufersal
+    # order reader and nothing else, so a Tiv Taam shop is invisible to
+    # them however recent it is. This docstring said "from any chain"
+    # before it was true.
+    #
+    # Measured 2026-09-15: Ishay shopped Tiv Taam on 09-13 and said so,
+    # and on 09-15 the nudge still announced "8 days since your last
+    # order", counting from the Shufersal order of 09-07. Nothing was
+    # broken in the count — it was counting the only thing it could see.
+    shopped = _as_date(standingcart.last_shop(storage))
+    candidates = [d for d in (logged, max(dates) if dates else None, shopped) if d]
     return max(candidates) if candidates else None
 
 
@@ -145,8 +159,19 @@ def compose(
     filled = standingcart.cart_contents(storage)
     if filled:
         lines = [f"🛒 *עברו {days} ימים — העגלה כבר מוכנה*", ""]
-        parts = [f"{count} פריטים ב{display_name(key)}" for key, count in filled]
-        lines.append("מילאתי " + " ו-".join(parts) + " לפי מה שאתם קונים בדרך כלל.")
+        # "1 פריטים" is not Hebrew, and it appeared in a real message on
+        # 2026-09-15. A count of one is the normal case for a second
+        # chain we are still learning, so it is the case to get right.
+        # The vav is hyphenated only before a digit — "ו-120 פריטים" is
+        # right and "ו-פריט אחד" is not.
+        parts = [
+            f"{'פריט אחד' if count == 1 else f'{count} פריטים'} ב{display_name(key)}"
+            for key, count in filled
+        ]
+        joined = parts[0]
+        for part in parts[1:]:
+            joined += (" ו-" if part[:1].isdigit() else " ו") + part
+        lines.append("מילאתי " + joined + " לפי מה שאתם קונים בדרך כלל.")
     else:
         lines = [
             f"🛒 *עברו {days} ימים מההזמנה האחרונה*",

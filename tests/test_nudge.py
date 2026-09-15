@@ -1,9 +1,10 @@
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
-from grocery_bot import hotdeals, nudge
+from grocery_bot import hotdeals, nudge, standingcart
+from grocery_bot.models import CartAddResult, OrderCycleReport
 from grocery_bot.storage import Storage
 
 TODAY = date(2026, 9, 10)
@@ -60,6 +61,83 @@ class TimingTest(unittest.TestCase):
         self._ordered_on("2026-09-09")
         self.assertEqual(nudge.last_order_date(self.storage), date(2026, 9, 9))
 
+    def test_a_shop_at_a_chain_we_cannot_read_still_counts(self):
+        # Both tables `last_order_date` used to read are Shufersal-only in
+        # practice, so a Tiv Taam shop was invisible however recent it
+        # was. On 2026-09-15 that told Ishay "8 days since your last
+        # order" two days after he had shopped Tiv Taam and said so.
+        self._ordered_on("2026-09-01")
+        standingcart.mark_shopped(self.storage, date(2026, 9, 9))
+        self.assertEqual(nudge.last_order_date(self.storage), date(2026, 9, 9))
+        self.assertFalse(nudge.decide(self.storage, today=TODAY).due)
+
+    def test_an_older_shop_does_not_pull_the_date_backwards(self):
+        self._ordered_on("2026-09-09")
+        standingcart.mark_shopped(self.storage, date(2026, 9, 1))
+        self.assertEqual(nudge.last_order_date(self.storage), date(2026, 9, 9))
+
+
+class TheFifteenthOfSeptemberTest(unittest.TestCase):
+    """The whole failure, replayed: the message Ishay was actually sent.
+
+    On 2026-09-15 at 09:00 the nudge announced "8 days since your last
+    order — the cart is ready, 120 items in Shufersal and 1 in Tiv Taam",
+    two days after he shopped Tiv Taam and said so in the chat. Every
+    number in it was defensible in isolation and the message as a whole
+    was wrong. This is one test rather than three because the three fixes
+    only add up to a correct message together.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.storage = Storage(str(Path(self.tmp.name) / "t.sqlite3"))
+        # The Shufersal order of 09-07, the only shop either table could
+        # see, and the manifest written by the refill that followed.
+        with self.storage._connect() as conn:  # noqa: SLF001 - test fixture
+            conn.execute(
+                "INSERT INTO order_log (order_code, store, placed_at, item_count) "
+                "VALUES ('05116876', 'shufersal', '2026-09-07T08:57:00', 41)"
+            )
+            conn.commit()
+        standingcart.mark_shopped(self.storage, date(2026, 9, 8), store="shufersal")
+        reports = {}
+        for store, count in (("shufersal", 120), ("tivtaam", 1)):
+            report = OrderCycleReport(store=store)
+            for i in range(count):
+                report.record(CartAddResult(
+                    item_name=f"{store}-{i}", store=store,
+                    status="added", product_code=f"P_{store}_{i}",
+                ))
+            reports[store] = report
+        standingcart.record_manifest(
+            self.storage, reports, at=datetime(2026, 9, 8, 19, 43, tzinfo=timezone.utc)
+        )
+
+    def test_before_the_tiv_taam_shop_is_recorded_the_nudge_is_due(self):
+        # The baseline: nothing here is a bug yet. A week after the last
+        # known shop, with both carts full, the reminder is correct.
+        decision = nudge.decide(self.storage, today=date(2026, 9, 15))
+        self.assertTrue(decision.due)
+        # The message as sent, minus its one ungrammatical word.
+        self.assertIn("120 פריטים בשופרסל ופריט אחד בטיב טעם", decision.text)
+
+    def test_the_shop_he_reported_silences_the_nudge(self):
+        standingcart.mark_shopped(self.storage, date(2026, 9, 13), store="tivtaam")
+        decision = nudge.decide(self.storage, today=date(2026, 9, 15))
+        self.assertFalse(decision.due)
+        self.assertEqual(decision.days_since_order, 2)
+
+    def test_if_it_did_speak_it_would_not_claim_the_emptied_cart(self):
+        # Two days later the quiet period has passed and it speaks again.
+        # Tiv Taam must be gone from it; Shufersal's 120 must not be.
+        standingcart.mark_shopped(self.storage, date(2026, 9, 13), store="tivtaam")
+        decision = nudge.decide(self.storage, today=date(2026, 9, 20))
+        self.assertTrue(decision.due)
+        self.assertIn("120 פריטים בשופרסל", decision.text)
+        self.assertNotIn("טיב טעם", decision.text.split("*מה שנשאר")[0])
+        self.assertNotIn("1 פריטים", decision.text)
+
 
 class MessageTest(unittest.TestCase):
     def setUp(self):
@@ -72,6 +150,26 @@ class MessageTest(unittest.TestCase):
         text = nudge.compose(self.storage, 7, TODAY)
         self.assertIn("מה להוסיף", text)
         self.assertIn("9", nudge.compose(self.storage, 9, TODAY))
+
+    def test_a_single_item_is_counted_in_hebrew(self):
+        # "1 פריטים" went out in a real message on 2026-09-15. One item is
+        # the normal case for a chain we are still learning.
+        from grocery_bot.models import CartAddResult, OrderCycleReport
+
+        reports = {}
+        for store, names in (("shufersal", ["חלב", "לחם"]), ("tivtaam", ["טחינה"])):
+            report = OrderCycleReport(store=store)
+            for name in names:
+                report.record(CartAddResult(
+                    item_name=name, store=store, status="added", product_code=name
+                ))
+            reports[store] = report
+        standingcart.record_manifest(self.storage, reports)
+
+        text = nudge.compose(self.storage, 7, TODAY)
+        self.assertIn("פריט אחד בטיב טעם", text)
+        self.assertIn("2 פריטים בשופרסל", text)
+        self.assertNotIn("1 פריטים", text)
 
     def test_a_quiet_week_is_still_a_valid_message(self):
         # No pantry items due and no deals: the reminder alone is fine,
