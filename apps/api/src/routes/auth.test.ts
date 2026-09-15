@@ -7,6 +7,15 @@ import {
   TEST_PASSWORD, closeTestApp, createTestApp, loginAs, loginAsAdmin, mailbox,
   resetDatabase, seedUser, sessionCookie, shutdown,
 } from '../test/helpers.js';
+import { setTransport } from '../services/mail.js';
+
+/** A mail server that is down, or credentials that are wrong. */
+const brokenTransport = {
+  name: 'broken',
+  async send(): Promise<void> {
+    throw new Error('535 authentication failed');
+  },
+};
 
 let app: FastifyInstance;
 
@@ -512,6 +521,48 @@ describe('account administration', () => {
     });
   });
 
+  it('reports that the invitation was emailed', async () => {
+    await seedUser({ email: 'admin@example.org', role: 'admin' });
+    const cookie = await loginAsAdmin(app, 'admin@example.org');
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/users/invitations', headers: { cookie },
+      payload: { email: 'new@example.org', displayName: 'New', role: 'physician' },
+    });
+    expect(res.json().delivery).toBe('sent');
+    expect(mailbox.lastTo('new@example.org')).toBeDefined();
+  });
+
+  it('still creates a usable invitation when the mail server refuses it', async () => {
+    await seedUser({ email: 'admin@example.org', role: 'admin' });
+    const cookie = await loginAsAdmin(app, 'admin@example.org');
+
+    setTransport(brokenTransport);
+    let res;
+    try {
+      res = await app.inject({
+        method: 'POST', url: '/api/users/invitations', headers: { cookie },
+        payload: { email: 'new@example.org', displayName: 'New', role: 'physician' },
+      });
+    } finally {
+      setTransport(mailbox);
+    }
+
+    // The account and its token are created before the email goes out. Failing
+    // the request over a refused SMTP connection would leave an invitation in
+    // the database that nobody could deliver, because the only copy of the
+    // link was in the response that was thrown away.
+    expect(res.statusCode).toBe(200);
+    expect(res.json().delivery).toBe('failed');
+
+    const token = new URL(res.json().invitationLink).searchParams.get('token')!;
+    const accepted = await app.inject({
+      method: 'POST', url: '/api/auth/invitations/accept',
+      payload: { token, password: TEST_PASSWORD },
+    });
+    expect(accepted.statusCode).toBe(200);
+  });
+
   it('re-inviting someone who never accepted updates their details in place', async () => {
     await seedUser({ email: 'admin@example.org', role: 'admin' });
     const cookie = await loginAsAdmin(app, 'admin@example.org');
@@ -760,6 +811,30 @@ describe('password reset', () => {
     expect(b.statusCode).toBe(a.statusCode);
     expect(b.json()).toEqual(a.json());
     expect(mailbox.lastTo('ghost@example.org')).toBeUndefined();
+  });
+
+  it('still answers identically when the mail server is broken', async () => {
+    const known = await seedUser({ email: 'doc@example.org', role: 'physician' });
+
+    setTransport(brokenTransport);
+    let a, b;
+    try {
+      // Only an address that exists reaches the mail server at all. If a
+      // failure there could change the response, the error itself would answer
+      // the question the identical reply is there to hide.
+      a = await app.inject({
+        method: 'POST', url: '/api/auth/password/forgot', payload: { email: known.email },
+      });
+      b = await app.inject({
+        method: 'POST', url: '/api/auth/password/forgot', payload: { email: 'ghost@example.org' },
+      });
+    } finally {
+      setTransport(mailbox);
+    }
+
+    expect(a.statusCode).toBe(200);
+    expect(b.statusCode).toBe(a.statusCode);
+    expect(b.json()).toEqual(a.json());
   });
 
   it('refuses to reuse a reset token', async () => {

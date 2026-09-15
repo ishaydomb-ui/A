@@ -58,6 +58,11 @@ services:
       TRUST_PROXY: "true"
       IMPORT_STORAGE_DIR: /data/imports
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Outbound mail. Left empty, invitations and password resets are written
+      # to the server's outbox and have to be delivered by hand — which is the
+      # safe default, not a fault. Set SMTP_URL in .env to have them sent.
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@localhost}
       # Single instance, so the schema is applied on start-up rather than as a
       # separate step that is easy to forget.
       RUN_MIGRATIONS_ON_START: "true"

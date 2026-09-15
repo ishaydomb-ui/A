@@ -147,9 +147,50 @@ the invitation screen shows the administrator a single-use link to pass on by
 hand. This is deliberate: a fresh deployment cannot surprise anyone with
 unexpected mail.
 
-To enable real delivery, set `SMTP_URL` (for example
-`smtps://user:password@smtp.example.org:465`) and `MAIL_FROM`, then
+To enable real delivery, set `SMTP_URL` and `MAIL_FROM` in `.env`, then
 `docker compose up -d api`.
+
+`MAIL_FROM` must be an address the SMTP account is allowed to send as.
+Providers reject anything else, and the placeholder default is the one most
+often left behind — the API warns at start-up if it is still in place.
+
+### A Google account as the mail server
+
+With no domain of your own, a Gmail or Workspace account is the shortest path.
+It needs two-factor authentication turned on, and an **app password** — the
+account's own password will not work:
+
+```
+SMTP_URL=smtps://you%40gmail.com:abcdefghijklmnop@smtp.gmail.com:465
+MAIL_FROM=you@gmail.com
+```
+
+The `@` in the username has to be written `%40`, because the value is a URL.
+Remove the spaces Google shows in the app password. Messages arrive from your
+own address, which is honest for a tool run by one person for a few
+colleagues; if that becomes the wrong impression to give, move to a
+transactional provider and a domain.
+
+### Checking it works
+
+```bash
+docker compose exec api node dist/scripts/send-test-mail.js you@example.org
+```
+
+It sends one plainly-labelled test message — never an invitation — so running
+it cannot create an account or grant anyone access. The API also asks the mail
+server whether it will accept the credentials at start-up, so
+`docker compose logs api | grep smtp` answers the question without sending
+anything at all.
+
+### When sending fails
+
+A refused mail server does not fail an invitation. The account and its
+single-use link are created first; the email is a convenience on top, and the
+invitation screen says whether it went out, so the link can be passed on by
+hand in the meantime. The same applies to password resets, where a failure
+must not change the reply — an error that appeared only for addresses that
+exist would reveal which addresses those are.
 
 ## Routine operations
 

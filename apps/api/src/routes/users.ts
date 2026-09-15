@@ -6,7 +6,7 @@ import { query } from '../db/pool.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { audit, auditContext } from '../services/audit.js';
 import * as auth from '../services/auth.js';
-import { invitationMail, sendMail } from '../services/mail.js';
+import { invitationMail, tryDeliver } from '../services/mail.js';
 import { countAdmins, findById, listUsers, toPublicUser } from '../services/users.js';
 
 const roleSchema = z.enum(ROLES as unknown as [Role, ...Role[]]);
@@ -27,7 +27,7 @@ export default async function userRoutes(app: FastifyInstance): Promise<void> {
 
     const result = await auth.inviteUser({ ...body, invitedBy: req.currentUser!.id });
     const link = `${config.publicUrl}/accept-invitation?token=${encodeURIComponent(result.token)}`;
-    await sendMail(
+    const delivery = await tryDeliver(
       invitationMail(body.email, body.displayName, link, Math.round(config.inviteExpiryMs / 3_600_000)),
     );
     await audit({
@@ -35,7 +35,7 @@ export default async function userRoutes(app: FastifyInstance): Promise<void> {
       action: 'users.invited',
       entityType: 'user',
       entityId: result.userId,
-      detail: { email: body.email, role: body.role },
+      detail: { email: body.email, role: body.role, delivery },
     });
 
     return {
@@ -44,8 +44,10 @@ export default async function userRoutes(app: FastifyInstance): Promise<void> {
       userId: result.userId,
       expiresAt: result.expiresAt.toISOString(),
       // Shown to the admin so the invitation can be delivered by hand when no
-      // SMTP server is configured. It is never stored in plaintext.
+      // SMTP server is configured, or when sending it failed. It is never
+      // stored in plaintext.
       invitationLink: link,
+      delivery,
     };
   });
 
@@ -63,9 +65,14 @@ export default async function userRoutes(app: FastifyInstance): Promise<void> {
       invitedBy: req.currentUser!.id,
     });
     const link = `${config.publicUrl}/accept-invitation?token=${encodeURIComponent(result.token)}`;
-    await sendMail(invitationMail(user.email, user.display_name, link, Math.round(config.inviteExpiryMs / 3_600_000)));
-    await audit({ ...auditContext(req), action: 'users.invitation_resent', entityType: 'user', entityId: id });
-    return { status: 'ok', invitationLink: link, expiresAt: result.expiresAt.toISOString() };
+    const delivery = await tryDeliver(
+      invitationMail(user.email, user.display_name, link, Math.round(config.inviteExpiryMs / 3_600_000)),
+    );
+    await audit({
+      ...auditContext(req), action: 'users.invitation_resent',
+      entityType: 'user', entityId: id, detail: { delivery },
+    });
+    return { status: 'ok', invitationLink: link, delivery, expiresAt: result.expiresAt.toISOString() };
   });
 
   app.patch('/:id', { onRequest: [requireUserAdmin] }, async (req) => {

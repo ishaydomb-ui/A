@@ -3,6 +3,8 @@ import { ROLES } from '@med/shared';
 import { useI18n } from '../i18n.ts';
 import { ApiError, api } from '../lib/api.ts';
 import type { AdminSetting, PublicUser } from '../lib/types.ts';
+
+type Delivery = 'sent' | 'not_configured' | 'failed';
 import { Notice } from '../components/Notice.tsx';
 import { Spinner } from '../components/Spinner.tsx';
 
@@ -12,6 +14,10 @@ export function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [invitationLink, setInvitationLink] = useState<string | null>(null);
+  // What became of the invitation email. The link below is what actually
+  // matters, but whether it also went out by email decides whether the
+  // administrator still has to pass it on by hand.
+  const [delivery, setDelivery] = useState<Delivery | null>(null);
   const [busy, setBusy] = useState(false);
 
   const [email, setEmail] = useState('');
@@ -29,6 +35,7 @@ export function UsersPage() {
   // beside the control that changed.
   const [roleSaved, setRoleSaved] = useState<string | null>(null);
   const [handedOver, setHandedOver] = useState<string | null>(null);
+  const [invitedAddress, setInvitedAddress] = useState<string | null>(null);
   // Sharing is a phone capability; on a desktop browser the button would
   // simply not work, so it is only offered where it exists.
   const [canShare, setCanShare] = useState(false);
@@ -96,12 +103,13 @@ export function UsersPage() {
     setError(null);
     setInvitationLink(null);
     try {
-      const result = await api.post<{ invitationLink: string }>('/api/users/invitations', {
-        email: email.trim(),
-        displayName: displayName.trim(),
-        role,
-      });
+      const result = await api.post<{ invitationLink: string; delivery: Delivery }>(
+        '/api/users/invitations',
+        { email: email.trim(), displayName: displayName.trim(), role },
+      );
       setInvitationLink(result.invitationLink);
+      setDelivery(result.delivery);
+      setInvitedAddress(email.trim());
       setHandedOver(null);
       setEmail('');
       setDisplayName('');
@@ -123,11 +131,14 @@ export function UsersPage() {
     setError(null);
     setInvitationLink(null);
     try {
-      const result = await api.post<{ invitationLink: string }>(
+      const user = users?.find((u) => u.id === id);
+      const result = await api.post<{ invitationLink: string; delivery: Delivery }>(
         `/api/users/${id}/invitations/resend`,
         {},
       );
       setInvitationLink(result.invitationLink);
+      setDelivery(result.delivery);
+      setInvitedAddress(user?.email ?? null);
       load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.errorGeneric);
@@ -264,10 +275,16 @@ export function UsersPage() {
 
         <div ref={invitationRef}>
           {invitationLink && (
-            <Notice tone="success" title="Invitation created">
+            <Notice
+              tone={delivery === 'failed' ? 'warning' : 'success'}
+              title="Invitation created"
+            >
               <p>
-                If no mail server is configured the message is written to the server's outbox
-                instead of being sent. Deliver this single-use link to the person yourself:
+                {delivery === 'sent'
+                  ? `Emailed to ${invitedAddress ?? 'them'}. If it does not arrive — a wrong address, a spam folder — this is the same single-use link:`
+                  : delivery === 'failed'
+                    ? 'The account is ready, but the email could not be sent. The server log says why. Deliver this single-use link yourself in the meantime:'
+                    : 'No mail server is configured, so nothing was sent. Deliver this single-use link to the person yourself:'}
               </p>
               <p className="mono" style={{ wordBreak: 'break-all' }}>
                 {invitationLink}

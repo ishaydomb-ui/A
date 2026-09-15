@@ -6,7 +6,7 @@ import { badRequest, unauthorized } from '../lib/errors.js';
 import { clearSessionCookie, setSessionCookie } from '../plugins/auth.js';
 import { audit, auditContext, clientIp } from '../services/audit.js';
 import * as auth from '../services/auth.js';
-import { passwordResetMail, sendMail } from '../services/mail.js';
+import { passwordResetMail, tryDeliver } from '../services/mail.js';
 import * as limits from '../services/rateLimit.js';
 import { findById, toPublicUser } from '../services/users.js';
 import QRCode from 'qrcode';
@@ -150,7 +150,10 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
     const created = await auth.createPasswordReset(body.email);
     if (created) {
       const link = `${config.publicUrl}/reset-password?token=${encodeURIComponent(created.token)}`;
-      await sendMail(passwordResetMail(created.user.email, link, Math.round(config.resetExpiryMs / 60000)));
+      // Never allowed to throw: a mail server that fails only for addresses
+      // that exist would answer, by its error, the very question the identical
+      // response below is there to hide.
+      await tryDeliver(passwordResetMail(created.user.email, link, Math.round(config.resetExpiryMs / 60000)));
       await audit({
         ...auditContext(req), action: 'auth.password_reset_requested',
         actorId: created.user.id, actorEmail: created.user.email,

@@ -21,6 +21,18 @@ export interface Transport {
   send(mail: Mail): Promise<void>;
 }
 
+/**
+ * What became of a message, from the point of view of the person who caused
+ * it to be sent.
+ *
+ * 'not_configured' and 'failed' are deliberately distinct: the first means
+ * nobody expected an email, the second means one was expected and did not
+ * arrive. An administrator needs to tell those apart, because only the second
+ * one is a fault to chase — and in both cases the invitation link still has to
+ * be delivered by hand.
+ */
+export type DeliveryStatus = 'sent' | 'not_configured' | 'failed';
+
 const outboxDir = resolve(config.importStorageDir, '../outbox');
 
 export const outboxTransport: Transport = {
@@ -52,7 +64,28 @@ export class MemoryTransport implements Transport {
 
 async function createSmtpTransport(url: string): Promise<Transport> {
   const { createTransport } = await import('nodemailer');
-  const transporter = createTransport(url);
+  // Bounded waits. A mail host that accepts the connection and then says
+  // nothing would otherwise hold the request open for minutes, and the person
+  // left looking at a spinner is an administrator in the middle of inviting a
+  // colleague. Ten seconds is long enough for any working server.
+  const transporter = createTransport(url, {
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 20_000,
+  });
+  // Ask the server up front whether it will accept us. Without this, bad
+  // credentials stay invisible until the first person is invited, and the
+  // symptom then shows up as a missing email rather than as a configuration
+  // error — at the worst possible moment, in front of the new colleague.
+  try {
+    await transporter.verify();
+    logger.info('smtp: the mail server accepted our credentials');
+  } catch (err) {
+    logger.error(
+      { err: err instanceof Error ? err.message : err },
+      'smtp: the mail server refused the connection or the credentials — mail will fail until this is fixed',
+    );
+  }
   return {
     name: 'smtp',
     async send(mail) {
@@ -66,8 +99,15 @@ let active: Transport = outboxTransport;
 
 export async function initMail(): Promise<void> {
   if (config.smtpUrl) {
+    // Almost every provider rejects a From address it does not recognise, and
+    // the placeholder default is the one most likely to be left behind.
+    if (config.mailFrom === 'no-reply@localhost') {
+      logger.warn(
+        'MAIL_FROM is still the placeholder — most mail servers will reject messages from it. Set it to an address the SMTP account is allowed to send as.',
+      );
+    }
     active = await createSmtpTransport(config.smtpUrl);
-    logger.info('mail transport: smtp');
+    logger.info({ from: config.mailFrom }, 'mail transport: smtp');
   } else {
     logger.warn('mail transport: outbox — invitations and resets will NOT be delivered by email');
   }
@@ -84,6 +124,34 @@ export function getTransport(): Transport {
 
 export async function sendMail(mail: Mail): Promise<void> {
   await active.send(mail);
+}
+
+/**
+ * Sends without letting the mail server decide whether the operation
+ * succeeds.
+ *
+ * An invitation is created in the database before its email goes out, so a
+ * refused SMTP connection used to fail the whole request: the account existed,
+ * the token existed, and the administrator got an error page instead of the
+ * link — leaving an invitation nobody could deliver. The email is a
+ * convenience; the link is the thing that matters, and it is already on its
+ * way back to someone who can pass it on.
+ */
+export async function tryDeliver(mail: Mail): Promise<DeliveryStatus> {
+  if (active === outboxTransport) {
+    await active.send(mail);
+    return 'not_configured';
+  }
+  try {
+    await active.send(mail);
+    return 'sent';
+  } catch (err) {
+    logger.error(
+      { err: err instanceof Error ? err.message : err, to: mail.to, subject: mail.subject },
+      'mail delivery failed — the message was not sent',
+    );
+    return 'failed';
+  }
 }
 
 export function invitationMail(to: string, displayName: string, link: string, expiresHours: number): Mail {
