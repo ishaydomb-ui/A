@@ -2603,6 +2603,88 @@ class GroceryBot:
         return
 
 
+    async def watch_list(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Tell the household what was added, then put it in the cart.
+
+        The missing half of the seam. `cli add-item` — how the other bot
+        writes for Liran — inserted a row and nothing watched the table,
+        so an item reached a cart only when someone ran `/start_order`.
+        Set by Ishay 2026-09-16 21:40; see `listwatch.py` for why this
+        debounces instead of adding each item as it arrives.
+        """
+        from . import listwatch
+
+        chat_id = self.storage.get_state("digest_chat_id")
+        if not chat_id:
+            return  # nowhere to speak yet
+
+        action, items = await asyncio.to_thread(listwatch.assess, self.storage)
+        if action == "wait":
+            return
+
+        if action == "announce":
+            text = listwatch.format_added(items)
+            if text:
+                await _send_markdown(context, int(chat_id), text)
+            await asyncio.to_thread(listwatch.note_announced, self.storage, items)
+            return
+
+        # action == "run"
+        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy)
+        if not status.available:
+            # Quietly: the nudge and the deferred cycle already report a
+            # down exit, and a third voice saying it every twelve minutes
+            # is the noise this project keeps having to remove.
+            logger.info("List watcher waiting: exit node down")
+            return
+        factories = _build_adapter_factories(self.config)
+        if not factories:
+            return
+
+        # Marked before the run, not after: a crash mid-cycle must not
+        # leave the cooldown unset and start another one twelve minutes
+        # later against a cart that may be half-filled.
+        await asyncio.to_thread(listwatch.note_ran, self.storage)
+
+        terms = [(item.text, item.quantity or 1) for item in items if item.text]
+        if not terms:
+            return
+        await context.bot.send_message(
+            chat_id=int(chat_id),
+            text=f"🛒 מכניס לעגלה {len(terms)} פריטים מהרשימה…",
+        )
+        try:
+            reports = await asyncio.to_thread(
+                add_terms_to_cart, self.storage, factories, terms, None, True,
+            )
+        except Exception:
+            logger.exception("List watcher cart run failed")
+            await context.bot.send_message(
+                chat_id=int(chat_id),
+                text="לא הצלחתי להכניס את הפריטים לעגלה. הם נשארו ברשימה — "
+                     "אפשר לנסות שוב עם /start_order.",
+            )
+            return
+
+        # Consume only what actually landed, for the same reason the full
+        # cycle does: a transient failure must not silently delete a
+        # request nobody will think to re-send.
+        added = {
+            (r.item_name or "").strip()
+            for report in reports.values()
+            for r in report.added
+        }
+        for item in items:
+            if (item.text or "").strip() in added:
+                await asyncio.to_thread(
+                    self.storage.mark_adhoc_consumed, item.id
+                )
+
+        summary, markup = self._store_cycle_summary(reports)
+        await _send_html(context, int(chat_id), summary or "לא הצלחתי להוסיף כלום.",
+                         reply_markup=markup)
+        await self._ask_ambiguities(int(chat_id), context, reports)
+
     async def drain_deferred_cycle(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Run a queued cycle once the Israeli exit is reachable again.
 
@@ -3047,6 +3129,15 @@ def build_application(config: Config, storage: Storage) -> Application:
             interval=EXIT_POLL_SECONDS,
             first=EXIT_POLL_SECONDS,
             name="drain_deferred_cycle",
+        )
+        # The list -> cart seam (Ishay, 2026-09-16 21:40). Three minutes
+        # is the announcement latency; the cart run waits for the burst to
+        # settle on top of that (listwatch.QUIET_MINUTES).
+        application.job_queue.run_repeating(
+            bot.watch_list,
+            interval=180,
+            first=60,
+            name="watch_list",
         )
         import datetime as _dt
         import zoneinfo as _zi

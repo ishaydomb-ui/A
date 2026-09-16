@@ -104,6 +104,25 @@ Nothing half-built. Four items are queued and none started, all from the
    turns up to compare against, within a two-day window. Runs in the
    nightly pass. Shufersal's line items still need a logged-in page that
    pass does not hold, so its snapshot waits — correct, not wrong.
+1b. **The list -> cart seam — CLOSED 2026-09-16.** Set by Ishay 21:40,
+   relayed verbatim through Miri: *"הוא צריך לקבל הודעה כשמשהו נוסף
+   לרשימה ולהכניס ישר לעגלה או משהו אחר שתציעו."* The gap was real:
+   `cli add-item` — how Miri writes for Liran — inserted a row into
+   `adhoc_requests` and **nothing watched the table**, so an item reached
+   a cart only via `/start_order` or a deferred cycle. Liran's 20 items of
+   09-16 sat untouched, and `חלב עמיד` (Ishay, 09-11) had been pending
+   five days.
+
+   `listwatch.py` + the `watch_list` job: announce a burst **once**, then
+   after 12 quiet minutes run one cart pass for everything pending.
+   Debounced rather than per-item because a cart add is ~30s of real
+   browser — twenty items over three minutes would be twenty sessions and
+   twenty messages, the same flood that made 80 pending questions the
+   worst friction ever measured here. A 6-hour cooldown stops an item
+   that can never be added from driving a cycle every quiet period all
+   night. No new routing decision was needed: a cycle already adds ad-hoc
+   items to both carts and consumes one only when a store succeeds.
+
 2. **STILL OPEN — Promotion conditions re-checked at hand-off**,
    including whether "מעל 150₪" still holds after deletions, and
    separating *added spend* from *verified discount* in the summary.
