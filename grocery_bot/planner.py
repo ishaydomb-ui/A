@@ -234,28 +234,38 @@ def describe_context(context: dict) -> str:
     """
     if not context:
         return ""
+    from .untrusted import flatten, flatten_all
+
+    # Every interpolated value is flattened, because several of them are
+    # not ours: cart item names come from the chain's own page or API, and
+    # a newline inside one turns a context line into a free-standing
+    # prompt line. See `untrusted.py` — the vector was demonstrated here,
+    # and newlines inside Tiv Taam product names are real data.
     lines = []
     if context.get("transcript"):
         # The exchange first: a correction refers to what was *said*, and
-        # the state below only says what is true now.
+        # the state below only says what is true now. Indented rather than
+        # flattened: this one is the household's own words, and its line
+        # structure is the content.
         lines.append("- השיחה עד כה:\n" + "\n".join(
             "    " + line for line in context["transcript"].splitlines()
         ))
     if context.get("last_subject"):
-        lines.append(f"- דובר לאחרונה על: {context['last_subject']}")
+        lines.append(f"- דובר לאחרונה על: {flatten(context['last_subject'])}")
     if context.get("pending"):
-        lines.append("- ממתין ברשימה: " + ", ".join(context["pending"][:20]))
+        lines.append("- ממתין ברשימה: " + ", ".join(flatten_all(context["pending"][:20])))
     for store, state in (context.get("carts") or {}).items():
+        items = flatten_all((state.get("items") or [])[:8])
         lines.append(
-            f"- עגלת {store}: {state.get('count', 0)} פריטים"
-            + (f", כולל {', '.join(state.get('items', [])[:8])}" if state.get("items") else "")
+            f"- עגלת {flatten(store, 40)}: {state.get('count', 0)} פריטים"
+            + (f", כולל {', '.join(items)}" if items else "")
         )
     if context.get("open_questions"):
         lines.append(f"- שאלות בחירה פתוחות: {context['open_questions']}")
     if context.get("last_shop"):
-        lines.append(f"- הקנייה האחרונה דווחה ב-{context['last_shop']}")
+        lines.append(f"- הקנייה האחרונה דווחה ב-{flatten(context['last_shop'], 40)}")
     if context.get("stores"):
-        lines.append("- רשתות פעילות: " + ", ".join(context["stores"]))
+        lines.append("- רשתות פעילות: " + ", ".join(flatten_all(context["stores"], 40)))
     return "\n".join(lines)
 
 

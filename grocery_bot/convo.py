@@ -175,15 +175,21 @@ def describe(context: dict) -> str:
     # it surfaces as "the model is unavailable" and every message falls
     # through to the rule-based fallback. Found on the comparison
     # harness, 2026-09-11, doing exactly that.
-    subject = context.get("subject") or context.get("last_subject") or ""
+    # The subject is often a product name chosen from a chain's search
+    # results, so it is fetched text and gets the same flattening as the
+    # planner's context — a newline in it would otherwise break this out
+    # of its own line in the prompt. See `untrusted.py`.
+    from .untrusted import flatten
+
+    subject = flatten(context.get("subject") or context.get("last_subject") or "")
     if not subject:
         return ""
     parts = [f"המוצר שדובר עליו לאחרונה: {subject}"]
     store = context.get("store") or context.get("last_store")
     if store:
-        parts.append(f"ברשת {display_name(store)}")
+        parts.append(f"ברשת {flatten(display_name(store), 40)}")
     if context.get("quantity"):
-        parts.append(f"בכמות {context['quantity']}")
+        parts.append(f"בכמות {flatten(context['quantity'], 20)}")
     if context.get("action"):
-        parts.append(f"(מה שנעשה: {context['action']})")
+        parts.append(f"(מה שנעשה: {flatten(context['action'], 40)})")
     return ", ".join(parts)
