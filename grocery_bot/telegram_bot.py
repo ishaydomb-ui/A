@@ -2841,15 +2841,66 @@ async def _send_markdown(context, chat_id: int, text: str, **kwargs):
     entity". The user then sees nothing at all, with no clue why. Escaping
     is handled at composition (see mdtext), but this is the backstop: a
     formatting problem should cost formatting, never the content.
+
+    **Length costs nothing either, since 2026-09-16.** Telegram refuses
+    anything over 4096 characters, and the plain-text fallback above
+    resent the same over-long text and failed again — so a long message
+    was not truncated, it was *lost*, exactly like the formatting failure
+    this function already existed to prevent. Nigel hit the same shape in
+    the budget project (a large section came back as a bare "truncated"
+    notice carrying no content) and passed it on. Long text is now split
+    on line boundaries, because a deals list cut mid-line is a price with
+    no product.
     """
-    try:
-        return await context.bot.send_message(
-            chat_id=chat_id, text=text, parse_mode="Markdown", **kwargs
-        )
-    except Exception:
-        logger.warning("Markdown rejected; resending as plain text", exc_info=True)
-        plain = text.replace("*", "").replace("_", "").replace("`", "")
-        return await context.bot.send_message(chat_id=chat_id, text=plain, **kwargs)
+    chunks = _split_for_telegram(text)
+    sent = None
+    for chunk in chunks:
+        try:
+            sent = await context.bot.send_message(
+                chat_id=chat_id, text=chunk, parse_mode="Markdown", **kwargs
+            )
+        except Exception:
+            logger.warning("Markdown rejected; resending as plain text", exc_info=True)
+            plain = chunk.replace("*", "").replace("_", "").replace("`", "")
+            sent = await context.bot.send_message(chat_id=chat_id, text=plain, **kwargs)
+    return sent
+
+
+# Telegram's hard limit is 4096; the margin absorbs the few characters an
+# entity fix can add on the way out.
+TELEGRAM_LIMIT = 3900
+
+
+def _split_for_telegram(text: str, limit: int = TELEGRAM_LIMIT) -> list:
+    """Split on line boundaries, never mid-line.
+
+    A deals list cut in the middle of a line is a price with no product
+    attached, which is worse than a second message. A single line longer
+    than the limit is hard-cut as a last resort — that is a composition
+    bug, and losing part of one line beats losing all of them.
+    """
+    if not text:
+        return [text or ""]
+    if len(text) <= limit:
+        return [text]
+
+    chunks, current = [], ""
+    for line in text.split("\n"):
+        while len(line) > limit:
+            if current:
+                chunks.append(current)
+                current = ""
+            chunks.append(line[:limit])
+            line = line[limit:]
+        candidate = f"{current}\n{line}" if current else line
+        if len(candidate) > limit:
+            chunks.append(current)
+            current = line
+        else:
+            current = candidate
+    if current:
+        chunks.append(current)
+    return chunks
 
 
 async def _on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:

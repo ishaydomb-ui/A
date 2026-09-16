@@ -423,7 +423,30 @@ def _name_match_rank(folded_term: str, name: str) -> int:
 # row where "קוטג 5%" found three. Fold the apostrophe family away on both
 # the query and the stored name before matching. (Ishay-approved
 # normalisation, 2026-09-04.)
-_APOSTROPHES = "'׳’`"
+#
+# **The double-quote family was missing until 2026-09-16**, and it matters
+# for the same reason: Hebrew writes abbreviations and units with
+# gershayim — ק"ג, מ"ל, ס"מ — and the iOS Hebrew keyboard produces the
+# typographic ״ (U+05F4) while the feeds overwhelmingly use the ASCII ".
+#
+# Measured on the live feed (547,069 rows): **48,776 names carry the
+# ASCII quote and 48 carry the gershayim.** So before this, a query typed
+# on Ishay's own phone could not reach the 48,776, and a query typed with
+# an ASCII quote could not reach the 48. Both directions silent, and
+# silence is the failure mode that looks like "the product isn't sold".
+#
+# The cost, stated because it is real: folding the quote away turns מ"ל
+# into מל, which can substring-match inside מלח or מלא. `_rank` scores an
+# exact name above a word start above a bare substring, so those land at
+# the bottom rather than the top — a slightly wider candidate set in
+# exchange for two populations that were unreachable.
+#
+# Raised by Nigel (family-budget-automation) on 2026-09-16 from the same
+# failure in the budget project, and confirmed here before acting: the
+# single-quote family already folded, the double-quote family did not.
+# Corroborating evidence that this had bitten before — `hotdeals`
+# hand-lists both "תמ\"ל" and "תמל" as separate stockable patterns.
+_APOSTROPHES = "'׳’`" + '"״“”'
 _FOLD_TABLE = str.maketrans("", "", _APOSTROPHES)
 
 

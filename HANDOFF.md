@@ -661,6 +661,35 @@ the same result whether or not the thing is true is not evidence.**
 
 ## 5. Open questions for the user
 
+- **Move the NLU onto the Agent SDK, as Nigel did?** He built a free
+  conversation layer in-process on the Max subscription
+  (`@anthropic-ai/claude-agent-sdk`, commits e9eb426 + f578469) with real
+  containment: `tools: []`, only their own verbs via `createSdkMcpServer`,
+  explicit `allowedTools`, `permissionMode: 'dontAsk'` (deliberately not
+  Miri's `bypassPermissions`, because nobody is at the keyboard),
+  `settingSources: []`, scratch `cwd`. He verified the refusals rather
+  than asserting them.
+
+  **The old objection is dead and this is now a real decision.** Adopting
+  it was previously refused because it meant a second Node runtime in a
+  Python project (same reasoning that declined `eshaham/shufersal-automation`
+  on 2026-08-29). **`claude-agent-sdk` exists for Python — 0.2.153 on
+  PyPI**, checked 2026-09-16. No second runtime.
+
+  **What it would and would not buy here, stated precisely.** It would
+  *not* save money: `nlu._ask_model` already shells out to the installed
+  `claude` CLI on the Max subscription, so there is no API key and no
+  per-token billing today either. What it would buy is declared
+  containment (today's containment is `planner.validate` and
+  `FORBIDDEN` *after* the fact, which is sound but is a filter rather
+  than a boundary), a persistent session instead of a fresh subprocess
+  per message, and one less process spawn on a path whose worst case is
+  already 210s. What it would cost is a dependency on a fast-moving SDK
+  in the one part of the system the household talks to directly.
+
+  My lean: worth doing, but as its own piece of work with the comparison
+  harness pointed at it — not folded into another change. **Ishay's call.**
+
 - **CLOSED 2026-09-16 — Rob's second rule was never about an approval
   gate.** I had read it as "explicit approval for any action born from
   fetched content", flagged the conflict with "בלי שלב אישור", and put it
