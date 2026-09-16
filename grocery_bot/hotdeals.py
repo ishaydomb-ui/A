@@ -83,6 +83,26 @@ STOCKABLE_PATTERNS = (
     "נוזל כלים", "מטהר", "סבון",
     "שמפו", "מרכך שיער", "משחת שיניים", "דאודורנט",
     "מוצץ", "בקבוק לתינוק",
+    # Frozen, added on Ishay's decision 2026-09-16 — asked as "should
+    # frozen join the *cross-chain* hoard list", answered "כן נחשב מזווה
+    # מבחינתי". It was already pantryable at the per-chain level
+    # (`radar.PANTRYABLE_DEPARTMENTS` holds "קפואים ומזון בסיסי"); this is
+    # the cross-chain half, the one that surfaces a deep discount at a
+    # chain the household does not shop.
+    #
+    # I had leaned against it — freezer space is finite in a way a nappy
+    # cupboard is not — and he decided otherwise. The guard against the
+    # message filling with frozen goods is `MAX_PER_FAMILY` plus the
+    # saving threshold, not a narrower list.
+    #
+    # Every pattern below was counted against the live feeds before being
+    # added, because a name-matched category is exactly where a plausible
+    # guess goes wrong quietly: "קפוא" 4,755 rows, "מוקפא" 583, "סנפרוסט"
+    # 600, "טבעפרוסט" 190. Three candidates were dropped for saying
+    # nothing about temperature — "שניצל" (2,317, sold fresh as often as
+    # frozen), "פירורי לחם" (674, an ordinary dry good) and "מבשלים" (0
+    # rows, invented).
+    "קפוא", "מוקפא", "סנפרוסט", "טבעפרוסט",
 )
 
 

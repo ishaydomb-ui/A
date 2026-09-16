@@ -48,6 +48,40 @@ CODE_SELECTOR = "#shortCode"
 SEND_OTP_TEXTS = ("שלחו לי קוד חד פעמי", "קוד חד פעמי")
 SUBMIT_TEXTS = ("התחברות", "כניסה")
 OTP_WAIT_SECONDS = 240
+
+# Text that only a logged-in session shows. Deliberately *not* "אזור אישי"
+# or "ארנק דיגיטלי" — those sit in the navigation whether or not anyone is
+# logged in, so they answer the same either way and cannot settle the
+# question this is here to settle.
+LOGGED_IN_MARKERS = ("התנתק", "התנתקות", "יציאה")
+
+# How long to keep asking. The page is an Angular SPA behind an Incapsula
+# challenge, so "rendered" arrives several seconds after domcontentloaded
+# and the delay is not constant.
+RENDER_WAIT_SECONDS = 45
+RENDER_POLL_SECONDS = 1.5
+
+
+def _wait_for_login_state(pg) -> str:
+    """"logged_out" | "logged_in" | "undetermined" — never a guess.
+
+    Polls for a positive signal from either side and returns as soon as
+    one appears, so the common case costs a second or two rather than the
+    whole budget. Returning "undetermined" is a real answer and the caller
+    must not treat it as either of the others.
+    """
+    deadline = time.time() + RENDER_WAIT_SECONDS
+    while time.time() < deadline:
+        try:
+            if pg.locator(ID_SELECTOR).count():
+                return "logged_out"
+            body = pg.inner_text("body")
+            if any(marker in body for marker in LOGGED_IN_MARKERS):
+                return "logged_in"
+        except Exception:  # noqa: BLE001 - mid-navigation reads throw
+            pass
+        time.sleep(RENDER_POLL_SECONDS)
+    return "undetermined"
 # A real browser UA; the anti-bot fingerprints headless Chromium, and a
 # mobile UA is what the Strategist's working login used.
 UA = (
@@ -84,6 +118,18 @@ def main() -> int:
     if OTP_PATH.exists():
         OTP_PATH.unlink()  # never reuse a stale code
 
+    # Opt-in, never automatic: the profile carries the warm session, and
+    # throwing it away costs Ishay another OTP round. It is the documented
+    # recovery from an UNDETERMINED run, not a routine step.
+    if "--reset-profile" in sys.argv and PROFILE_DIR.exists():
+        import shutil
+
+        backup = PROFILE_DIR.with_name(PROFILE_DIR.name + ".stale")
+        if backup.exists():
+            shutil.rmtree(backup)
+        PROFILE_DIR.rename(backup)
+        _log(f"profile reset — previous one kept at {backup}")
+
     with sync_playwright() as pw:
         ctx = pw.chromium.launch_persistent_context(
             str(PROFILE_DIR),
@@ -102,8 +148,20 @@ def main() -> int:
             # the login form, while a reload trips a full challenge page
             # with no form at all. So the reload is removed on purpose —
             # patience on the first load is what works.
-            pg.goto(SITE, wait_until="domcontentloaded", timeout=60_000)
-            pg.wait_for_timeout(8_000)
+            response = pg.goto(SITE, wait_until="domcontentloaded", timeout=60_000)
+            status = response.status if response else 0
+            if status in (403, 429):
+                # A block is not a markup problem, and saying "login field
+                # not found" for one sends the next person to read
+                # selectors. Measured 2026-09-16: the default Playwright
+                # UA (it carries the literal "HeadlessChrome") gets a
+                # 915-byte 403 here, while the iPhone UA above gets a
+                # 436KB page. If this ever fires, the UA is the first
+                # thing to check, not the DOM.
+                _log(f"BLOCKED: HTTP {status} — anti-bot, not a missing field. "
+                     f"Check the User-Agent first.")
+                pg.screenshot(path=str(BENEFITS_DIR / "login_error.png"))
+                return 3
 
             # Dismiss any cookie/intro overlay that would eat the first click.
             for text in ("אישור", "קבל", "סגור", "הבנתי"):
@@ -115,15 +173,48 @@ def main() -> int:
                 except Exception:
                     pass
 
-            if not pg.locator(ID_SELECTOR).count():
-                # Already logged in from the persistent profile.
-                if "/login" not in pg.url:
-                    ctx.storage_state(path=str(STATE_PATH))
-                    _log(f"ALREADY_LOGGED_IN url={pg.url} — state saved, nothing to do.")
-                    return 0
-                _log("ERROR: login field not found and not logged in.")
+            # Wait for a *positive* answer rather than sleeping and hoping.
+            #
+            # This is the bug that made the login inconsistent, and it is
+            # this project's recurring shape: a check that returns the same
+            # result whether or not the thing is true. "No login field"
+            # means either "already logged in" or "the SPA has not rendered
+            # yet", and the old code resolved that ambiguity by looking at
+            # the URL — then, on the "/" branch, **saved a storage_state
+            # and reported ALREADY_LOGGED_IN**. A logged-out snapshot
+            # written to the session path is worse than an error, because
+            # everything downstream treats it as a session.
+            #
+            # Measured 2026-09-16: 8 seconds after domcontentloaded the
+            # body held 288 characters; once actually settled it held 531
+            # and the full navigation. The old fixed sleep was landing
+            # inside that window.
+            state = _wait_for_login_state(pg)
+            if state == "logged_in":
+                ctx.storage_state(path=str(STATE_PATH))
+                _log(f"ALREADY_LOGGED_IN url={pg.url} — state saved, nothing to do.")
+                return 0
+            if state == "undetermined":
+                # Deliberately saves nothing. Not knowing is a third
+                # outcome, and it must not be spelled like either of the
+                # other two.
+                #
+                # The known cause, measured 2026-09-16: the *saved*
+                # profile renders neither signal in 45s, while a **fresh**
+                # profile shows the login field immediately. The profile's
+                # Incapsula cookies go stale and the challenge then never
+                # resolves. Miri hit the same shape on Akamai (bm_*
+                # cookies poisoned after a block, cleared per-domain to
+                # recover) and passed it on 2026-09-16 — different vendor,
+                # same failure and same fix.
+                _log("UNDETERMINED: neither the login field nor a logged-in "
+                     "marker appeared in "
+                     f"{RENDER_WAIT_SECONDS}s. Nothing saved; see login_error.png. "
+                     "Most likely the profile's anti-bot cookies are stale — "
+                     "rerun with --reset-profile (a fresh profile renders the "
+                     "form immediately).")
                 pg.screenshot(path=str(BENEFITS_DIR / "login_error.png"))
-                return 1
+                return 2
 
             pg.fill(ID_SELECTOR, login_id, timeout=15_000)
             pg.wait_for_timeout(500)

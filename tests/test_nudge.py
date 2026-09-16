@@ -220,6 +220,19 @@ class HotDealTest(unittest.TestCase):
             self.assertTrue(hotdeals.is_stockable(name), name)
         self.assertFalse(hotdeals.is_stockable("עגבניות שרי"))
 
+    def test_frozen_is_stockable(self):
+        # Ishay's decision 2026-09-16: "כן נחשב מזווה מבחינתי". I had
+        # leaned the other way (freezer space is finite); he decided.
+        for name in ("אפונה עדינה סנפרוסט", "תות שדה מוקפא 300גר",
+                     "פילה סלמון קפוא", "טבעפרוסט ברוקולי"):
+            self.assertTrue(hotdeals.is_stockable(name), name)
+
+    def test_the_frozen_patterns_do_not_catch_ordinary_food(self):
+        # The three candidates dropped after counting them against the
+        # live feeds: they say nothing about temperature.
+        for name in ("שניצל בציפוי מעודן", "פירורי לחם מוזהבים", "עגבניות שרי"):
+            self.assertFalse(hotdeals.is_stockable(name), name)
+
     def test_unfamiliar_chains_are_marked_in_the_message(self):
         text = hotdeals.format_deals([self._deal("האגיס מידה 4", 46.90, 60.90)])
         self.assertIn("⚡", text)
