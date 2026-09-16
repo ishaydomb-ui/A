@@ -518,8 +518,64 @@ class GroceryBot:
             + (f" {moved} בקשות סומנו כנקנו." if moved else "")
         )
 
+    def _log_removals_from_orders(self) -> dict:
+        """Compare each shopped cart against the order that emptied it.
+
+        The reliable half, and it runs nightly rather than at `/done`
+        because that is when the evidence exists: the order surfaces in
+        the chain's own history hours after checkout — Tiv Taam the same
+        day, Shufersal ~36 — long after the cart went empty.
+
+        Blocking; called from the nightly pass through a thread.
+        """
+        from . import tivtaamhistory
+        from .history import fetch_order_history  # noqa: F401 - documented below
+
+        logged = {}
+        for store in standingcart.pending_snapshot_stores(self.storage):
+            try:
+                if store == "tivtaam":
+                    from .adapters.tivtaam_api import TivTaamApi, TivTaamSession
+
+                    api = TivTaamApi(TivTaamSession.from_storage_state())
+                    orders = tivtaamhistory.fetch_orders(api, size=5)
+                    if not orders:
+                        continue
+                    newest = orders[0]
+                    lines = tivtaamhistory.order_lines(
+                        api.order(int(newest["code"]))
+                    )
+                    placed = newest["placed_at"]
+                else:
+                    # Shufersal's line items need a logged-in browser page,
+                    # which this pass does not hold. Left for the caller
+                    # that has one; the snapshot simply waits, and waiting
+                    # is correct — it is not wrong, only not yet answered.
+                    continue
+
+                gone = standingcart.removals_from_order(
+                    self.storage, store, lines, placed
+                )
+                if gone:
+                    standingcart.log_removals(self.storage, store, gone)
+                    logged[store] = len(gone)
+                # Cleared either way: the order for this shop has been
+                # seen, so the snapshot has served its purpose. Keeping it
+                # would compare the next order against a stale cart.
+                standingcart.clear_shopped_snapshot(self.storage, store)
+            except Exception:
+                logger.exception("Could not read %s's order for removals", store)
+        return logged
+
     async def _log_removals(self, factories) -> None:
-        """Record what the household deleted from each cart this shop."""
+        """Record what the household deleted from each cart this shop.
+
+        Kept for the pre-checkout case, where reading the live cart is
+        still the right observation: `/done` fired but the cart was not
+        actually emptied, which happens when the household changes its
+        mind. After a real shop this finds nothing, by design, and
+        `_log_removals_from_orders` is what answers instead.
+        """
         def _read(store, factory):
             try:
                 with factory() as adapter:
@@ -568,6 +624,26 @@ class GroceryBot:
             await _send_html(
                 context, chat_id, format_report_summary(reports) or "לא היה מה להוסיף."
             )
+
+    async def failures(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/failures — what keeps failing, and what to do differently.
+
+        Exists because a counter was never a plan. `cart_failures` had
+        recorded every miss since 2026-09-10 and nothing read it back, so
+        the same over-specified search ran again every cycle. Reviewed
+        2026-09-16: of the eight items on record, seven were carried by
+        the chain's own price feed at the time it "could not find" them.
+        """
+        if not _authorized(self.config, update):
+            return
+        from . import failstrategy
+
+        strategies = await asyncio.to_thread(failstrategy.review, self.storage, 60, 1)
+        text = failstrategy.format_review(strategies)
+        if not text:
+            await update.message.reply_text("אין פריטים שנכשלו בחודשיים האחרונים.")
+            return
+        await _send_markdown(context, update.effective_chat.id, text)
 
     async def last_deals(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/lastdeals — what the last cycle put in the cart on its own."""
@@ -986,6 +1062,16 @@ class GroceryBot:
                     logger.info("Nightly learn (tivtaam): %s", tivtaam)
             except Exception:
                 logger.exception("Tiv Taam order sync failed; Shufersal is done")
+
+            # Now that the orders are in, ask what the household took out
+            # before paying. Runs here and not at `/done` because the
+            # order is the only observation that survives the checkout.
+            try:
+                removed = await asyncio.to_thread(self._log_removals_from_orders)
+                if removed:
+                    logger.info("Removals recovered from orders: %s", removed)
+            except Exception:
+                logger.exception("Could not recover removals from orders")
 
             # The backstop: an order nobody told us about. Free text and
             # /done are faster and cover the normal case; this catches a
@@ -2635,19 +2721,56 @@ def _format_choice(
 
 
 def _cheapest_index(cards: list[dict]) -> int | None:
-    """Index of the cheapest candidate, for a 💰 hint.
+    """Index of the best-value candidate, for a 💰 hint.
 
-    Only a hint: the cheapest is often a smaller pack rather than a better
-    buy, so it is never auto-selected (see disambiguate.py).
+    **By unit price where that is comparable, absolute price otherwise.**
+    Ranking on the sticker price marked the small pack as the bargain —
+    the exact arithmetic the household was doing in their head, done
+    wrongly on their behalf, which is worse than not doing it.
+
+    The trap is that a unit price only means something against the same
+    unit: ₪/ק"ג and ₪/ליטר and ₪/יחידה share a number and nothing else.
+    So the ratio is used only when **every** candidate carrying one
+    carries the *same* label, and the comparison falls back to absolute
+    price the moment the units disagree. Mixed units are common — a
+    search for "טחינה" returns jars by weight and bottles by volume.
+
+    Still only a hint; never auto-selected (see disambiguate.py).
     """
-    best, best_price = None, None
-    for i, card in enumerate(cards):
+    def _number(card, field):
         try:
-            price = float(card.get("price", ""))
+            return float(card.get(field, ""))
         except (TypeError, ValueError):
+            return None
+
+    labels = {
+        (card.get("unitLabel") or "").strip()
+        for card in cards
+        if _number(card, "unitPrice") is not None
+    }
+    # One label shared by everything that has one, and it is not blank.
+    comparable = len(labels) == 1 and bool(next(iter(labels), ""))
+    field = "unitPrice" if comparable else "price"
+
+    best, best_value = None, None
+    for i, card in enumerate(cards):
+        value = _number(card, field)
+        if value is None or value <= 0:
             continue
-        if best_price is None or price < best_price:
-            best, best_price = i, price
+        if best_value is None or value < best_value:
+            best, best_value = i, value
+    if best is not None:
+        return best
+    # Every unit price was missing or unusable; the sticker price is
+    # still better than no hint at all.
+    if field == "price":
+        return None
+    for i, card in enumerate(cards):
+        value = _number(card, "price")
+        if value is None:
+            continue
+        if best_value is None or value < best_value:
+            best, best_value = i, value
     return best
 
 
@@ -2671,6 +2794,7 @@ async def _register_bot_metadata(application: Application) -> None:
             BotCommand("chaindeals", "מבצעים מכל הרשתות, לא רק שופרסל"),
             BotCommand("basket", "הסל שלי בכל רשת — כולל חוסרים ותחליפים"),
             BotCommand("lastdeals", "אילו מבצעים נוספו לעגלה לבד"),
+            BotCommand("failures", "פריטים שנכשלו — ומה לשנות"),
             BotCommand("done", "סיימתי לקנות — מלא את העגלה מחדש"),
             BotCommand("questions", "שאלות בחירה שממתינות — לענות כשנוח"),
             BotCommand("requests", "מה קרה למה שביקשנו — בעגלה, נקנה, סופק"),
@@ -2775,6 +2899,7 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("chaindeals", bot.chain_deals))
     application.add_handler(CommandHandler("basket", bot.basket))
     application.add_handler(CommandHandler("lastdeals", bot.last_deals))
+    application.add_handler(CommandHandler("failures", bot.failures))
     application.add_handler(CommandHandler("done", bot.done_shopping))
     application.add_handler(CommandHandler("refresh_prices", bot.refresh_prices))
     # /propose retired 2026-09-06: used once ever (2026-08-29), abandoned

@@ -94,20 +94,32 @@ across both chains; that is fine because it runs immediately after
 Nothing half-built. Four items are queued and none started, all from the
 2026-09-11 reviews, in the order I would do them:
 
-1. **Removals read from the order contents, not the emptied cart.** This
-   one is a capability that broke while being fixed: an empty cart no
-   longer reads as "everything was deleted" (correct), but after a real
-   shop the cart is *always* empty, so removals are now never recorded at
-   all. The reliable observation is what the order actually contained
-   against the manifest, ~36 hours later.
-2. **Promotion conditions re-checked at hand-off**, including whether
-   "מעל 150₪" still holds after deletions, and separating *added spend*
-   from *verified discount* in the summary.
-3. **A repeat failure should change strategy**, not just raise a counter:
-   check the search term, the pack size, an allowed substitute, the other
-   chain.
-4. **💰 by unit price.** `_cheapest_index` ranks absolute price, so a
-   small pack wins over the better buy.
+**Three of the four are done (2026-09-16); one remains.**
+
+1. ~~Removals read from the order contents~~ — **DONE.** The hard part
+   was not the comparison but the timing: `/done` refills immediately and
+   the order surfaces hours later (Tiv Taam same day, Shufersal ~36h), so
+   by then the manifest describes the *new* cart. `mark_shopped` now
+   snapshots the chain's cart at checkout and keeps it until an order
+   turns up to compare against, within a two-day window. Runs in the
+   nightly pass. Shufersal's line items still need a logged-in page that
+   pass does not hold, so its snapshot waits — correct, not wrong.
+2. **STILL OPEN — Promotion conditions re-checked at hand-off**,
+   including whether "מעל 150₪" still holds after deletions, and
+   separating *added spend* from *verified discount* in the summary.
+3. ~~A repeat failure should change strategy~~ — **DONE**, and it
+   disproved the bot's own diagnosis. `failstrategy.py` + `/failures`.
+   Of the eight failures on record, **seven were carried by the chain's
+   own price feed at the moment it "could not find" them**, and
+   `טבעפרוסט תרד 800 גרם` — filed as "probably out of stock" on 09-10 —
+   was **delivered to the household on 09-12**. "Probably out of stock"
+   is a guess the adapter makes from a missing button, and it is
+   checkable. The four strategies (retry / shorten / switch_chain /
+   unavailable) were each derived from those eight cases.
+4. ~~💰 by unit price~~ — **DONE.** Ranked on the unit price where the
+   labels agree, absolute price otherwise: ₪/ק"ג and ₪/ליטר share a
+   number and nothing else, and mixed units are common (a search for
+   טחינה returns jars by weight and bottles by volume).
 
 **CLOSED 2026-09-15 — Tiv Taam's order history is read.** This was the
 "live gap, found 2026-09-13" that used to sit here. `order_log` was

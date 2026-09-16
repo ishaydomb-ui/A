@@ -392,3 +392,127 @@ class PerChainDetectionTests(unittest.TestCase):
     def test_a_chain_we_do_not_fill_is_ignored(self):
         self._order("victory", "V1", "2026-09-12T10:00:00")
         self.assertEqual(standingcart.shops_detected_since_refill(self.storage), {})
+
+
+class RemovalsFromOrderTests(unittest.TestCase):
+    """What was deleted before paying, read from the order rather than the cart.
+
+    The capability that broke while being fixed. An empty cart used to
+    read as "everything was deleted"; guarding that was correct, but after
+    a real shop the cart is *always* empty, so removals stopped being
+    recorded at all. The order is the observation that survives checkout.
+
+    The subtlety is timing: `/done` refills immediately, so by the time
+    the order surfaces (Tiv Taam same day, Shufersal ~36h) the manifest
+    describes the *new* cart. Hence the snapshot taken at shop time.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.storage = Storage(str(Path(self._tmp.name) / "t.sqlite3"))
+
+    def _manifest(self, store, pairs):
+        from grocery_bot.models import CartAddResult, OrderCycleReport
+
+        report = OrderCycleReport(store=store)
+        for code, name in pairs:
+            report.record(CartAddResult(
+                item_name=name, store=store, status="added", product_code=code
+            ))
+        standingcart.record_manifest(self.storage, {store: report})
+
+    def _shop(self, store, day):
+        standingcart.mark_shopped(self.storage, day, store=store)
+
+    def test_what_the_order_lacks_was_removed(self):
+        self._manifest("tivtaam", [("P_1", "חלב"), ("P_2", "קורנפלקס")])
+        self._shop("tivtaam", date(2026, 9, 12))
+        gone = standingcart.removals_from_order(
+            self.storage, "tivtaam",
+            [{"code": "P_1", "name": "חלב"}], "2026-09-12",
+        )
+        self.assertEqual([r["name"] for r in gone], ["קורנפלקס"])
+
+    def test_a_refill_after_the_shop_does_not_destroy_the_evidence(self):
+        # The whole reason the snapshot exists: /done refills at once.
+        self._manifest("tivtaam", [("P_1", "חלב"), ("P_2", "קורנפלקס")])
+        self._shop("tivtaam", date(2026, 9, 12))
+        self._manifest("tivtaam", [("P_9", "משהו אחר")])  # the refill
+        gone = standingcart.removals_from_order(
+            self.storage, "tivtaam",
+            [{"code": "P_1", "name": "חלב"}], "2026-09-12",
+        )
+        self.assertEqual([r["name"] for r in gone], ["קורנפלקס"])
+
+    def test_an_order_from_another_shop_is_not_compared(self):
+        # A much later order is not the one that emptied this cart.
+        self._manifest("tivtaam", [("P_1", "חלב")])
+        self._shop("tivtaam", date(2026, 9, 12))
+        self.assertEqual(
+            standingcart.removals_from_order(
+                self.storage, "tivtaam", [{"code": "P_9", "name": "אחר"}],
+                "2026-09-30"),
+            [],
+        )
+
+    def test_a_shop_with_nothing_removed_reports_nothing(self):
+        self._manifest("tivtaam", [("P_1", "חלב")])
+        self._shop("tivtaam", date(2026, 9, 12))
+        self.assertEqual(
+            standingcart.removals_from_order(
+                self.storage, "tivtaam", [{"code": "P_1", "name": "חלב"}],
+                "2026-09-12"),
+            [],
+        )
+
+    def test_no_order_lines_is_silence_not_everything_removed(self):
+        # The original bug, in its new home: an empty reading must never
+        # read as "the household deleted the entire cart".
+        self._manifest("tivtaam", [("P_1", "חלב"), ("P_2", "לחם")])
+        self._shop("tivtaam", date(2026, 9, 12))
+        self.assertEqual(
+            standingcart.removals_from_order(
+                self.storage, "tivtaam", [], "2026-09-12"),
+            [],
+        )
+
+    def test_a_chain_never_shopped_has_no_snapshot(self):
+        self._manifest("tivtaam", [("P_1", "חלב")])
+        self.assertEqual(standingcart.pending_snapshot_stores(self.storage), [])
+        self.assertEqual(
+            standingcart.removals_from_order(
+                self.storage, "tivtaam", [{"code": "P_9", "name": "x"}]),
+            [],
+        )
+
+    def test_the_snapshot_is_per_chain(self):
+        self._manifest("tivtaam", [("P_1", "חלב")])
+        self._shop("tivtaam", date(2026, 9, 12))
+        self._manifest("shufersal", [("S_1", "לחם")])
+        self._shop("shufersal", date(2026, 9, 13))
+        self.assertEqual(standingcart.pending_snapshot_stores(self.storage),
+                         ["shufersal", "tivtaam"])
+        standingcart.clear_shopped_snapshot(self.storage, "tivtaam")
+        self.assertEqual(standingcart.pending_snapshot_stores(self.storage),
+                         ["shufersal"])
+
+    def test_a_cleared_snapshot_stops_answering(self):
+        self._manifest("tivtaam", [("P_1", "חלב"), ("P_2", "לחם")])
+        self._shop("tivtaam", date(2026, 9, 12))
+        standingcart.clear_shopped_snapshot(self.storage, "tivtaam")
+        self.assertEqual(
+            standingcart.removals_from_order(
+                self.storage, "tivtaam", [{"code": "P_1", "name": "חלב"}],
+                "2026-09-12"),
+            [],
+        )
+
+    def test_matching_by_name_works_without_codes(self):
+        # Tiv Taam order lines carry productId, but a manifest entry
+        # recorded from a search may only have the name.
+        self._manifest("tivtaam", [("", "חלב"), ("", "קורנפלקס")])
+        self._shop("tivtaam", date(2026, 9, 12))
+        gone = standingcart.removals_from_order(
+            self.storage, "tivtaam", [{"code": "", "name": "חלב"}], "2026-09-12")
+        self.assertEqual([r["name"] for r in gone], ["קורנפלקס"])

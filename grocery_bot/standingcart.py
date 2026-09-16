@@ -204,6 +204,96 @@ def removals(storage, store: str, cart_items) -> list[dict]:
     ]
 
 
+_SHOPPED_SNAPSHOT_KEY = "standing_cart_shopped_snapshot"
+
+# How far back an order may sit and still be the one that emptied this
+# snapshot. The household pays, then the order surfaces in the chain's
+# history hours later; two days of slack covers Shufersal's measured ~36
+# hours with room for a late-evening shop, and stops a *later* order
+# being matched against a stale snapshot.
+SNAPSHOT_MATCH_DAYS = 2
+
+
+def _snapshot_shopped_cart(storage, store: str, day: str) -> None:
+    """Keep this chain's manifest as it stood when the shop finished."""
+    items = _manifest(storage).get("stores", {}).get(store) or []
+    if not items:
+        return
+    snapshots = _shopped_snapshots(storage)
+    snapshots[store] = {"at": day, "items": items}
+    storage.set_state(
+        _SHOPPED_SNAPSHOT_KEY, json.dumps(snapshots, ensure_ascii=False)
+    )
+
+
+def _shopped_snapshots(storage) -> dict:
+    raw = storage.get_state(_SHOPPED_SNAPSHOT_KEY)
+    if not raw:
+        return {}
+    try:
+        loaded = json.loads(raw)
+    except ValueError:
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def removals_from_order(storage, store: str, order_items, placed_at: str = "") -> list:
+    """What the household deleted before paying, read from the order.
+
+    The reliable observation, and the one the previous design could not
+    make. `removals()` compares the manifest against the *live cart*,
+    which works only before checkout — after a real shop the cart is
+    always empty, so an honest empty-cart guard (added when an empty cart
+    was being read as "everything was deleted") left removals never
+    recorded at all. What the order actually contained is the answer that
+    survives the checkout.
+
+    Returns [] rather than guessing whenever the comparison would be
+    meaningless: no snapshot, no order lines, or an order too far from
+    the shop to be the one that emptied this cart.
+    """
+    snapshot = _shopped_snapshots(storage).get(store) or {}
+    items = snapshot.get("items") or []
+    if not items or not order_items:
+        return []
+
+    if placed_at and snapshot.get("at"):
+        try:
+            shopped = date.fromisoformat(str(snapshot["at"])[:10])
+            ordered = date.fromisoformat(str(placed_at)[:10])
+        except ValueError:
+            pass
+        else:
+            # An order from well before the shop cannot be the one that
+            # emptied this cart; neither can one from well after.
+            if abs((ordered - shopped).days) > SNAPSHOT_MATCH_DAYS:
+                return []
+
+    bought = {str(item.get("code") or "") for item in order_items}
+    bought |= {(item.get("name") or "").strip() for item in order_items}
+    bought.discard("")
+    return [
+        row for row in items
+        if str(row.get("code") or "") not in bought
+        and (row.get("name") or "").strip() not in bought
+    ]
+
+
+def clear_shopped_snapshot(storage, store: str) -> None:
+    """Forget a snapshot once its order has been compared against it."""
+    snapshots = _shopped_snapshots(storage)
+    if snapshots.pop(store, None) is None:
+        return
+    storage.set_state(
+        _SHOPPED_SNAPSHOT_KEY, json.dumps(snapshots, ensure_ascii=False)
+    )
+
+
+def pending_snapshot_stores(storage) -> list:
+    """Chains whose shopped cart is still waiting for its order."""
+    return sorted(_shopped_snapshots(storage))
+
+
 def shops_detected_since_refill(storage, stores=None) -> dict:
     """Which chains have an order newer than their own last refill.
 
@@ -336,6 +426,18 @@ def mark_shopped(storage, today: date | None = None, store: str = "") -> str:
     shopped *somewhere* is the fact the nudge needs.
     """
     day = (today or date.today()).isoformat()
+    # Freeze what was in this chain's cart *before* the refill overwrites
+    # it. This is the step that makes removals recoverable at all.
+    #
+    # The order of events is the problem: the household pays, `/done`
+    # fires, the refill immediately rewrites the manifest — and the order
+    # only appears in the chain's own history later (Tiv Taam the same
+    # day, Shufersal ~36 hours). By then the manifest describes the *new*
+    # cart, so comparing it against the order answers a question nobody
+    # asked. The snapshot is the cart as it stood at checkout, kept until
+    # an order turns up to compare it with.
+    if store:
+        _snapshot_shopped_cart(storage, store, day)
     storage.set_state(_LAST_SHOP_KEY, day)
     if store:
         by_store = _last_shop_by_store(storage)
