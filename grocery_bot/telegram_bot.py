@@ -2854,15 +2854,25 @@ async def _send_markdown(context, chat_id: int, text: str, **kwargs):
     """
     chunks = _split_for_telegram(text)
     sent = None
-    for chunk in chunks:
+    for index, chunk in enumerate(chunks):
+        # A keyboard belongs to the message it acts on, so it rides the
+        # **last** chunk only. Attaching it to every chunk would show the
+        # same buttons three times and let a tap on an early copy act on
+        # a message that is no longer the live one. No caller passes
+        # `reply_markup` here today; `**kwargs` invites one to, and this
+        # is cheaper to fix now than to diagnose later. (Nigel flagged
+        # the same detail from the budget project, 2026-09-16.)
+        extras = dict(kwargs)
+        if index < len(chunks) - 1:
+            extras.pop("reply_markup", None)
         try:
             sent = await context.bot.send_message(
-                chat_id=chat_id, text=chunk, parse_mode="Markdown", **kwargs
+                chat_id=chat_id, text=chunk, parse_mode="Markdown", **extras
             )
         except Exception:
             logger.warning("Markdown rejected; resending as plain text", exc_info=True)
             plain = chunk.replace("*", "").replace("_", "").replace("`", "")
-            sent = await context.bot.send_message(chat_id=chat_id, text=plain, **kwargs)
+            sent = await context.bot.send_message(chat_id=chat_id, text=plain, **extras)
     return sent
 
 
@@ -2904,7 +2914,22 @@ def _split_for_telegram(text: str, limit: int = TELEGRAM_LIMIT) -> list:
 
 
 async def _on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Keep expected Telegram complaints out of the traceback stream."""
+    """Keep expected Telegram complaints out of the traceback stream, and
+    never leave a question answered with silence.
+
+    Until 2026-09-16 this only logged. That meant a handler throwing
+    produced *nothing at all* in the chat: the household asked something
+    and could not tell "the bot broke" from "the bot ignored me", which
+    is the same ambiguity that has cost this project repeatedly today —
+    a state that reads identically whether or not the thing happened.
+
+    Nigel hit the mirror image in the budget project (a failed send
+    surfaced as the help menu, so a breakage read as "it did not
+    understand the question"). Both are the same mistake: letting a
+    failure wear the costume of an ordinary answer. So this says plainly
+    that something broke, and says nothing about what — an exception
+    string is not for the family group, and it is in the journal.
+    """
     from telegram.error import BadRequest
 
     error = context.error
@@ -2916,6 +2941,21 @@ async def _on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.debug("Ignoring benign Telegram error: %s", error)
         return
     logger.exception("Unhandled error while processing an update", exc_info=error)
+
+    # Telling them costs one line; not telling them costs a question they
+    # believe was received. Guarded so a failure to report a failure
+    # cannot itself raise.
+    chat = getattr(getattr(update, "effective_chat", None), "id", None)
+    if chat is None:
+        return
+    try:
+        await context.bot.send_message(
+            chat_id=chat,
+            text="משהו נשבר אצלי באמצע הבקשה הזאת — היא לא בוצעה. "
+                 "אפשר לנסות שוב; אם זה חוזר, זה רשום בלוג ואבדוק.",
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not report the error to the chat")
 
 
 def build_application(config: Config, storage: Storage) -> Application:

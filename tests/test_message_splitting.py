@@ -56,3 +56,52 @@ class SplittingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KeyboardPlacementTests(unittest.IsolatedAsyncioTestCase):
+    """A keyboard belongs to the message it acts on — the last chunk.
+
+    Flagged by Nigel (family-budget-automation) 2026-09-16 from the same
+    split. Attaching it to every chunk shows the buttons several times and
+    lets a tap on an earlier copy act on a message that is no longer live.
+    """
+
+    class _Bot:
+        def __init__(self):
+            self.sent = []
+
+        async def send_message(self, chat_id, text, **kwargs):
+            self.sent.append((text, kwargs.get("reply_markup")))
+            return object()
+
+    class _Ctx:
+        def __init__(self, bot):
+            self.bot = bot
+
+    async def test_the_keyboard_rides_only_the_last_chunk(self):
+        from grocery_bot.telegram_bot import _send_markdown
+
+        bot = self._Bot()
+        long_text = "\n".join(f"שורה {i}" for i in range(2000))
+        await _send_markdown(self._Ctx(bot), 1, long_text, reply_markup="KEYBOARD")
+        self.assertGreater(len(bot.sent), 1)
+        self.assertIsNone(bot.sent[0][1])
+        self.assertEqual(bot.sent[-1][1], "KEYBOARD")
+
+    async def test_a_single_chunk_still_gets_its_keyboard(self):
+        from grocery_bot.telegram_bot import _send_markdown
+
+        bot = self._Bot()
+        await _send_markdown(self._Ctx(bot), 1, "קצר", reply_markup="KEYBOARD")
+        self.assertEqual(len(bot.sent), 1)
+        self.assertEqual(bot.sent[0][1], "KEYBOARD")
+
+    async def test_every_chunk_is_actually_sent(self):
+        from grocery_bot.telegram_bot import _send_markdown
+
+        bot = self._Bot()
+        long_text = "\n".join(f"שורה {i}" for i in range(2000))
+        await _send_markdown(self._Ctx(bot), 1, long_text)
+        rejoined = "\n".join(text for text, _ in bot.sent)
+        for i in (0, 999, 1999):
+            self.assertIn(f"שורה {i}", rejoined)
