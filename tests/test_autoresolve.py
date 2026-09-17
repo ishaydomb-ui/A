@@ -1,100 +1,146 @@
+"""Decide from purchase history instead of asking 90 questions.
+
+Set by Ishay 2026-09-17: "אני לא מתכוון לענות על 90 שאלות. הפרוסס הזה לא
+עובד. קח החלטה מה לשים על בסיס היסטוריית הקנייה שלי."
+
+The first version of this module was confidently wrong, and the tests
+that matter are the ones pinning why. Ranking candidates by how often the
+household buys them — with no check that the candidate answers the term —
+resolved `גבינה צהובה מגוררת` to `פלפל צהוב` (bought in 88% of orders,
+shares the word צהוב), `מארז אוכמניות` to `דלעת ארוזה`, and `ביצי משק M`
+to `כרוב לבן`. A purchase share says "they like this product"; it never
+says "this is what they asked for".
+"""
 import tempfile
 import unittest
 from pathlib import Path
 
-from grocery_bot.models import CartAddResult
-from grocery_bot.orchestrator import run_order_cycle
+from grocery_bot import autoresolve
+from grocery_bot.stock import StockItem
 from grocery_bot.storage import Storage
 
 
-def _card(name, code, price="6.10"):
-    return {"name": name, "code": code, "price": price, "size": "250 גרם", "brand": "תנובה"}
+class _Row(dict):
+    """Stands in for a sqlite3.Row, which indexes by name."""
 
 
-class _SearchAdapter:
-    """Returns a fixed candidate list, and records what was added."""
+def _row(id, store, term, candidates, cards="[]"):
+    import json
 
-    name = "shufersal"
-
-    def __init__(self, cards):
-        self._cards = cards
-        self.specific_calls = []
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        return False
-
-    def search_and_add(self, term, quantity=1):
-        return CartAddResult(
-            item_name=term, store="shufersal", status="ambiguous",
-            candidates=[c["name"] for c in self._cards],
-            candidate_cards=self._cards, quantity=quantity,
-        )
-
-    def add_specific_product(self, label, quantity=1, product_code="", search_term=""):
-        self.specific_calls.append((label, product_code))
-        return CartAddResult(
-            item_name=label, store="shufersal", status="added",
-            quantity=quantity, product_code=product_code,
-        )
+    return _Row(id=id, store=store, original_term=term,
+                candidates=json.dumps(candidates, ensure_ascii=False),
+                candidate_cards=cards)
 
 
-class AutoResolveTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self._tmpdir = tempfile.TemporaryDirectory()
-        self.storage = Storage(str(Path(self._tmpdir.name) / "t.sqlite3"))
+class RelevanceGateTests(unittest.TestCase):
+    """The gate whose absence was the whole defect."""
 
-    def tearDown(self) -> None:
-        self._tmpdir.cleanup()
+    def test_a_shared_adjective_is_not_a_match(self):
+        # גבינה צהובה מגוררת vs פלפל צהוב — both "yellow", nothing else.
+        self.assertEqual(autoresolve._relevance("גבינה צהובה מגוררת", "פלפל צהוב"), 0.0)
 
-    def _cycle(self, adapter):
-        return run_order_cycle(self.storage, {"shufersal": lambda: adapter})["shufersal"]
+    def test_an_unrelated_staple_is_not_a_match(self):
+        self.assertEqual(autoresolve._relevance("מארז אוכמניות", "דלעת ארוזה"), 0.0)
+        self.assertEqual(autoresolve._relevance("ביצי משק M", "כרוב לבן"), 0.0)
 
-    def test_a_previously_bought_product_is_picked_without_asking(self) -> None:
-        self.storage.add_base_list_item("תפוחי עץ")
-        self.storage.remember_choice("shufersal", "תפוח עץ סמיט", "P_SMIT", "תפוח עץ סמיט")
-        adapter = _SearchAdapter([_card("תפוח עץ גאלה", "P_GALA"), _card("תפוח עץ סמיט", "P_SMIT")])
+    def test_the_same_product_scores_fully(self):
+        self.assertEqual(autoresolve._relevance("מארז אוכמניות", "מארז אוכמניות 125 גרם"), 1.0)
 
-        report = self._cycle(adapter)
+    def test_a_qualifier_that_is_missing_scores_partially(self):
+        # They asked for chili and would get a sweet red pepper.
+        score = autoresolve._relevance("פלפל צילי", "פלפל אדום")
+        self.assertGreater(score, 0.0)
+        self.assertLess(score, 1.0)
 
-        self.assertEqual(report.ambiguous, [])
-        self.assertEqual(len(report.added), 1)
-        self.assertEqual(adapter.specific_calls[0][1], "P_SMIT")
-        self.assertEqual(self.storage.list_pending_ambiguities(), [])
 
-    def test_an_auto_pick_is_flagged_so_it_is_not_silent(self) -> None:
-        self.storage.add_base_list_item("תפוחי עץ")
-        self.storage.remember_choice("shufersal", "תפוח עץ סמיט", "P_SMIT", "תפוח עץ סמיט")
-        report = self._cycle(
-            _SearchAdapter([_card("תפוח עץ גאלה", "P_GALA"), _card("תפוח עץ סמיט", "P_SMIT")])
-        )
-        self.assertEqual(report.added[0].auto_resolved, "history")
+class DecisionTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.storage = Storage(str(Path(self._tmp.name) / "t.sqlite3"))
+        self.storage.replace_stock_items("tivtaam", [
+            StockItem("1", "פלפל אדום", 0.94, "שונות"),
+            StockItem("2", "מלפפונים", 0.48, "שונות"),
+            StockItem("3", "קוטג' 5% שומן", 0.88, "שונות"),
+        ])
+        self.storage.replace_stock_items("shufersal", [
+            StockItem("9", "עלי תרד בייבי 200 גרם", 0.15, "שונות"),
+        ])
 
-    def test_the_auto_pick_is_remembered_for_the_requested_term(self) -> None:
-        """So the same search doesn't re-derive it every cycle."""
-        self.storage.add_base_list_item("תפוחי עץ")
-        self.storage.remember_choice("shufersal", "תפוח עץ סמיט", "P_SMIT", "תפוח עץ סמיט")
-        self._cycle(_SearchAdapter([_card("תפוח עץ גאלה", "P_GALA"), _card("תפוח עץ סמיט", "P_SMIT")]))
-        self.assertEqual(
-            self.storage.preferred_for("shufersal", "תפוחי עץ")["product_code"], "P_SMIT"
-        )
+    def _decide(self, term, candidates, store="tivtaam"):
+        return autoresolve.decide(self.storage, _row(1, store, term, candidates))
 
-    def test_two_known_products_still_ask(self) -> None:
-        self.storage.add_base_list_item("ביצים")
-        self.storage.remember_choice("shufersal", "ביצים L", "P_L", "ביצים L")
-        self.storage.remember_choice("shufersal", "ביצים XL", "P_XL", "ביצים XL")
-        report = self._cycle(_SearchAdapter([_card("ביצים L", "P_L"), _card("ביצים XL", "P_XL")]))
-        self.assertEqual(len(report.ambiguous), 1)
+    def test_a_product_they_buy_here_wins(self):
+        d = self._decide("קוטג", ["קוטג' 5% שומן", "קוטג' 9%", "ממרח קוטג"])
+        self.assertEqual(d.name, "קוטג' 5% שומן")
+        self.assertEqual(d.basis, "bought_here")
+        self.assertTrue(d.confident)
 
-    def test_an_unknown_item_still_asks_and_stores_the_cards(self) -> None:
-        self.storage.add_base_list_item("גבינה בולגרית")
-        cards = [_card("בולגרית 5%", "P_1"), _card("בולגרית 16%", "P_2")]
-        report = self._cycle(_SearchAdapter(cards))
-        self.assertEqual(len(report.ambiguous), 1)
-        pending = self.storage.list_pending_ambiguities()[0]
-        self.assertEqual([c["code"] for c in pending["candidate_cards"]], ["P_1", "P_2"])
+    def test_a_popular_staple_cannot_hijack_an_unrelated_term(self):
+        # The original bug, pinned. פלפל אדום is bought in 94% of orders.
+        d = self._decide("גבינה צהובה מגוררת", ["פלפל אדום", "גבינה צהובה מגוררת 200 גרם"])
+        self.assertEqual(d.name, "גבינה צהובה מגוררת 200 גרם")
+
+    def test_a_partial_match_is_decided_but_not_called_confident(self):
+        d = self._decide("פלפל צילי", ["פלפל אדום", "רוטב צילי מתוק"])
+        self.assertEqual(d.name, "פלפל אדום")
+        self.assertEqual(d.basis, "bought_here")
+        self.assertFalse(d.confident)
+        self.assertIn("חלקית", d.detail)
+
+    def test_the_other_chain_counts_when_this_one_has_nothing(self):
+        d = self._decide("עלי תרד", ["עלי תרד בייבי 200 גרם", "תרד קפוא"])
+        self.assertEqual(d.basis, "bought_other")
+
+    def test_a_candidate_list_answering_nothing_is_said_so(self):
+        # בייקון -> מצלמת EYEX4 was real. Saying "no candidate answers
+        # this" is the honest outcome; asserting one would be worse.
+        d = self._decide("בייקון", ["מצלמת EYEX4", "כבל USB"])
+        self.assertEqual(d.basis, "no_match")
+        self.assertFalse(d.confident)
+
+    def test_a_price_controlled_item_wins_a_tie(self):
+        d = self._decide("חלב", ["חלב סויה", "חלב 3% - מחיר בפיקוח"])
+        self.assertEqual(d.basis, "controlled")
+
+    def test_the_plainest_name_is_the_last_resort(self):
+        d = self._decide("ריבה", ["ריבה", "ריבת חלב בטעם קרמל מיוחד"])
+        self.assertEqual(d.name, "ריבה")
+        self.assertEqual(d.basis, "shortest")
+
+    def test_every_question_is_settled_without_asking(self):
+        # The behaviour he rejected was leaving them open for him. Settled
+        # means either a product or an explicit "nothing here matches" —
+        # never a question, and never a name that answers nothing.
+        for term, cands in (("משהו", ["א", "ב"]), ("ריבה", ["ריבה"])):
+            d = self._decide(term, cands)
+            self.assertTrue(d.index >= 0 or d.basis in ("no_match", "none"))
+
+    def test_an_unmatched_term_names_no_product_at_all(self):
+        # `בייקון -> מצלמת EYEX4` was written into preferences once.
+        d = self._decide("בייקון", ["מצלמת EYEX4", "כבל USB"])
+        self.assertEqual(d.index, -1)
+        self.assertEqual(d.name, "")
+
+    def test_no_candidates_at_all_is_not_a_crash(self):
+        d = self._decide("משהו", [])
+        self.assertEqual(d.basis, "none")
+        self.assertEqual(d.index, -1)
+
+
+class SummaryTests(unittest.TestCase):
+    def test_uncertain_decisions_are_surfaced_not_buried(self):
+        strong = autoresolve.Decision(1, "tivtaam", "קוטג", 0, "קוטג' 5%",
+                                      "bought_here", "נקנה כאן", score=1.0)
+        weak = autoresolve.Decision(2, "tivtaam", "בייקון", 0, "מצלמה",
+                                    "no_match", "אף מועמד", score=0.0)
+        text = autoresolve.format_summary([strong, weak])
+        self.assertIn("2", text)
+        self.assertIn("בייקון", text)
+        self.assertIn("שווה מבט", text)
+
+    def test_nothing_open_says_so(self):
+        self.assertIn("אין", autoresolve.format_summary([]))
 
 
 if __name__ == "__main__":

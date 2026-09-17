@@ -2447,6 +2447,32 @@ class GroceryBot:
             # again for answers the bot was holding.
             if self.storage.preferred_for(row["store"], row["original_term"]) is None
         ]
+        # Decide instead of asking. Set by Ishay 2026-09-17, shown 90 open
+        # questions: "אני לא מתכוון לענות על 90 שאלות. הפרוסס הזה לא עובד.
+        # קח החלטה מה לשים על בסיס היסטוריית הקנייה שלי."
+        #
+        # The questions were being generated before the evidence to answer
+        # them existed: 108 of the 134 were Tiv Taam, and this project
+        # could not read a single Tiv Taam order until 09-15. It was
+        # asking a person, one message at a time, for what the account
+        # already held — 40 orders and 377 products with their shares.
+        #
+        # Only what genuinely answers to nothing is still surfaced, and as
+        # a note rather than a question.
+        from . import autoresolve
+
+        if pending:
+            decisions = await asyncio.to_thread(autoresolve.resolve_all, self.storage)
+            if decisions:
+                await asyncio.to_thread(autoresolve.apply, self.storage, decisions)
+                summary = autoresolve.format_summary(decisions)
+                if summary:
+                    await _send_markdown(context, chat_id, summary)
+            pending = [
+                row for row in self.storage.list_pending_ambiguities()
+                if self.storage.preferred_for(row["store"], row["original_term"]) is None
+            ]
+
         if reports is not None:
             wanted = _cycle_question_keys(reports)
             asking = [

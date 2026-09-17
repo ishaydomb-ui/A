@@ -1,14 +1,17 @@
-"""Only ask about the shop that just happened.
+"""Decide, do not ask — and if you must ask, ask only about this shop.
 
-Measured on the live DB 2026-09-11: 80 variant questions would have gone
-out at the next cycle, 73 of them about Tiv Taam — so a Shufersal-only
-shop ended with 73 unrelated notifications, one Telegram message each,
-about terms nobody had asked for that day. The queue was filtered by
-nothing: not by store, not by age, not by whether the term was in the
-run.
+Two rounds of the same problem, and the second answer supersedes the
+first. On 2026-09-11 the fix was to *filter* the questions: only this
+cycle's, capped at eight, the backlog behind /questions. On 2026-09-17
+Ishay looked at 90 still-open questions and rejected the premise —
+"אני לא מתכוון לענות על 90 שאלות. הפרוסס הזה לא עובד. קח החלטה מה לשים
+על בסיס היסטוריית הקנייה שלי."
 
-These tests pin the two halves of the fix: relevance, and a cap on how
-many may arrive at once.
+So `_ask_ambiguities` now resolves from purchase history first, and what
+it can resolve it never asks. The relevance and cap machinery is kept for
+whatever survives that, and these tests pin both layers: that a decidable
+question is decided silently, and that the old filtering still holds for
+anything left.
 """
 import asyncio
 import json
@@ -68,35 +71,54 @@ class QuestionRelevanceTests(unittest.TestCase):
             candidates=["מוצר א", "מוצר ב"], candidate_cards=[],
         )
 
-    def test_a_shufersal_shop_does_not_ask_about_tiv_taam(self) -> None:
-        self._queue("tivtaam", "בצל")
-        self._queue("tivtaam", "גזר")
+    def test_a_decidable_question_is_decided_not_asked(self) -> None:
+        # The 2026-09-17 contract. Candidates that can be chosen between
+        # are chosen between, and nothing is put to the household.
         self._queue("shufersal", "קוטג")
         sent = self._ask({"shufersal": _report("shufersal", ["קוטג"])})
-        self.assertEqual(sent, 1)
-        self.assertTrue(any("קוטג" in m for m in self.recorder.messages))
-        self.assertFalse(any("בצל" in m for m in self.recorder.messages))
+        self.assertEqual(sent, 0)
+        self.assertFalse(any("איזה מהם" in m for m in self.recorder.messages))
 
-    def test_the_backlog_is_named_but_not_pushed(self) -> None:
-        self._queue("tivtaam", "בצל")
+    def test_the_household_is_told_what_was_decided(self) -> None:
+        # Deciding silently would be worse than asking: they cannot
+        # correct what they were never shown.
         self._queue("shufersal", "קוטג")
         self._ask({"shufersal": _report("shufersal", ["קוטג"])})
-        backlog = [m for m in self.recorder.messages if "/questions" in m]
-        self.assertEqual(len(backlog), 1)
-        self.assertIn("1 שאלות", backlog[0])
+        self.assertTrue(any("החלטתי" in m for m in self.recorder.messages))
 
-    def test_questions_on_request_works_through_everything(self) -> None:
-        for term in ("בצל", "גזר", "שמן זית"):
-            self._queue("tivtaam", term)
+    def test_a_whole_backlog_is_cleared_without_a_single_question(self) -> None:
+        # 90 open questions was the thing he refused. None of these
+        # should reach him.
+        for n in range(MAX_QUESTIONS_PER_BURST + 20):
+            self._queue("tivtaam", f"מוצר {n}")
         sent = self._ask(reports=None)
-        self.assertEqual(sent, 3)
+        self.assertEqual(sent, 0)
+        self.assertFalse(any("/questions" in m for m in self.recorder.messages))
 
-    def test_a_burst_is_capped(self) -> None:
+    def test_the_cap_still_guards_whatever_cannot_be_decided(self) -> None:
+        # The 2026-09-11 machinery is kept, not deleted: if something ever
+        # survives the resolver, a burst must still not flood the chat.
+        from grocery_bot import autoresolve
+
+        original = autoresolve.resolve_all
+        autoresolve.resolve_all = lambda storage: []
+        self.addCleanup(lambda: setattr(autoresolve, "resolve_all", original))
         for n in range(MAX_QUESTIONS_PER_BURST + 5):
             self._queue("tivtaam", f"מוצר {n}")
         sent = self._ask(reports=None)
         self.assertEqual(sent, MAX_QUESTIONS_PER_BURST)
-        self.assertTrue(any("/questions" in m for m in self.recorder.messages))
+
+    def test_store_filtering_still_holds_for_what_is_left(self) -> None:
+        from grocery_bot import autoresolve
+
+        original = autoresolve.resolve_all
+        autoresolve.resolve_all = lambda storage: []
+        self.addCleanup(lambda: setattr(autoresolve, "resolve_all", original))
+        self._queue("tivtaam", "בצל")
+        self._queue("shufersal", "קוטג")
+        sent = self._ask({"shufersal": _report("shufersal", ["קוטג"])})
+        self.assertEqual(sent, 1)
+        self.assertFalse(any("בצל" in m for m in self.recorder.messages))
 
     def test_an_already_remembered_choice_is_never_asked(self) -> None:
         # Pre-existing behaviour, kept: an unresolved row can outlive its
@@ -114,9 +136,15 @@ class QuestionRelevanceTests(unittest.TestCase):
         self.assertEqual(self.recorder.messages, [])
 
 
-    def test_the_whole_set_arrives_as_one_message(self) -> None:
+    def test_whatever_is_left_still_arrives_as_one_message(self) -> None:
         """Before 2026-09-11 this was one Telegram message per question:
-        80 after a single cycle, each its own notification."""
+        80 after a single cycle, each its own notification. Still true for
+        anything the resolver cannot settle."""
+        from grocery_bot import autoresolve
+
+        original = autoresolve.resolve_all
+        autoresolve.resolve_all = lambda storage: []
+        self.addCleanup(lambda: setattr(autoresolve, "resolve_all", original))
         for term in ("בצל", "גזר", "שמן זית", "קמח"):
             self._queue("tivtaam", term)
         self._ask(reports=None)
@@ -124,16 +152,17 @@ class QuestionRelevanceTests(unittest.TestCase):
         self.assertEqual(len(questions), 1)
         self.assertIn("1 מתוך 4", questions[0])
 
-    def test_a_single_question_carries_no_counter(self) -> None:
-        self._queue("tivtaam", "בצל")
-        self._ask(reports=None)
-        self.assertNotIn("מתוך", self.recorder.messages[0])
-
     def test_the_set_is_remembered_for_the_next_tap(self) -> None:
         # Answered over minutes or hours; a restart in between is ordinary,
-        # so the queue lives in storage and not in memory.
+        # so the queue lives in storage and not in memory. Only reachable
+        # now for what the resolver could not settle.
         import json
 
+        from grocery_bot import autoresolve
+
+        original = autoresolve.resolve_all
+        autoresolve.resolve_all = lambda storage: []
+        self.addCleanup(lambda: setattr(autoresolve, "resolve_all", original))
         for term in ("בצל", "גזר"):
             self._queue("tivtaam", term)
         self._ask(reports=None)
