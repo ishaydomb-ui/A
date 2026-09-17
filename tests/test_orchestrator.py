@@ -57,22 +57,24 @@ class OrchestratorTests(unittest.TestCase):
         reports = run_order_cycle(self.storage, {"fake_store": lambda: fake})
 
         report = reports["fake_store"]
-        self.assertEqual([r.item_name for r in report.added], ["חלב"])
-        self.assertEqual([r.item_name for r in report.ambiguous], ["טונה"])
+        self.assertEqual([r.item_name for r in report.added], ["חלב", "טונה א"])
+        self.assertEqual(report.ambiguous, [])
         self.assertEqual([r.item_name for r in report.not_found], ["סבון כלים"])
-        self.assertEqual(fake.added_calls, [("חלב", 2)])
+        # "טונה" now lands too: it came back ambiguous and was decided
+        # from the candidates rather than put to the household.
+        self.assertEqual(fake.added_calls, [("חלב", 2), ("טונה א", 1)])
         self.assertTrue(fake.closed)
 
-    def test_ambiguous_results_are_persisted_for_followup(self) -> None:
+    def test_an_ambiguous_result_is_decided_from_the_candidates(self) -> None:
+        # Was: persisted as a question for follow-up. Now decided — see
+        # RememberedChoiceTests for why the old contract was the bug.
         self.storage.add_base_list_item("טונה")
         fake = FakeAdapter({"טונה": "ambiguous"})
 
-        run_order_cycle(self.storage, {"fake_store": lambda: fake})
+        reports = run_order_cycle(self.storage, {"fake_store": lambda: fake})
 
-        pending = self.storage.list_pending_ambiguities()
-        self.assertEqual(len(pending), 1)
-        self.assertEqual(pending[0]["original_term"], "טונה")
-        self.assertEqual(pending[0]["candidates"], ["טונה א", "טונה ב"])
+        self.assertEqual(self.storage.list_pending_ambiguities(), [])
+        self.assertEqual(len(reports["fake_store"].added), 1)
 
     def test_adhoc_requests_are_consumed_after_the_cycle(self) -> None:
         self.storage.add_adhoc_request("מגבות נייר", requested_by="אני")
@@ -112,10 +114,24 @@ class RememberedChoiceTests(unittest.TestCase):
     def _cycle(self, adapter):
         return run_order_cycle(self.storage, {"shufersal": lambda: adapter})
 
-    def test_without_a_choice_the_user_is_asked(self):
+    def test_without_a_choice_it_is_decided_rather_than_asked(self):
+        """Contract changed 2026-09-17 on Ishay's instruction.
+
+        Previously an ambiguous result became a question. It now resolves
+        from purchase history, and only a term that nothing answers is
+        left open. The old behaviour is why 134 questions accumulated:
+        Tiv Taam's search returns names without cards, so the card-based
+        resolver could never fire there and *every* ambiguous term became
+        a question by construction."""
         report = self._cycle(_AlwaysAmbiguousAdapter())["shufersal"]
-        self.assertEqual(len(report.ambiguous), 1)
-        self.assertEqual(len(self.storage.list_pending_ambiguities()), 1)
+        self.assertEqual(report.ambiguous, [])
+        self.assertEqual(len(report.added), 1)
+        self.assertEqual(self.storage.list_pending_ambiguities(), [])
+
+    def test_the_decision_says_what_it_rested_on(self):
+        # A silent decision cannot be corrected by someone who never saw it.
+        report = self._cycle(_AlwaysAmbiguousAdapter())["shufersal"]
+        self.assertTrue(getattr(report.added[0], "auto_resolved", ""))
 
     def test_a_remembered_choice_stops_the_question(self):
         self.storage.remember_choice("shufersal", "חלב 3%", "P_111", "חלב 3% בקרטון")
@@ -411,10 +427,15 @@ class CleanResolutionIsRememberedTests(unittest.TestCase):
         self.assertIsNotNone(remembered)
         self.assertEqual(remembered["product_name"], "חלב 3% בקרטון תנובה")
 
-    def test_an_ambiguous_result_is_still_asked_about(self):
-        # The memory must not swallow a genuine choice.
+    def test_a_decided_choice_is_remembered_so_it_is_decided_once(self):
+        # Was: "an ambiguous result is still asked about", asserting the
+        # memory stayed empty. Since 2026-09-17 the choice is made from
+        # purchase history instead of asked, and remembering it is the
+        # point — otherwise the same search is re-decided every cycle.
         self._cycle(_AlwaysAmbiguousAdapter())
-        self.assertIsNone(self.storage.preferred_for("shufersal", "חלב 3%"))
+        remembered = self.storage.preferred_for("shufersal", "חלב 3%")
+        self.assertIsNotNone(remembered)
+        self.assertTrue(remembered["product_name"])
 
 
 class DealsInTheCartTests(unittest.TestCase):

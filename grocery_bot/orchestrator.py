@@ -7,6 +7,8 @@ that one item — never as a blanket "confirm this whole cart" step.
 """
 from __future__ import annotations
 
+import json
+
 import logging
 from typing import Callable
 
@@ -527,6 +529,52 @@ def _add_one(
                     product_name=chosen.get("name", term),
                 )
                 picked.auto_resolved = decision.reason
+                return picked
+
+    # No cards, only names — which is every Tiv Taam term, because that
+    # adapter's search returns a name list and nothing else. The branch
+    # above could therefore never fire there, so **every** ambiguous Tiv
+    # Taam term became a question by construction. That is where the 108
+    # Tiv Taam questions of 2026-09-17 came from, and why resolving the
+    # backlog did not stop new ones arriving.
+    #
+    # The purchase history answers most of them: 377 products with the
+    # share of orders each appears in, readable only since 09-15.
+    if not cards and result.candidates:
+        from . import autoresolve
+
+        row = {
+            "id": 0,
+            "store": store,
+            "original_term": term,
+            "candidates": json.dumps(list(result.candidates), ensure_ascii=False),
+            "candidate_cards": "[]",
+        }
+        try:
+            decision = autoresolve.decide(storage, row)
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not auto-decide %r", term)
+            decision = None
+        if decision is not None and decision.index >= 0 and decision.name:
+            # Pass the code only when there is one. A name-only chain
+            # has none, and an adapter that never sees codes need not
+            # accept the argument.
+            extra = {"search_term": term}
+            if decision.code:
+                extra["product_code"] = decision.code
+            try:
+                picked = adapter.add_specific_product(
+                    decision.name, quantity, **extra
+                )
+            except TypeError:
+                picked = adapter.add_specific_product(decision.name, quantity)
+            if picked.status == "added":
+                storage.remember_choice(
+                    store=store, term=term,
+                    product_code=decision.code or "",
+                    product_name=decision.name,
+                )
+                picked.auto_resolved = f"{decision.basis}: {decision.detail}"
                 return picked
 
     storage.save_pending_ambiguity(
