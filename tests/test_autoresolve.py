@@ -145,3 +145,62 @@ class SummaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FreshBeforeProcessedTests(unittest.TestCase):
+    """A produce term must not resolve to the jar version of itself.
+
+    Raised by Miri 2026-09-17 from reviewing the real order, and verified
+    systematic on the Tiv Taam feed rather than treated as five unlucky
+    cases: a bare produce term returns processed goods first, every time.
+    שזיפים -> dried plums, תפוחים -> apple juice, אפרסק -> peach syrup,
+    סלק -> horseradish sauce.
+
+    It is why Liran asked for peppers and got pepper spread, asked for
+    plums and got plum purée, and asked for beetroot *not* vacuum-packed
+    and got vacuum-packed beetroot.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.storage = Storage(str(Path(self._tmp.name) / "t.sqlite3"))
+
+    def _decide(self, term, candidates):
+        return autoresolve.decide(self.storage, _row(1, "tivtaam", term, candidates))
+
+    def test_fruit_beats_the_puree(self):
+        d = self._decide("שזיפים", ["מחית אורגנית שזיפים", "שזיפים טריים"])
+        self.assertEqual(d.name, "שזיפים טריים")
+
+    def test_vegetable_beats_the_spread(self):
+        d = self._decide("פלפלים", ["ממרח פלפלים", "פלפלים 4 העונות במשקל"])
+        self.assertEqual(d.name, "פלפלים 4 העונות במשקל")
+
+    def test_fresh_beats_the_vacuum_pack(self):
+        # She wrote "לא באריזת ואקום" and got exactly that.
+        d = self._decide("סלק", ["סלק אדום מקולף ומבושל", "סלק"])
+        self.assertEqual(d.name, "סלק")
+
+    def test_fruit_beats_the_juice(self):
+        d = self._decide("תפוחים", ["מיץ תפוחים גרניני 1 ליטר", "תפוחים"])
+        self.assertEqual(d.name, "תפוחים")
+
+    def test_granola_beats_granola_cookies(self):
+        d = self._decide("גרנולה", ["עוגיות גרנולה", "גרנולה פירות 500 גרם"])
+        self.assertEqual(d.name, "גרנולה פירות 500 גרם")
+
+    def test_asking_for_the_processed_form_still_works(self):
+        # The mirror error this must not introduce: "מיץ לימון" and
+        # "רסק עגבניות" are legitimate requests for the processed thing.
+        self.assertEqual(
+            self._decide("מיץ לימון", ["מיץ לימון", "לימון"]).name, "מיץ לימון")
+        self.assertEqual(
+            self._decide("רסק עגבניות", ["רסק עגבניות", "עגבניות"]).name,
+            "רסק עגבניות")
+
+    def test_only_processed_candidates_is_not_a_reason_to_refuse(self):
+        # If the shop genuinely sells no fresh version, the processed one
+        # is the honest answer — better than adding nothing.
+        d = self._decide("שזיפים", ["מחית אורגנית שזיפים", "ריבת שזיפים"])
+        self.assertGreaterEqual(d.index, 0)

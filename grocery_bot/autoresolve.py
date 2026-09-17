@@ -61,6 +61,35 @@ MIN_SHARE = 0.02
 # Israeli price-controlled goods are marked in the name itself.
 CONTROLLED_MARKERS = ("בפיקוח", "פיקוח")
 
+# Words that mean "this is the processed version of the thing you named".
+#
+# Verified systematic on the Tiv Taam feed 2026-09-17, not inferred from a
+# few bad cases: a bare produce term returns processed goods first, every
+# time. שזיפים -> dried plums, תפוחים -> apple juice, אפרסק -> peach
+# syrup, סלק -> horseradish sauce, עגבניות שרי -> pickled preserves,
+# גרנולה -> chocolate granola. Raised by Miri from her own review of the
+# order, and it is why five of Liran's requests arrived as the wrong
+# thing: ממרח פלפלים for peppers, מחית שזיפים for plums, סלק ואקום for
+# the beetroot she explicitly said should not be vacuum-packed.
+#
+# Only penalised when the *term* does not itself ask for the processed
+# form: "מיץ לימון" and "רסק עגבניות" are legitimate requests, and
+# demoting them would swap one error for its mirror image.
+PROCESSED_MARKERS = (
+    "ממרח", "מחית", "רוטב", "שימורי", "שימורים", "מיץ", "סירופ", "ריבה",
+    "רסק", "תרכיז", "בחומץ", "כבוש", "כבושות", "מבושל", "ואקום", "וואקום",
+    "קלוי", "מיובש", "מיובשים", "עוגיות", "חטיף", "במלח", "מרק", "אבקת",
+)
+
+
+def _is_processed(name: str) -> bool:
+    return any(mark in (name or "") for mark in PROCESSED_MARKERS)
+
+
+def _term_wants_processed(term: str) -> bool:
+    """Did they ask for the processed form themselves?"""
+    return _is_processed(term)
+
 
 @dataclass
 class Decision:
@@ -228,6 +257,16 @@ def decide(storage, row, here=None, other=None) -> Decision:
         if (score := _relevance(term, name)) > 0
     ]
 
+    # Fresh before processed, unless they asked for processed. Without
+    # this the feed's own ordering decides, and it puts juice before
+    # fruit. Applied as a filter rather than a tie-break: if any
+    # unprocessed candidate answers the term, the processed ones are not
+    # in the running at all.
+    if eligible and not _term_wants_processed(term):
+        fresh = [e for e in eligible if not _is_processed(e[1])]
+        if fresh:
+            eligible = fresh
+
     # 1 + 2: what they actually buy, this chain before the other. Ranked
     # by relevance first and purchase share second — a better answer to
     # the question beats a more popular product.
@@ -264,7 +303,17 @@ def decide(storage, row, here=None, other=None) -> Decision:
 
     # Below here, prefer an eligible candidate and fall back to the full
     # list only when nothing answers the term at all.
+    # `nothing_answers` is tracked explicitly rather than by comparing
+    # `pool is candidates`: the fresh-over-processed filter below rebinds
+    # `pool`, and an identity check silently turned "no candidate answers
+    # this" into "pick the shortest" — reintroducing the exact falsehood
+    # (`בייקון` -> a camera) that no_match exists to prevent.
+    nothing_answers = not eligible
     pool = [(i, n, c) for i, n, c, _ in eligible] or candidates
+    if not _term_wants_processed(term):
+        unprocessed = [p for p in pool if not _is_processed(p[1])]
+        if unprocessed:
+            pool = unprocessed
 
     # 4: price-controlled wins among otherwise equal candidates.
     for i, name, _ in pool:
@@ -288,7 +337,7 @@ def decide(storage, row, here=None, other=None) -> Decision:
                         f"הזול ביותר ליחידה ({unit:.2f})", alternatives=alternatives)
 
     # 6: the plainest name is the base product.
-    if pool is candidates:
+    if nothing_answers:
         # Nothing on the list answers the term at all. Naming one anyway
         # is how `בייקון` became `מצלמת EYEX4` — a confident falsehood,
         # worse than the question it replaced. Say so instead, and let

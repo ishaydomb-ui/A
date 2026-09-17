@@ -124,5 +124,70 @@ class ReviewTests(unittest.TestCase):
         self.assertTrue(any("נכשל" in e for e in strategy.evidence))
 
 
+
+class ConnectivityIsNotAProductFactTests(unittest.TestCase):
+    """A dropped connection must not be remembered against an item.
+
+    On 2026-09-17 the exit node failed mid-run and 14 items landed in
+    `cart_failures` with ERR_SOCKS_CONNECTION_FAILED. In that table they
+    read exactly like fourteen products the shop does not stock, and
+    `failstrategy` would then propose shortening search terms that were
+    never the problem. Raised by Miri from the same journal.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.storage = Storage(str(Path(self._tmp.name) / "t.sqlite3"))
+
+    def _report(self, *results):
+        from grocery_bot.models import OrderCycleReport
+
+        report = OrderCycleReport(store="tivtaam")
+        for r in results:
+            report.record(r)
+        return report
+
+    def _result(self, name, status, detail):
+        from grocery_bot.models import CartAddResult
+
+        return CartAddResult(item_name=name, store="tivtaam", status=status,
+                             detail=detail)
+
+    def test_a_socks_failure_is_not_recorded_against_the_item(self):
+        from grocery_bot.orchestrator import _remember_failures
+
+        _remember_failures(self.storage, self._report(
+            self._result("חלב", "error", "Page.goto: net::ERR_SOCKS_CONNECTION_FAILED"),
+        ))
+        self.assertEqual(self.storage.repeat_failures(days=90, min_runs=1), [])
+
+    def test_an_expired_session_is_not_recorded_against_the_item(self):
+        from grocery_bot.orchestrator import _remember_failures
+
+        _remember_failures(self.storage, self._report(
+            self._result("חלב", "error", "Session expired and could not be renewed"),
+        ))
+        self.assertEqual(self.storage.repeat_failures(days=90, min_runs=1), [])
+
+    def test_a_genuine_product_failure_is_still_recorded(self):
+        from grocery_bot.orchestrator import _remember_failures
+
+        _remember_failures(self.storage, self._report(
+            self._result("נקטרינה", "not_found", "no add control on the row"),
+        ))
+        rows = self.storage.repeat_failures(days=90, min_runs=1)
+        self.assertEqual([r["item_name"] for r in rows], ["נקטרינה"])
+
+    def test_a_mixed_run_records_only_the_product_half(self):
+        from grocery_bot.orchestrator import _remember_failures
+
+        _remember_failures(self.storage, self._report(
+            self._result("חלב", "error", "net::ERR_SOCKS_CONNECTION_FAILED"),
+            self._result("נקטרינה", "not_found", "no add control on the row"),
+        ))
+        rows = self.storage.repeat_failures(days=90, min_runs=1)
+        self.assertEqual([r["item_name"] for r in rows], ["נקטרינה"])
+
 if __name__ == "__main__":
     unittest.main()

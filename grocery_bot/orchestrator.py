@@ -280,6 +280,15 @@ class CartGuard:
         return ""
 
 
+# Failure details that describe the network or the session rather than
+# the product. Matched case-insensitively against the recorded detail.
+INFRASTRUCTURE_MARKERS = (
+    "ERR_SOCKS", "ERR_PROXY", "ERR_CONNECTION", "ERR_TUNNEL",
+    "ERR_NAME_NOT_RESOLVED", "ERR_INTERNET_DISCONNECTED",
+    "Session expired", "net::ERR_ABORTED", "Timeout", "timed out",
+)
+
+
 def _remember_failures(storage: Storage, report) -> None:
     """Persist what this run could not add, so a pattern can be seen.
 
@@ -293,8 +302,30 @@ def _remember_failures(storage: Storage, report) -> None:
     Never fatal: a cycle that filled a cart must not be reported as
     failed because a bookkeeping insert did not land.
     """
+    # A dropped connection is not a fact about a product. On 2026-09-17
+    # the exit node failed mid-run and 14 items were written to
+    # `cart_failures` with ERR_SOCKS_CONNECTION_FAILED, where they read
+    # exactly like fourteen products the shop does not stock — and
+    # `failstrategy` would then propose shortening search terms that were
+    # never the problem. The network's state belongs in the log, not in
+    # the per-item history.
+    infra = [m.lower() for m in INFRASTRUCTURE_MARKERS]
+    def _is_infrastructure(result) -> bool:
+        detail = (getattr(result, "detail", "") or "").lower()
+        return any(mark in detail for mark in infra)
+
+    recordable = [
+        r for r in list(report.not_found) + list(report.errors)
+        if not _is_infrastructure(r)
+    ]
+    skipped = (len(report.not_found) + len(report.errors)) - len(recordable)
+    if skipped:
+        logger.warning(
+            "%d failure(s) were connectivity, not products — not recorded "
+            "against the items", skipped,
+        )
     try:
-        storage.record_cart_failures(list(report.not_found) + list(report.errors))
+        storage.record_cart_failures(recordable)
     except Exception:  # noqa: BLE001
         logger.exception("Could not record cart failures; the cycle itself is unaffected")
 
