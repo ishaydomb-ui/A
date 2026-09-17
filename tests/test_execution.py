@@ -185,5 +185,26 @@ class RecoveryTests(Base):
         self.assertEqual(len(self._runs()), 1)
 
 
+class RemovalsSessionNameTests(Base):
+    def test_a_tivtaam_style_adapter_with_is_session_valid_is_read(self):
+        # Tiv Taam names its check is_session_valid; the old handler only
+        # knew ensure_session and logged an AttributeError every night.
+        class TT:
+            name = "tivtaam"
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def is_session_valid(self): return True
+            def cart_summary(self): return {"ok": True, "items": [], "total": 0.0}
+        seen = []
+        from grocery_bot import standingcart
+        orig = standingcart.removals
+        standingcart.removals = lambda storage, store, items: seen.append((store, items)) or []
+        try:
+            execution.log_removals_from_carts(self.storage, {"tivtaam": lambda: TT()})
+        finally:
+            standingcart.removals = orig
+        self.assertEqual(seen, [("tivtaam", [])])
+
+
 if __name__ == "__main__":
     unittest.main()

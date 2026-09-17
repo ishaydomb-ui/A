@@ -130,6 +130,7 @@ class EndToEndTests(Base):
         self.assertEqual(out.state, "aborted")
         text = outcome.format_outcome(out)
         self.assertIn("הריצה נקטעה", text)
+        self.assertIn("1 אומתו ו-1 נשארו להשלמה", text)
         self.assertIn("אמשיך בהפעלה הבאה: ביצים", text)
 
 

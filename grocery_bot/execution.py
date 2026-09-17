@@ -130,7 +130,12 @@ def log_removals_from_carts(storage, factories: dict) -> dict:
     for store, factory in factories.items():
         try:
             with factory() as adapter:
-                if not adapter.ensure_session():
+                # Shufersal calls it ensure_session, Tiv Taam
+                # is_session_valid; the handler this came from only knew
+                # the first name and logged an AttributeError for Tiv
+                # Taam every time (found by the 2026-09-17 canary).
+                check = getattr(adapter, "ensure_session", None) or getattr(adapter, "is_session_valid", None)
+                if check is not None and not check():
                     items = []
                 else:
                     items = adapter.cart_summary().get("items") or []

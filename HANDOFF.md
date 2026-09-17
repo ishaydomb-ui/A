@@ -6,13 +6,29 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-15 09:05 (host time, CEST)
+**Last anchored:** 2026-09-17 ~18:50 (host time, CEST) — end of the reliability build
 **Session:** https://claude.ai/code/session_01AR7esAYdoXQ71HXtqJPpQV
 **Branch:** `claude/online-grocery-automation-b7pq4g`
 **Status is in `git log`, not hand-typed here.**
 
-**Since the last anchor (`c178749`):** 78 commits, `53ec0f7`..`68f34ea`.
-**1,015 tests pass.** Three outside reviews were commissioned by Ishay and
+**Since the last anchor (`c178749`):** the **FINAL RELIABILITY + AGENT UX
+BUILD** (Ishay's mandate of 2026-09-17), phases 0–12 done and deployed;
+**1,262+ tests pass**. The full account — architecture as built, schema
+and migration counts, before/after, what was and was not measured live,
+open decisions — is one document:
+[`docs/reports/2026-09-17-reliability-build-report.md`](docs/reports/2026-09-17-reliability-build-report.md)
+(also delivered as .docx). Read that before this file. The one-line
+version: a cart run is now durable state (`cart_runs`/`run_items`), every
+add is verified or says it is not, a route drop trips a breaker instead
+of cascading, a crash resumes under the same run id, preferences carry
+their authority, "X במקום Y" is done truthfully, and the household gets
+one message per run built from run items. **Not done: the live 20-item
+mutation benchmark and the five clean runs — see §5, first item.** The
+conversation-backend comparison and the Agent SDK decision are gated on
+that benchmark by the mandate itself and were not run.
+
+Earlier context (2026-09-15 anchor), still accurate where not superseded:
+Three outside reviews were commissioned by Ishay and
 answered; most of this work came out of verifying them rather than
 accepting them. In rough order:
 
@@ -90,6 +106,20 @@ across both chains; that is fine because it runs immediately after
 `/done` and the cart is not needed for ~5 days.
 
 ## 2. In flight
+
+**2026-09-17 evening, after the build:** nothing half-built. The last
+commit is Phase 12 (regression suite, A–F mapping, two canary fixes).
+The bot runs the committed code (`scripts/refresh_bot.sh`, PID printed
+in the anchor). Two live facts a new session must not re-derive:
+(1) the Shufersal cart page shows at most **100 lines** and renders them
+10–25 s after load — `cart_summary` waits for settle and returns
+`complete=False` at the cap; presence beyond it is *unknown*, never
+absent; (2) `remove_item` cannot reach lines past 100 and Tiv Taam has no
+per-line remove at all. **Host memory:** never run a Playwright probe and
+the full suite at once — both were OOM-killed on 2026-09-17 beside the
+three live bots.
+
+Older in-flight notes, kept:
 
 Nothing half-built. Four items are queued and none started, all from the
 2026-09-11 reviews, in the order I would do them:
@@ -451,11 +481,16 @@ cannot come to rely on the flattening alone.
 
 ## 3. Blocked, and on what
 
-- **The running bot is older than the code.** `grocery-bot.service`
-  started 2026-09-09 17:15; every commit since — the loop, the 30s cap,
-  and `safesend` — is on disk and not live. One command fixes it:
-  `systemctl --user restart grocery-bot.service`. Flagged to Ishay
-  2026-09-10; his call, not done here.
+- ~~The running bot is older than the code~~ — closed: every anchor runs
+  `scripts/refresh_bot.sh`, which restarts only when loaded code is newer
+  than the process and refuses mid-fill (exit 3).
+- **14 ad-hoc requests from 2026-09-16 (Liran's list) are still
+  unconsumed** in `adhoc_requests` — pre-Phase-1 rows the old name-compare
+  never consumed after the midday fill. The watcher ignores them
+  (backlog rule); a manual `/start_order` would retry them under the
+  cart guard. 3 word-match the Shufersal cart, 11 inconclusive on a
+  100-line read. Ishay's call whether to mark them consumed; the command
+  is in the report §5.
 - **The Israeli exit runs through Ishay's iPhone, not the TV box.** The
   Xiaomi Android TV box has been unreachable since ~2026-09-01 ("offline,
   last seen 6d ago", `tailscale ping` times out). The phone works but is
@@ -679,6 +714,17 @@ the same result whether or not the thing is true is not evidence.**
   `LikeWildcardEscape`. Any new LIKE must go through `_like_contains`.
 
 ## 5. Open questions for the user
+
+- **The live execution benchmark (mandate Phase 10) — which real runs
+  count?** Not run on 2026-09-17, deliberately: the Shufersal cart is the
+  live Friday proposal and a synthetic 20-item add is not removable past
+  line 100; the Tiv Taam cart was just ordered, so a refill now is off
+  cadence and would be a manufactured basket. Options: (a) the next
+  Liran list through the watcher, (b) the next Tiv Taam refill on
+  cadence, (c) a Shufersal add-then-remove window Ishay names. The
+  instrumentation records every run either way (`cart_runs.outcome`,
+  RUN/ATTEMPT/BREAKER/RECOVERY/PRESENCE/RESUME journal lines).
+- **The 14 stale ad-hoc rows** — mark consumed or leave (see §3).
 
 - **Move the NLU onto the Agent SDK, as Nigel did?** He built a free
   conversation layer in-process on the Max subscription

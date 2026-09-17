@@ -130,7 +130,11 @@ def format_outcome(out: RunOutcome) -> str:
     for bucket, names in stray.items():
         lines.append(f"   {_GAP_LABEL[bucket]}: " + ", ".join(_e(n) for n in names))
     if out.pending:
-        lines.append(f"⏸ {len(out.pending)} לא טופלו — אמשיך בהפעלה הבאה: "
+        # The household consequence, not the mechanism: how much is done,
+        # how much is left, and that it will be picked up.
+        verified = out.counts.get("verified", 0)
+        lines.append(f"לא הצלחתי לסיים כרגע; {verified} אומתו ו-{len(out.pending)} נשארו להשלמה — "
+                     "אמשיך בהפעלה הבאה: "
                      + ", ".join(_e(n) for n in out.pending[:8])
                      + (" …" if len(out.pending) > 8 else ""))
     return "\n".join(lines)
