@@ -136,11 +136,11 @@ the string as-is; treat length ≤ 7 as chain-local.
 resolve in the feed. Weight is a quantity problem, not an identity one —
 the barcode still identifies the product.
 
-**Collisions:** 251 of 25,291 feed barcodes (1%) carry >1 name, and the
-samples are naming variants of one product (three spellings of one
-Tabasco). Not a false-equivalence risk. **15 purchased base-names carry
->1 barcode** — pack variants — which is the argument *for* keying on
-barcode, not against.
+**Collisions:** 251 of 25,291 feed barcodes (1%) carry more than one
+name, and the samples are naming variants of one product (three
+spellings of one Tabasco). Not a false-equivalence risk. **15 purchased
+base-names carry more than one barcode** — pack variants — which is the
+argument *for* keying on barcode, not against.
 
 **Cross-chain false equivalence:** of barcodes present at ≥2 chains, **493
 name-pairs agree, 29 disagree** on any content word (5.6%). Inspected:
