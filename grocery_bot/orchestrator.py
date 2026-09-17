@@ -12,6 +12,8 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
+
+from . import breaker
 from typing import Callable
 
 from . import dealfill
@@ -30,6 +32,7 @@ def run_order_cycle(
     adapter_factories: dict[str, AdapterFactory],
     on_progress=None,
     add_deals: bool = True,
+    proxy: str | None = None,
 ) -> dict[str, OrderCycleReport]:
     """Run the cycle against every enabled store.
 
@@ -66,6 +69,7 @@ def run_order_cycle(
     # The run and its needs, registered before any store is touched. Base
     # and ad-hoc identities are store-independent by construction; a deal
     # pick is chain-specific and keyed on its term.
+    breakers: dict = {}
     run_id = storage.start_cart_run("cycle")
     item_ids = storage.add_run_items(run_id, [
         *[PlanTerm(b.name, b.default_quantity, "base", str(b.id)) for b in base_items],
@@ -118,14 +122,18 @@ def run_order_cycle(
             # household edits this cart on the site, and until now the bot
             # only ever looked afterwards.
             guard = CartGuard.read(storage, adapter, store)
+            brk = breaker.Breaker(store, proxy, run_id)
+            breakers[store] = brk
             total_items = len(base_items) + len(adhoc_items) + len(deal_picks)
             done = 0
 
             for base_item in base_items:
                 term = base_item.search_term_for(store)
-                result = _add_one(
-                    storage, adapter, store, term, base_item.default_quantity,
-                    prematched, guard,
+                result, alive = _attempt(
+                    brk, adapter,
+                    lambda term=term, q=base_item.default_quantity: _add_one(
+                        storage, adapter, store, term, q, prematched, guard,
+                    ),
                 )
                 # Carry the weight through so the cart view can say "0.5 ק"ג"
                 # rather than a meaningless "×1" for loose produce.
@@ -136,15 +144,23 @@ def run_order_cycle(
                 _record_attempt(storage, run_id, item_ids.get(("base", str(base_item.id))), store, result)
                 done += 1
                 _progress(done, total_items, result)
+                if not alive:
+                    break
 
-            for adhoc in adhoc_items:
-                result = _add_one(
-                    storage, adapter, store, adhoc.text, adhoc.quantity,
-                    prematched, guard,
+            for adhoc in (adhoc_items if not brk.halted else []):
+                result, alive = _attempt(
+                    brk, adapter,
+                    lambda a=adhoc: _add_one(
+                        storage, adapter, store, a.text, a.quantity, prematched, guard,
+                    ),
                 )
                 result.requested_by = adhoc.requested_by
                 report.record(result)
                 _record_attempt(storage, run_id, item_ids.get(("adhoc", str(adhoc.id))), store, result)
+                if not alive:
+                    done += 1
+                    _progress(done, total_items, result)
+                    break
                 # Only a request that actually reached the cart is done
                 # with. "not_found" used to count as resolved, which meant
                 # the household was told "נוסף לרשימה", the cycle quietly
@@ -167,11 +183,16 @@ def run_order_cycle(
                 done += 1
                 _progress(done, total_items, result)
 
-            for pick in deal_picks:
-                result = _add_one(
-                    storage, adapter, store, pick.term, pick.quantity,
-                    prematched, guard,
+            for pick in (deal_picks if not brk.halted else []):
+                result, alive = _attempt(
+                    brk, adapter,
+                    lambda p=pick: _add_one(
+                        storage, adapter, store, p.term, p.quantity, prematched, guard,
+                    ),
                 )
+                if not alive:
+                    report.record(result)
+                    break
                 # Only a line that actually made it into the cart is worth
                 # calling a deal. An ambiguous or missing one would put a
                 # saving in the summary that is not in the cart — exactly
@@ -198,7 +219,7 @@ def run_order_cycle(
     # "what did it add, and why". A record on disk survives a bad send.
     record_deals(storage, reports)
     _finish_run(storage, run_id)
-    _log_run("cycle", started, reports, run_id)
+    _log_run("cycle", started, reports, run_id, breakers)
     return reports
 
 
@@ -332,7 +353,8 @@ class CartGuard:
         return ""
 
 
-def _log_run(kind: str, started: float, reports: dict, run_id: int | None = None) -> None:
+def _log_run(kind: str, started: float, reports: dict, run_id: int | None = None,
+             breakers: dict | None = None) -> None:
     """One journal line per cart run, per store.
 
     Phase 0 instrumentation (2026-09-17). Before this the journal held no
@@ -352,23 +374,25 @@ def _log_run(kind: str, started: float, reports: dict, run_id: int | None = None
             if any(m.lower() in ((getattr(r, "detail", "") or "").lower())
                    for m in INFRASTRUCTURE_MARKERS)
         )
+        brk = (breakers or {}).get(store)
+        verified = sum(1 for r in report.added if getattr(r, "verification", "") == "verified")
         logger.info(
-            "RUN run=%s kind=%s store=%s requested=%d added=%d ambiguous=%d not_found=%d "
-            "errors=%d skipped=%d infra=%d elapsed_s=%.0f",
+            "RUN run=%s kind=%s store=%s requested=%d added=%d verified=%d unverified=%d "
+            "ambiguous=%d not_found=%d errors=%d skipped=%d infra=%d recoveries=%d "
+            "halted=%s elapsed_s=%.0f",
             run_id if run_id is not None else "-",
-            kind, store, requested, len(report.added), len(report.ambiguous),
-            len(report.not_found), len(report.errors),
-            len(getattr(report, "skipped", []) or []), infra, elapsed,
+            kind, store, requested, len(report.added), verified, len(report.added) - verified,
+            len(report.ambiguous), len(report.not_found), len(report.errors),
+            len(getattr(report, "skipped", []) or []), infra,
+            getattr(brk, "recoveries", 0), getattr(brk, "halted", False), elapsed,
         )
 
 
-# Failure details that describe the network or the session rather than
-# the product. Matched case-insensitively against the recorded detail.
-INFRASTRUCTURE_MARKERS = (
-    "ERR_SOCKS", "ERR_PROXY", "ERR_CONNECTION", "ERR_TUNNEL",
-    "ERR_NAME_NOT_RESOLVED", "ERR_INTERNET_DISCONNECTED",
-    "Session expired", "net::ERR_ABORTED", "Timeout", "timed out",
-)
+# Moved to breaker.py in Phase 4 so the fill loop and the recorder share
+# one classification. Note what is *not* in it any more: "Timeout" and
+# "Session expired". A timeout is ambiguous (breaker.AMBIGUOUS_MARKERS)
+# and a session failure is its own class; neither is infrastructure.
+from .breaker import INFRASTRUCTURE_MARKERS, SESSION_MARKERS  # noqa: E402
 
 
 def _remember_failures(storage: Storage, report) -> None:
@@ -391,8 +415,11 @@ def _remember_failures(storage: Storage, report) -> None:
     # `failstrategy` would then propose shortening search terms that were
     # never the problem. The network's state belongs in the log, not in
     # the per-item history.
-    infra = [m.lower() for m in INFRASTRUCTURE_MARKERS]
+    infra = [m.lower() for m in INFRASTRUCTURE_MARKERS] + list(SESSION_MARKERS)
     def _is_infrastructure(result) -> bool:
+        kind = (getattr(result, "failure_kind", "") or "")
+        if kind in ("infrastructure", "session"):
+            return True
         detail = (getattr(result, "detail", "") or "").lower()
         return any(mark in detail for mark in infra)
 
@@ -479,6 +506,34 @@ def _record_attempt(storage: Storage, run_id: int, item_id: int | None, store: s
         logger.exception("Could not update run item %s", item_id)
 
 
+def _attempt(brk, adapter, fn):
+    """Run one add through the breaker. Returns (result, keep_going).
+
+    `fn` performs the add and returns a CartAddResult. If the breaker
+    says `recover`, recovery runs and — on success — `fn` is called once
+    more for the same item, so the item that tripped is not left as an
+    infrastructure failure when the route came back. `keep_going=False`
+    means this store is done for the run; the caller leaves the rest
+    pending.
+    """
+    result = fn()
+    action = brk.observe(result)
+    if action == "continue":
+        return result, True
+    if action == "recover" and brk.recover(adapter):
+        logger.info("BREAKER run=%s store=%s resuming at the item that tripped",
+                    brk.run_id, brk.store)
+        result = fn()
+        # A second failure of the same kind straight after recovery is
+        # not retried again here; the next observe() decides.
+        action = brk.observe(result)
+        if action == "continue":
+            return result, True
+        if action == "recover" and brk.recover(adapter):
+            return fn(), True
+    return result, False
+
+
 def _finish_run(storage: Storage, run_id: int) -> str:
     """Close the run with the only status Phase 1 can justify.
 
@@ -499,6 +554,7 @@ def add_terms_to_cart(
     guard_cart: bool = False,
     run_id: int | None = None,
     trigger: str = "terms",
+    proxy: str | None = None,
 ) -> dict[str, OrderCycleReport]:
     """Put specific items straight into the real cart.
 
@@ -532,6 +588,7 @@ def add_terms_to_cart(
         return item_ids.get((pt.source_kind, str(sid)))
 
     reports: dict[str, OrderCycleReport] = {}
+    breakers: dict = {}
     for store, make_adapter in adapter_factories.items():
         report = OrderCycleReport(store=store)
         with make_adapter() as adapter:
@@ -551,9 +608,15 @@ def add_terms_to_cart(
 
             prematched = _prefetch_matches(adapter, storage, store, [t.term for t in plan_terms])
             guard = CartGuard.read(storage, adapter, store) if guard_cart else CartGuard.empty()
+            brk = breaker.Breaker(store, proxy, run_id)
+            breakers[store] = brk
             for index, pt in enumerate(plan_terms, start=1):
-                result = _add_one(
-                    storage, adapter, store, pt.term, int(pt.quantity or 1), prematched, guard
+                result, alive = _attempt(
+                    brk, adapter,
+                    lambda pt=pt: _add_one(
+                        storage, adapter, store, pt.term, int(pt.quantity or 1),
+                        prematched, guard,
+                    ),
                 )
                 report.record(result)
                 _record_attempt(storage, run_id, _item_id(pt), store, result)
@@ -562,11 +625,19 @@ def add_terms_to_cart(
                         on_progress(index, len(plan_terms), result)
                     except Exception:
                         logger.exception("Progress callback failed; continuing")
+                if not alive:
+                    # The rest of this store's items stay `pending` on the
+                    # run — not failed, not attempted. Phase 4's whole point.
+                    logger.warning(
+                        "BREAKER run=%s store=%s stopped after item %d/%d; %d left pending",
+                        run_id, store, index, len(plan_terms), len(plan_terms) - index,
+                    )
+                    break
         _remember_failures(storage, report)
         reports[store] = report
     if owns_run:
         _finish_run(storage, run_id)
-    _log_run("terms", started, reports, run_id)
+    _log_run("terms", started, reports, run_id, breakers)
     return reports
 
 
