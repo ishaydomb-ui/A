@@ -354,7 +354,7 @@ class GroceryBot:
             return
         deals = await asyncio.to_thread(hotdeals.find_extended, self.storage)
         await update.message.reply_text(
-            hotdeals.format_extended(deals), parse_mode="Markdown"
+            hotdeals.format_extended(deals), parse_mode="HTML"
         )
 
     async def on_any_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -383,7 +383,7 @@ class GroceryBot:
             chat_id=update.effective_chat.id,
             text=hotdeals.format_deals(relevant, exceptional)
             or "אין כרגע מבצעים חריגים ברשתות האחרות.",
-            parse_mode="Markdown",
+            parse_mode="HTML",
         )
 
     async def _do_shopped(self, update, context, parsed, requested_by: str) -> None:
@@ -645,7 +645,7 @@ class GroceryBot:
         relevant, exceptional = await asyncio.to_thread(hotdeals.find, self.storage)
         text = hotdeals.format_deals(relevant, exceptional)
         await update.message.reply_text(
-            text or "אין כרגע מבצעים חריגים ברשתות האחרות.", parse_mode="Markdown"
+            text or "אין כרגע מבצעים חריגים ברשתות האחרות.", parse_mode="HTML"
         )
 
     async def refresh_prices(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1190,7 +1190,7 @@ class GroceryBot:
         # Telegram makes a command tappable by itself, and that needs no
         # callback plumbing to go wrong.
         await update.message.reply_text(
-            format_stockup_deals(deals), parse_mode="Markdown"
+            format_stockup_deals(deals), parse_mode="HTML"
         )
 
 

@@ -40,8 +40,16 @@ class SafeNameTest(unittest.TestCase):
         self.assertIn("\\*", escape("2*75"))
 
 
-class BoldedNamesStayBalancedTest(unittest.TestCase):
-    """Every entity a deals message opens must close."""
+class HotdealsHtmlTest(unittest.TestCase):
+    """hotdeals.py moved to HTML 2026-09-17 (Markdown->HTML migration, part 2).
+
+    Replaces the old balanced-asterisk test: under legacy Markdown the
+    goal was to keep `*`/`_` counts even so an entity never leaked past
+    the end of a line; under HTML those characters carry no meaning at
+    all, so the goal inverts exactly as it did for the order summary
+    (see OrderSummaryTest) — a name survives unchanged, & < > are
+    escaped, and every <b>/<i> it opens closes.
+    """
 
     def _deal(self, name):
         return hotdeals.HotDeal(
@@ -49,33 +57,82 @@ class BoldedNamesStayBalancedTest(unittest.TestCase):
             price=10.0, reference_price=20.0,
         )
 
-    def _balanced(self, text):
-        return all(
-            line.count("*") % 2 == 0 and line.count("_") % 2 == 0
-            for line in text.splitlines()
-        )
+    def _tags_balanced(self, text):
+        return all(text.count(f"<{t}>") == text.count(f"</{t}>") for t in ("b", "i"))
 
-    def test_a_multipack_name_does_not_break_the_message(self):
+    def test_a_multipack_name_survives_unchanged(self):
         text = hotdeals.format_deals([self._deal("משחת שיניים דואלקר 2*75")], [])
-        self.assertTrue(self._balanced(text), text)
+        self.assertIn("2*75", text)
+        self.assertNotIn("2×75", text, "no silent rewrite of the name")
+        self.assertTrue(self._tags_balanced(text), text)
 
     def test_several_asterisks_in_one_name(self):
         text = hotdeals.format_deals([self._deal("בירה 6*330 מ\"ל 2*4")], [])
-        self.assertTrue(self._balanced(text), text)
+        self.assertIn("6*330", text)
+        self.assertIn("2*4", text)
+        self.assertTrue(self._tags_balanced(text), text)
 
-    def test_underscores_in_a_name(self):
+    def test_underscores_in_a_name_survive_too(self):
         text = hotdeals.format_deals([self._deal("מוצר_עם_קו_תחתון")], [])
-        self.assertTrue(self._balanced(text), text)
+        self.assertIn("מוצר_עם_קו_תחתון", text)
+        self.assertTrue(self._tags_balanced(text), text)
+
+    def test_html_metacharacters_are_escaped(self):
+        text = hotdeals.format_deals([self._deal("M&S <ביסקוויט>")], [])
+        self.assertIn("M&amp;S", text)
+        self.assertIn("&lt;ביסקוויט&gt;", text)
+        self.assertNotIn("M&S <", text)
 
     def test_both_sections_stay_balanced(self):
         text = hotdeals.format_deals(
             [self._deal("א 2*75")], [self._deal("ב 6*330")]
         )
-        self.assertTrue(self._balanced(text), text)
+        self.assertTrue(self._tags_balanced(text), text)
 
     def test_the_extended_list_too(self):
-        text = hotdeals.format_extended([self._deal("ג 3*100")])
-        self.assertTrue(self._balanced(text), text)
+        text = hotdeals.format_extended([self._deal("ג 3*100 & נוסף")])
+        self.assertIn("3*100", text)
+        self.assertIn("&amp;", text)
+        self.assertTrue(self._tags_balanced(text), text)
+
+
+class StockupDealsHtmlTest(unittest.TestCase):
+    """radar.format_stockup_deals — moved to HTML the same day as hotdeals.
+
+    catalog_name/description were interpolated with no escaping at all
+    even under legacy Markdown (a latent gap the old tests never caught,
+    since neither field happened to carry a `*` in the fixtures used).
+    Fixed as part of this migration, not left as a second silent-failure
+    class under the new parser.
+    """
+
+    def _deal(self, name="דבש טבעי", desc="מבצע"):
+        from grocery_bot.radar import StockUpDeal
+
+        return StockUpDeal(
+            bought_name=name, catalog_name=name, shelf_price=16.9, deal_price=10.0,
+            description=desc, pantryable=True,
+        )
+
+    def test_html_metacharacters_in_the_name_are_escaped(self):
+        from grocery_bot.radar import format_stockup_deals
+
+        text = format_stockup_deals([self._deal(name="M&S <דבש>")])
+        self.assertIn("M&amp;S", text)
+        self.assertIn("&lt;דבש&gt;", text)
+
+    def test_html_metacharacters_in_the_description_are_escaped(self):
+        from grocery_bot.radar import format_stockup_deals
+
+        text = format_stockup_deals([self._deal(desc="מבצע 1<2")])
+        self.assertIn("1&lt;2", text)
+
+    def test_tags_are_balanced(self):
+        from grocery_bot.radar import format_stockup_deals
+
+        text = format_stockup_deals([self._deal()])
+        for tag in ("b", "i"):
+            self.assertEqual(text.count(f"<{tag}>"), text.count(f"</{tag}>"))
 
 
 class OrderSummaryTest(unittest.TestCase):

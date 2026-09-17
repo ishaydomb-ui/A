@@ -94,6 +94,8 @@ def find_stockup_deals(storage: Storage, store: str = "shufersal") -> list[Stock
 
 def format_stockup_deals(deals: list[StockUpDeal], bot_username: str = "") -> str:
     """`bot_username` is accepted and unused; see the note about deep links."""
+    from .htmltext import bold, escape, italic
+
     if not deals:
         return (
             "אין כרגע מבצעים חריגים (25%+ הנחה) על מוצרים שאתם קונים. "
@@ -103,15 +105,15 @@ def format_stockup_deals(deals: list[StockUpDeal], bot_username: str = "") -> st
     # is named once at the top. Without it the list reads as chain-neutral
     # while the cross-chain deals list beside it names a chain per line —
     # and a reader cannot tell which prices these are.
-    lines = ["📦 *שווה לאגור בשופרסל* — מבצעים חריגים על דברים שאתם קונים", ""]
+    lines = [f"📦 {bold('שווה לאגור בשופרסל')} — מבצעים חריגים על דברים שאתם קונים", ""]
     for deal in deals:
         mark = "🧺 " if deal.pantryable else ""
         lines.append(
-            f"• {mark}{deal.catalog_name}\n"
-            f"   {deal.shelf_price:.2f}₪ ⟵ *{deal.deal_price:.2f}₪* "
-            f"(-{deal.discount * 100:.0f}%) — {deal.description}"
+            f"• {mark}{escape(deal.catalog_name)}\n"
+            f"   {deal.shelf_price:.2f}₪ ⟵ {bold(f'{deal.deal_price:.2f}₪')} "
+            f"(-{deal.discount * 100:.0f}%) — {escape(deal.description)}"
         )
-    lines += ["", "_🧺 = נשמר בארון; שווה לקנות מראש. כלום לא נוסף לסל אוטומטית._"]
+    lines += ["", italic("🧺 = נשמר בארון; שווה לקנות מראש. כלום לא נוסף לסל אוטומטית.")]
     # A plain command, not a deep link and not a callback button.
     #
     # A t.me deep link tapped from inside the bot's own chat arrives as a
@@ -121,5 +123,5 @@ def format_stockup_deals(deals: list[StockUpDeal], bot_username: str = "") -> st
     # Telegram renders "/chaindeals" as tappable text on its own, which
     # is the whole feature with none of the machinery — and it keeps the
     # long list out of this message, which was the point.
-    lines.append("_עוד מבצעים, מכל הרשתות:_ /chaindeals")
+    lines.append(italic("עוד מבצעים, מכל הרשתות:") + " /chaindeals")
     return "\n".join(lines)

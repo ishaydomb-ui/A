@@ -335,17 +335,17 @@ def find_extended(storage, chains=None, limit: int = EXTENDED_LIMIT) -> list[Hot
 
 
 def format_extended(deals: list[HotDeal]) -> str:
-    from .mdtext import safe_name
+    from .htmltext import bold, italic
 
     if not deals:
         return "אין כרגע מבצעים נוספים מעבר למה שכבר שלחתי."
-    lines = [f"*עוד {len(deals)} מבצעים*", ""]
+    lines = [bold(f"עוד {len(deals)} מבצעים"), ""]
     for deal in deals:
         tag = "" if is_regular(deal.chain) else " \u26a1"
         lines.append(
-            f"\u2022 *{safe_name(deal.name)}* \u2014 \u20aa{deal.price:.2f} "
-            f"\u05d1{safe_name(display_name(deal.chain))}{tag} "
-            f"_(\u20aa{deal.saving:.2f}, {deal.discount * 100:.0f}%)_"
+            f"\u2022 {bold(deal.name)} \u2014 \u20aa{deal.price:.2f} "
+            f"\u05d1{bold(display_name(deal.chain))}{tag} "
+            + italic(f"(\u20aa{deal.saving:.2f}, {deal.discount * 100:.0f}%)")
         )
     return "\n".join(lines)
 
@@ -405,7 +405,7 @@ def _dedupe(deals: list[HotDeal]) -> list[HotDeal]:
 
 
 def format_deals(relevant: list[HotDeal], exceptional: list[HotDeal] | None = None) -> str:
-    from .mdtext import safe_name
+    from .htmltext import bold, italic
 
     exceptional = exceptional or []
     if not relevant and not exceptional:
@@ -420,23 +420,23 @@ def format_deals(relevant: list[HotDeal], exceptional: list[HotDeal] | None = No
         if not can_fill_cart(deal.chain):
             tag += " 🔗"
         return (
-            f"• *{safe_name(deal.name)}* — ₪{deal.price:.2f} ב{safe_name(where)}{tag} "
+            f"• {bold(deal.name)} — ₪{deal.price:.2f} ב{bold(where)}{tag} "
             f"מול ₪{deal.reference_price:.2f} "
-            f"_(חיסכון ₪{deal.saving:.2f}, {deal.discount * 100:.0f}%)_"
+            + italic(f"(חיסכון ₪{deal.saving:.2f}, {deal.discount * 100:.0f}%)")
         )
 
     lines = []
     if relevant:
-        lines += ["*מבצעים על מה שאתם קונים*", ""]
+        lines += [bold("מבצעים על מה שאתם קונים"), ""]
         lines += [line(d) for d in relevant]
     if exceptional:
         if lines:
             lines.append("")
-        lines += ["*מבצעים חריגים — שווה מבט גם אם לא קניתם*", ""]
+        lines += [bold("מבצעים חריגים — שווה מבט גם אם לא קניתם"), ""]
         lines += [line(d) for d in exceptional]
     shown = relevant + exceptional
     if any(not is_regular(d.chain) for d in shown):
-        lines += ["", "_⚡ = רשת שאתם לא קונים בה בדרך כלל_"]
+        lines += ["", italic("⚡ = רשת שאתם לא קונים בה בדרך כלל")]
     if any(not can_fill_cart(d.chain) for d in shown):
-        lines += ["_🔗 = אין חיבור לסל שם — צריך להזמין ידנית באתר של הרשת_"]
+        lines += [italic("🔗 = אין חיבור לסל שם — צריך להזמין ידנית באתר של הרשת")]
     return "\n".join(lines)
