@@ -225,6 +225,7 @@ def import_base_list(
             term=item.name,
             product_code=item.product_code,
             product_name=item.name,
+            source="purchase",
         )
     return len(chosen)
 
@@ -242,6 +243,7 @@ def seed_product_memory(storage, history: OrderHistory, store: str = "shufersal"
             term=item.name,
             product_code=item.product_code,
             product_name=item.name,
+            source="purchase",
         )
     return len(history.products)
 

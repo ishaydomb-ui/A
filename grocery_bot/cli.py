@@ -773,7 +773,7 @@ def _benefits_remember(storage: Storage, args: list[str]) -> int:
         return 2
     storage.remember_choice(
         store=_BENEFITS_MEMORY_STORE, term=term,
-        product_code=merchant, product_name=merchant,
+        product_code=merchant, product_name=merchant, source="human",
     )
     print(f'remembered: "{term}" → {merchant}')
     return 0

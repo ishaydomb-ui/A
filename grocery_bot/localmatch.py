@@ -153,6 +153,7 @@ def seed_memory(storage, store: str, terms, dry_run: bool = False) -> dict:
                 term=term,
                 product_code=hit.barcode,
                 product_name=hit.name,
+                source="inferred",
             )
         seeded.append(hit)
         if hit.controlled:

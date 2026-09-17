@@ -238,6 +238,10 @@ def decide(storage, row, here=None, other=None) -> Decision:
     store = row["store"]
     term = row["original_term"]
     candidates = _candidates(row)
+    rejected = storage.rejected_codes(store, term) if hasattr(storage, "rejected_codes") else set()
+    if rejected:
+        candidates = [(i, name, card) for i, name, card in candidates
+                      if str((card or {}).get("code") or "") not in rejected and name not in rejected]
     if not candidates:
         return Decision(row["id"], store, term, -1, "", "none",
                         "no candidates were stored")
@@ -395,7 +399,7 @@ def apply(storage, decisions) -> int:
         try:
             storage.remember_choice(
                 decision.store, decision.term, decision.code or decision.name,
-                decision.name,
+                decision.name, source="inferred",
             )
             storage.mark_ambiguity_resolved(decision.ambiguity_id)
             applied += 1

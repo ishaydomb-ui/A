@@ -706,6 +706,10 @@ def add_terms_to_cart(
                         continue
                     # absent → fall through and add
                 ident = identity.resolve(storage, store, pt)
+                if ident and storage.is_rejected(store, pt.term, ident.product_code):
+                    # The household said "not that one" for this term;
+                    # the barcode does not override them (Phase 8).
+                    ident = None
                 result, alive = _attempt(
                     brk, adapter,
                     lambda pt=pt, ident=ident: _add_one(
@@ -864,6 +868,7 @@ def _add_one(
             storage.remember_choice(
                 store=store, term=term,
                 product_code=hit["code"], product_name=hit.get("name") or term,
+                source="inferred",
             )
             result.auto_resolved = "bulk_match"
             return result
@@ -905,6 +910,7 @@ def _add_one(
                 term=term,
                 product_code=result.product_code,
                 product_name=result.item_name or term,
+                source="search",
             )
         return result
     if result.status != "ambiguous":
@@ -914,6 +920,12 @@ def _add_one(
     # "ambiguity" is a search returning twenty tiles, of which exactly one
     # is a product this household has bought for years.
     cards = getattr(result, "candidate_cards", None)
+    if cards:
+        # A product the household explicitly rejected for this term is
+        # not a candidate, however well it matches (Phase 8).
+        rejected = storage.rejected_codes(store, term)
+        if rejected:
+            cards = [c for c in cards if str(c.get("code") or "") not in rejected]
     if cards:
         known = _known_products(storage, store)
         decision = resolve(term, cards, known["names"], known["codes"])
@@ -931,6 +943,7 @@ def _add_one(
                     term=term,
                     product_code=chosen.get("code", ""),
                     product_name=chosen.get("name", term),
+                    source="inferred",
                 )
                 picked.auto_resolved = decision.reason
                 return picked
@@ -977,6 +990,7 @@ def _add_one(
                     store=store, term=term,
                     product_code=decision.code or "",
                     product_name=decision.name,
+                    source="inferred",
                 )
                 picked.auto_resolved = f"{decision.basis}: {decision.detail}"
                 return picked

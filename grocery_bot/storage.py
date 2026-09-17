@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import logging
 import sqlite3
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
@@ -92,6 +93,23 @@ CREATE TABLE IF NOT EXISTS preferred_products (
     product_name TEXT NOT NULL,
     chosen_at TEXT NOT NULL,
     PRIMARY KEY (store, term)
+);
+
+-- "Not that one, for this term." Written only by an explicit correction
+-- (Phase 8, 2026-09-17): "X במקום Y", or a tap that overrides a
+-- remembered choice. Deliberately NOT written when an item is merely
+-- missing from a final order or removed from a cart — the household
+-- edits carts for many reasons, and a silent rejection would teach the
+-- bot the wrong lesson from a price check or a change of plan.
+-- A rejected pair can never be remembered as a preference again.
+CREATE TABLE IF NOT EXISTS product_rejections (
+    store TEXT NOT NULL,
+    term TEXT NOT NULL,
+    product_code TEXT NOT NULL,
+    product_name TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL,
+    rejected_at TEXT NOT NULL,
+    PRIMARY KEY (store, term, product_code)
 );
 
 -- An order cycle asked for while the Israeli exit node was down (the exit
@@ -351,7 +369,26 @@ CREATE TABLE IF NOT EXISTS app_state (
 # Columns added after the first version shipped. SQLite has no
 # "ADD COLUMN IF NOT EXISTS", and the database already holds a real list,
 # so each is added only when missing rather than recreating the table.
+logger = logging.getLogger(__name__)
+
+# On whose authority a remembered choice stands (Phase 8). A write from a
+# lower rank never overwrites a higher one.
+PREFERENCE_RANK = {"search": 1, "inferred": 2, "purchase": 3, "human": 4}
+# `human`: a tap or a spoken correction. `order_removed` is reserved for a
+# later version — v1 never infers a rejection from a cart edit.
+REJECTION_SOURCES = ("human", "order_removed")
+
 _ADDED_COLUMNS = {
+    # Provenance, added 2026-09-17 (Phase 8). Every remembered choice was
+    # written as if it were the household's word; 410 of 782 were the
+    # resolver's own guesses from one day. `source` ranks them —
+    # human > purchase > inferred > search — and `remember_choice` refuses
+    # to let a lower rank overwrite a higher one.
+    "preferred_products": {
+        "source": "TEXT NOT NULL DEFAULT 'search'",
+        "evidence_count": "INTEGER NOT NULL DEFAULT 1",
+        "last_confirmed_at": "TEXT NOT NULL DEFAULT ''",
+    },
     # Added 2026-09-01 when Tiv Taam's smart list turned out to publish a
     # measured purchase interval, which beats our 1/share estimate.
     "stock_items": {"interval_days": "REAL", "barcode": "TEXT"},
@@ -1825,42 +1862,142 @@ class Storage:
     # -- remembered product choices ----------------------------------------
 
     def remember_choice(
-        self, store: str, term: str, product_code: str, product_name: str
-    ) -> None:
+        self, store: str, term: str, product_code: str, product_name: str,
+        source: str = "search",
+    ) -> bool:
         """Record which product a search term should resolve to from now on.
 
         This is what stops the bot re-asking the same question every
         cycle. Keyed on the search term rather than the base-list row so
         an ad-hoc "טונה" benefits from a choice made for the standing
         "טונה" too.
+
+        `source` says on whose authority (Phase 8): `human` — a tap or a
+        correction; `purchase` — the product is in the household's own
+        order history; `inferred` — the resolver's or autoresolve's
+        decision; `search` — the store's first hit. A write never
+        downgrades: an inferred pick cannot overwrite a human one, and a
+        pair the household explicitly rejected is never remembered.
+        Re-confirming the same product bumps `evidence_count`. Returns
+        whether anything was written.
         """
+        term = term.strip()
+        rank = PREFERENCE_RANK.get(source)
+        if rank is None:
+            raise ValueError(f"unknown preference source {source!r}")
+        now = datetime.now(timezone.utc).isoformat()
         with closing(self._connect()) as conn:
+            if conn.execute(
+                "SELECT 1 FROM product_rejections WHERE store = ? AND term = ? AND product_code = ?",
+                (store, term, product_code),
+            ).fetchone():
+                logger.info("Not remembering %r → %r at %s: explicitly rejected",
+                            term, product_code, store)
+                return False
+            current = conn.execute(
+                "SELECT product_code, source, evidence_count FROM preferred_products "
+                "WHERE store = ? AND term = ?", (store, term),
+            ).fetchone()
+            if current is not None:
+                current_rank = PREFERENCE_RANK.get(current["source"], 0)
+                if current["product_code"] == product_code:
+                    conn.execute(
+                        "UPDATE preferred_products SET product_name = ?, evidence_count = evidence_count + 1,"
+                        " last_confirmed_at = ?, source = ? WHERE store = ? AND term = ?",
+                        (product_name, now, source if rank >= current_rank else current["source"],
+                         store, term),
+                    )
+                    conn.commit()
+                    return True
+                if rank < current_rank:
+                    logger.info("Keeping %s choice for %r at %s; %s pick %r not written",
+                                current["source"], term, store, source, product_code)
+                    return False
             conn.execute(
                 "INSERT OR REPLACE INTO preferred_products "
-                "(store, term, product_code, product_name, chosen_at) VALUES (?, ?, ?, ?, ?)",
-                (
-                    store,
-                    term.strip(),
-                    product_code,
-                    product_name,
-                    datetime.now(timezone.utc).isoformat(),
-                ),
+                "(store, term, product_code, product_name, chosen_at, source, evidence_count,"
+                " last_confirmed_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)",
+                (store, term, product_code, product_name, now, source, now),
             )
             conn.commit()
+            return True
 
     def preferred_for(self, store: str, term: str) -> dict | None:
         with closing(self._connect()) as conn:
             row = conn.execute(
-                "SELECT product_code, product_name FROM preferred_products "
+                "SELECT product_code, product_name, source, evidence_count FROM preferred_products "
                 "WHERE store = ? AND term = ?",
                 (store, term.strip()),
             ).fetchone()
-        if row is None:
-            return None
-        return {"product_code": row["product_code"], "product_name": row["product_name"]}
+            if row is None:
+                return None
+            if conn.execute(
+                "SELECT 1 FROM product_rejections WHERE store = ? AND term = ? AND product_code = ?",
+                (store, term.strip(), row["product_code"]),
+            ).fetchone():
+                return None
+        return {"product_code": row["product_code"], "product_name": row["product_name"],
+                "source": row["source"], "evidence_count": row["evidence_count"]}
+
+    # -- explicit rejections (Phase 8) --------------------------------------
+
+    def reject_product(
+        self, store: str, term: str, product_code: str, product_name: str = "",
+        source: str = "human",
+    ) -> None:
+        """"Not that one." Only an explicit correction calls this.
+
+        Also drops the pair from preferred_products if it is the current
+        choice, so the next fill does not hand it straight back.
+        """
+        if source not in REJECTION_SOURCES:
+            raise ValueError(f"unknown rejection source {source!r}")
+        term = term.strip()
+        if not product_code:
+            return
+        with closing(self._connect()) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO product_rejections "
+                "(store, term, product_code, product_name, source, rejected_at)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                (store, term, product_code, product_name, source,
+                 datetime.now(timezone.utc).isoformat()),
+            )
+            conn.execute(
+                "DELETE FROM preferred_products WHERE store = ? AND term = ? AND product_code = ?",
+                (store, term, product_code),
+            )
+            conn.commit()
+
+    def is_rejected(self, store: str, term: str, product_code: str) -> bool:
+        if not product_code:
+            return False
+        with closing(self._connect()) as conn:
+            return conn.execute(
+                "SELECT 1 FROM product_rejections WHERE store = ? AND term = ? AND product_code = ?",
+                (store, term.strip(), product_code),
+            ).fetchone() is not None
+
+    def rejected_codes(self, store: str, term: str) -> set[str]:
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT product_code FROM product_rejections WHERE store = ? AND term = ?",
+                (store, term.strip()),
+            ).fetchall()
+        return {r["product_code"] for r in rows}
+
+    def list_rejections(self, store: str | None = None) -> list[dict]:
+        query = "SELECT store, term, product_code, product_name, source, rejected_at FROM product_rejections"
+        params: tuple = ()
+        if store:
+            query += " WHERE store = ?"
+            params = (store,)
+        with closing(self._connect()) as conn:
+            return [dict(r) for r in conn.execute(query + " ORDER BY rejected_at DESC", params)]
 
     def list_preferences(self, store: str | None = None) -> list[dict]:
-        query = "SELECT store, term, product_code, product_name FROM preferred_products"
+        query = ("SELECT store, term, product_code, product_name, source, evidence_count"
+                 " FROM preferred_products")
         params: tuple = ()
         if store:
             query += " WHERE store = ?"
