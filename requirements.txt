@@ -9,3 +9,8 @@ PyYAML>=6.0,<7
 # gives httpx socks5h:// support (DNS resolved at the exit, not here).
 httpx>=0.27,<1
 socksio>=1.0,<2
+# The optional persistent conversation backend (grocery_bot/agentconvo.py),
+# off by default (GORDON_CONVO_BACKEND unset). Runs through the existing
+# `claude` CLI subscription already used by nlu.py — no ANTHROPIC_API_KEY,
+# no second billing relationship.
+claude-agent-sdk==0.2.154

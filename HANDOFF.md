@@ -6,26 +6,47 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-17 ~18:50 (host time, CEST) — end of the reliability build
+**Last anchored:** 2026-09-17 ~20:55 (host time, CEST) — reliability build + conversation-backend benchmark
 **Session:** https://claude.ai/code/session_01AR7esAYdoXQ71HXtqJPpQV
 **Branch:** `claude/online-grocery-automation-b7pq4g`
 **Status is in `git log`, not hand-typed here.**
 
 **Since the last anchor (`c178749`):** the **FINAL RELIABILITY + AGENT UX
-BUILD** (Ishay's mandate of 2026-09-17), phases 0–12 done and deployed;
-**1,262+ tests pass**. The full account — architecture as built, schema
-and migration counts, before/after, what was and was not measured live,
-open decisions — is one document:
-[`docs/reports/2026-09-17-reliability-build-report.md`](docs/reports/2026-09-17-reliability-build-report.md)
-(also delivered as .docx). Read that before this file. The one-line
-version: a cart run is now durable state (`cart_runs`/`run_items`), every
-add is verified or says it is not, a route drop trips a breaker instead
-of cascading, a crash resumes under the same run id, preferences carry
-their authority, "X במקום Y" is done truthfully, and the household gets
-one message per run built from run items. **Not done: the live 20-item
-mutation benchmark and the five clean runs — see §5, first item.** The
-conversation-backend comparison and the Agent SDK decision are gated on
-that benchmark by the mandate itself and were not run.
+BUILD** (Ishay's mandate of 2026-09-17), phases 0–12 done and deployed.
+Mid-day the same day Ishay lifted the five-clean-runs gate the mandate had
+set ("this system is low-consequence for me... proceed now... BUILD
+FORWARD, VALIDATE CONTINUOUSLY") and asked for the conversation-backend
+comparison and, if justified, a persistent Agent SDK build — done the
+same day as Phase 13. **1,315 tests pass.**
+
+Two reports, both also delivered as .docx:
+- [`docs/reports/2026-09-17-reliability-build-report.md`](docs/reports/2026-09-17-reliability-build-report.md)
+  — the execution layer: a cart run is durable state (`cart_runs`/`run_items`),
+  every add is verified or says it is not, a route drop trips a breaker
+  instead of cascading, a crash resumes under the same run id,
+  preferences carry their authority, "X במקום Y" is done truthfully, one
+  message per run. **Still not run: the live 20-item mutation benchmark
+  — see §5, first item** (real carts were in use all day; no longer a
+  gate on anything, per the mandate change, just still open).
+- [`docs/reports/2026-09-17-conversation-backend-benchmark.md`](docs/reports/2026-09-17-conversation-backend-benchmark.md)
+  — the conversation layer: classifier and planner both scored 26/30 on
+  a fixed 30-message suite (including every example message the mandate
+  itself gave); a one-shot Agent SDK call scored 22/30, needed more than
+  double the model calls per message, and **tripped the household's
+  shared weekly Claude usage limit** partway through the benchmark (it
+  recovered within the hour on its own; nothing else was affected). A
+  **persistent** Agent SDK session, tested with **zero injected
+  context**, correctly resolved a real conversational correction the
+  other two can only reach with a hand-built context dict — the one
+  clearly validated advantage. **Not adopted as the default.**
+  `grocery_bot/agentconvo.py` ships, tested, off unless
+  `GORDON_CONVO_BACKEND=agent` is set for a chat — Ishay's to try
+  personally, not flipped as the household's default. Full numbers,
+  including a real bug found and partially fixed the same day (cart
+  tools were reachable from injected background, not just the current
+  message — fixed, with an honestly reported residual case where the
+  fix causes a different message shape to give up instead of erring),
+  are in the report.
 
 Earlier context (2026-09-15 anchor), still accurate where not superseded:
 Three outside reviews were commissioned by Ishay and
@@ -715,6 +736,20 @@ the same result whether or not the thing is true is not evidence.**
 
 ## 5. Open questions for the user
 
+- **Want to try the persistent Agent SDK conversation yourself?**
+  `GORDON_CONVO_BACKEND=agent` in the environment + `systemctl --user
+  restart grocery-bot.service` turns it on for every chat; removing the
+  line and restarting again turns it straight back off — the dependency
+  (`claude-agent-sdk`) is already installed in the service's own venv,
+  nothing else to set up. Worth trying specifically on a correction
+  mid-conversation ("בעצם שניים", "לא זה, השני") — that is the one thing
+  it is measurably better at than the classifier. Not recommended as the
+  everyday default yet: it was less accurate than the classifier on a
+  fixed 30-message test, costs more per message, and a message with no
+  cart or list wording at all can still make it try the wrong tool or
+  give up rather than defaulting to the list the way the classifier
+  always does. Full numbers:
+  [`docs/reports/2026-09-17-conversation-backend-benchmark.md`](docs/reports/2026-09-17-conversation-backend-benchmark.md).
 - **The live execution benchmark (mandate Phase 10) — which real runs
   count?** Not run on 2026-09-17, deliberately: the Shufersal cart is the
   live Friday proposal and a synthetic 20-item add is not removable past

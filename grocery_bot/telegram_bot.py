@@ -36,7 +36,7 @@ from .catalog import (
     format_search_answer,
     refresh_catalog,
 )
-from . import basketview, convo, execution, standingcart
+from . import agentconvo, basketview, convo, execution, standingcart
 from .cartview import (
     MIN_EDIT_INTERVAL_SECONDS,
     render_final_by_store,
@@ -245,6 +245,9 @@ class GroceryBot:
     def __init__(self, config: Config, storage: Storage):
         self.config = config
         self.storage = storage
+        # One persistent agent session per chat, created lazily. Only
+        # populated when GORDON_CONVO_BACKEND=agent — see agentconvo.py.
+        self._agent_sessions: dict = {}
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # A Telegram deep link (t.me/<bot>?start=alldeals) arrives as
@@ -710,6 +713,17 @@ class GroceryBot:
         # (cadence digest, alerts) have somewhere to go.
         self.storage.set_state("digest_chat_id", str(update.effective_chat.id))
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+
+        # An alternate conversation backend, off by default
+        # (GORDON_CONVO_BACKEND=agent). It keeps its own persistent
+        # memory per chat and never reaches this file's parse/dispatch
+        # path — see agentconvo.py for why, and for the rollback (unset
+        # the flag).
+        if agentconvo.enabled():
+            requested_by = update.effective_user.first_name if update.effective_user else "unknown"
+            await self._handle_with_agent(update, context, text, requested_by)
+            return
+
         # The previous turn goes in with the message, not after it fails.
         # "בעצם שניים" carries no product at all: without context it is
         # unclassifiable in principle, and demanding that every message
@@ -751,6 +765,30 @@ class GroceryBot:
             )
             return
         await handler(update, context, parsed, requested_by)
+
+    async def _handle_with_agent(self, update, context, text: str, requested_by: str) -> None:
+        """Route through the persistent Agent SDK session for this chat.
+
+        One `agentconvo.AgentSession` per chat, kept for the life of the
+        process — its memory of the conversation lives in the SDK
+        session, not in `convo.py`. A failure here is reported and the
+        turn ends; it does not fall back onto the classifier mid-message,
+        because a message half-answered by one backend and half by
+        another is worse than one backend saying it broke.
+        """
+        chat_id = update.effective_chat.id
+        session = self._agent_sessions.get(chat_id)
+        if session is None:
+            session = agentconvo.AgentSession(self)
+            self._agent_sessions[chat_id] = session
+        context._gordon_understood = {"backend": "agent", "seconds": 0.0, "intent": "agent"}  # noqa: SLF001
+        try:
+            await session.handle(update, context, text, requested_by)
+        except Exception:  # noqa: BLE001
+            logger.exception("Agent backend failed for chat %s", chat_id)
+            await update.message.reply_text(
+                "משהו נשבר בצד השיחה החדש — נסו שוב עוד רגע."
+            )
 
     async def _run_actions(self, update, context, parsed, requested_by: str) -> None:
         """Carry out every request in one message, in the order it was said.
