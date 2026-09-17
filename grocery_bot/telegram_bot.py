@@ -2743,9 +2743,10 @@ class GroceryBot:
         # request nobody will think to re-send.
         outcomes = await asyncio.to_thread(self.storage.run_outcomes, run_id)
         for item in items:
-            # Phase 1: `added` is the strongest word this phase can use;
-            # Phase 2 narrows consumption to `verified`.
-            if outcomes.get(("adhoc", str(item.id))) in ("added", "verified"):
+            # Phase 2: only positive evidence consumes a request. An add
+            # that was sent but not confirmed stays on the list and is
+            # presence-checked next time, never blindly re-added.
+            if outcomes.get(("adhoc", str(item.id))) == "verified":
                 await asyncio.to_thread(
                     self.storage.mark_adhoc_consumed, item.id
                 )

@@ -465,7 +465,16 @@ class ShufersalAdapter(StoreAdapter):
                 # 0.00 and sits close enough to be picked up first, which
                 # would report a free shop.
                 total = _price_after(self._page.inner_text("body"), "לתשלום")
-            return {"ok": True, "items": items, "total": total, "url": CART_URL}
+            # Phase 2: zero line items beside a non-zero total is the lie
+            # observed live on 2026-09-17 (0 lines, ₪1,831.83, ok=True).
+            # The page renders its lines after an async discount pass and
+            # the 15s wait above expired. That is a failed read.
+            if not items and (total or 0) > 0:
+                logger.warning("Shufersal: cart read inconsistent (0 lines, total %s)", total)
+                return {"ok": False, "items": [], "total": total, "url": CART_URL,
+                        "read": "failed"}
+            return {"ok": True, "items": items, "total": total, "url": CART_URL,
+                    "read": "verified"}
         except Exception:
             logger.exception("Shufersal: could not read the cart")
             return {"ok": False, "items": [], "total": None, "url": CART_URL}
@@ -592,12 +601,14 @@ class ShufersalAdapter(StoreAdapter):
             already_in_cart = self._tile_in_cart(tile)
             if already_in_cart:
                 # Already there: adjust the amount instead of pressing a
-                # button that is no longer on screen.
+                # button that is no longer on screen. The tile's own
+                # in-cart state is positive evidence.
                 if quantity > 1:
                     self._set_quantity(tile, quantity)
                 return CartAddResult(
                     item_name=name, store=self.name, status="added", quantity=quantity,
                     product_code=code, price=_as_float(card.get("price")),
+                    verification="verified", detail="tile already in in-cart state",
                 )
 
             if quantity > 1:
@@ -613,10 +624,27 @@ class ShufersalAdapter(StoreAdapter):
                     return CartAddResult(
                         item_name=name, store=self.name, status="added", quantity=quantity,
                         product_code=code, price=_as_float(card.get("price")),
+                        verification="verified", detail="tile flipped to in-cart state",
                     )
                 button.click(timeout=8_000, force=True)
 
             self._page.wait_for_timeout(1_000)  # let the cart request settle
+            # Phase 2: until now this returned "added" here on nothing but
+            # "the click did not throw". The tile's in-cart form is the
+            # one positive signal available on the search page without a
+            # navigation; the badge is deliberately not used — it read "0"
+            # on an unloaded page for a cart holding ~137 items (live
+            # probe, 2026-09-17). The exact contract is confirmed by the
+            # controlled live test in Phase 3; this is the honest default.
+            verification, note = "unverified", "add sent; tile state not confirmed"
+            try:
+                for _ in range(3):
+                    if self._tile_in_cart(tile):
+                        verification, note = "verified", "tile flipped to in-cart state"
+                        break
+                    self._page.wait_for_timeout(700)
+            except Exception:
+                logger.debug("Shufersal: tile state unreadable after add", exc_info=True)
             return CartAddResult(
                 item_name=name,
                 store=self.name,
@@ -624,6 +652,8 @@ class ShufersalAdapter(StoreAdapter):
                 quantity=quantity,
                 product_code=code,
                 price=_as_float(card.get("price")),
+                verification=verification,
+                detail=note,
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Shufersal: failed to add %r to cart", name)

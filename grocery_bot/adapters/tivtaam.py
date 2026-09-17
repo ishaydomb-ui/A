@@ -398,7 +398,7 @@ class TivTaamAdapter(StoreAdapter):
             for _ in range(ADD_VERIFY_POLLS):
                 self._page.wait_for_timeout(ADD_VERIFY_POLL_MS)
                 after = self._cart_line_count()
-                if after > before:
+                if before is not None and after is not None and after > before:
                     break
 
             for _ in range(max(0, int(quantity) - 1)):
@@ -407,13 +407,37 @@ class TivTaamAdapter(StoreAdapter):
                     self._page.wait_for_timeout(2000)
                 except Exception:
                     break
+
+            # Phase 2: two signals, and honesty about which ones answered.
+            # The count delta says "a line appeared"; the panel names say
+            # "this product's line appeared". Both → verified. Either read
+            # unavailable → the click was sent, nothing more is claimed.
+            if before is None or after is None:
+                return CartAddResult(
+                    item_name=name, store=self.name, status="added", quantity=quantity,
+                    verification="unverified",
+                    detail="add sent; cart count unreadable before/after",
+                )
             if after <= before:
+                # Could be lag, could be a dead button. Not a product fact.
                 return CartAddResult(
                     item_name=name, store=self.name, status="error",
                     detail="the click did not change the cart",
+                    failure_kind="ambiguous",
+                )
+            names = self._cart_line_names()
+            needle = name.strip()[:12]
+            seen = any(needle and needle in (line.get("name") or "") for line in names)
+            if seen:
+                return CartAddResult(
+                    item_name=name, store=self.name, status="added", quantity=quantity,
+                    verification="verified", detail="count +%d, name in cart panel" % (after - before),
                 )
             return CartAddResult(
-                item_name=name, store=self.name, status="added", quantity=quantity
+                item_name=name, store=self.name, status="added", quantity=quantity,
+                verification="unverified",
+                detail="count +%d but panel %s" % (
+                    after - before, "unreadable" if not names else "does not show the name"),
             )
         except Exception as exc:
             logger.exception("Tiv Taam add failed for %r", name)
@@ -462,9 +486,10 @@ class TivTaamAdapter(StoreAdapter):
         if text is None:
             return None
         found = re.search(r"(\d+)\s*מוצרים", text)
-        return int(found.group(1)) if found else 0
+        # No count in the header text is "unknown", not zero. Phase 2.
+        return int(found.group(1)) if found else None
 
-    def _cart_line_count(self) -> int:
+    def _cart_line_count(self) -> int | None:
         """How many line elements the cart holds, panel open or shut.
 
         The authoritative signal, and the one an add is verified against.
@@ -473,11 +498,19 @@ class TivTaamAdapter(StoreAdapter):
         failures. A `.product-in-cart` element is the line itself: it is
         present in the DOM whether or not the panel has slid into view, so
         this costs nothing and does not need the panel opened.
+
+        **None, not 0, when the read throws.** Until Phase 2 an exception
+        here returned 0 — and this value is the `before` in add
+        verification, so a failed read made any later count look like a
+        successful add, and a failed *after* read made a real add look
+        like "the click did not change the cart". A number produced by an
+        exception handler is not a count.
         """
         try:
             return self._page.locator(".product-in-cart").count()
         except Exception:
-            return 0
+            logger.debug("Tiv Taam: cart line count unreadable", exc_info=True)
+            return None
 
     def cart_summary(self) -> dict:
         """Read the cart the household is about to pay for.
@@ -510,7 +543,8 @@ class TivTaamAdapter(StoreAdapter):
                 return {"ok": False, "items": [], "total": None, "url": CART_URL}
 
             count_match = re.search(r"(\d+)\s*מוצרים", text)
-            count = int(count_match.group(1)) if count_match else 0
+            # Phase 2: no count in the header is unknown, not zero.
+            count = int(count_match.group(1)) if count_match else None
 
             total = None
             price_match = re.search(r"₪\s*([\d,]+(?:\.\d+)?)", text)
@@ -523,10 +557,18 @@ class TivTaamAdapter(StoreAdapter):
                 # many lines there are. Say so with placeholders rather
                 # than reporting an empty cart with a non-zero total.
                 items = [{"name": "", "qty": ""} for _ in range(count)]
-            return {"ok": True, "items": items, "total": total, "url": CART_URL}
+            if not items and (total or 0) > 0 and count is None:
+                # Nothing to explain a non-zero total: a failed read, not
+                # an empty cart. Phase 2.
+                logger.warning("Tiv Taam: cart read inconsistent (no lines, total %s)", total)
+                return {"ok": False, "items": [], "total": total, "url": CART_URL,
+                        "read": "failed"}
+            return {"ok": True, "items": items, "total": total, "url": CART_URL,
+                    "read": "verified"}
         except Exception:
             logger.exception("Tiv Taam: could not read the cart")
-            return {"ok": False, "items": [], "total": None, "url": CART_URL}
+            return {"ok": False, "items": [], "total": None, "url": CART_URL,
+                    "read": "failed"}
 
     def _cart_line_names(self) -> list[dict]:
         """Open the cart panel and read its line items. [] if it will not.

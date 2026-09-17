@@ -98,13 +98,28 @@ class CartGuardTests(unittest.TestCase):
         self.assertEqual(report.skipped, [])
         self.assertEqual(len(report.added), 2)
 
-    def test_an_unreadable_cart_blocks_nothing(self) -> None:
-        # A page-load failure must not quietly stop a shop being filled.
+    def test_an_unreadable_cart_does_not_stop_the_fill(self) -> None:
+        # A page-load failure must not quietly stop a shop being filled:
+        # something new still goes in.
+        _manifest(self.storage, "shufersal", [("P_1", "חלב 3%")])
+        adapter = _BrokenCartAdapter([])
+        report = self._run(adapter, [("לחם אחיד", 1)])
+        self.assertEqual(report.skipped, [])
+        self.assertEqual(len(report.added), 1)
+
+    def test_an_unreadable_cart_does_not_duplicate_what_we_last_added(self) -> None:
+        """Phase 2 (2026-09-17). Was "an unreadable cart blocks nothing",
+        and that let a re-run after an unverified add put עגבניות שרי במלח
+        in the cart twice. Unreadable now falls back to the last known
+        evidence — the manifest — for what *we* put in. Conservative by
+        design: an item the household deleted since is not re-added on
+        this one pass, and that beats a duplicate."""
         _manifest(self.storage, "shufersal", [("P_1", "חלב 3%")])
         adapter = _BrokenCartAdapter([])
         report = self._run(adapter, [("חלב 3%", 1)])
-        self.assertEqual(report.skipped, [])
-        self.assertEqual(len(report.added), 1)
+        self.assertEqual(len(report.added), 0)
+        self.assertEqual([r.item_name for r in report.skipped], ["חלב 3%"])
+        self.assertIn("כבר בעגלה", report.skipped[0].detail)
 
     def test_an_explicit_request_is_never_refused(self) -> None:
         """"תוסיף חלב" means milk now. If it was deleted an hour ago and

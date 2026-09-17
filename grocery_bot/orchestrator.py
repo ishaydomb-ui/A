@@ -261,19 +261,49 @@ class CartGuard:
         return cls({}, {}, readable=False)
 
     @classmethod
+    def from_last_known(cls, storage: Storage, store: str) -> "CartGuard":
+        """The guard to use when the cart cannot be read: last known evidence.
+
+        Phase 2 (2026-09-17). `empty()` — "unreadable allows everything" —
+        was the right call against *stopping* a fill, and the wrong call
+        against *duplicating* one: on 2026-09-17 a re-run after an
+        unverified add put `עגבניות שרי במלח` in the cart twice, because
+        the cart read had failed and the guard therefore knew nothing.
+
+        So an unreadable cart is guarded by what this bot last put in it
+        (`standing_cart_manifest`), which is the best evidence available
+        without a page. Items *we* added are treated as present; anything
+        else proceeds. The cost, stated: an item the household deleted
+        since the last fill will not be re-added on this pass — the
+        conservative direction, and one pass only.
+        """
+        from . import standingcart
+
+        present: dict = {}
+        try:
+            rows = standingcart._manifest(storage).get("stores", {}).get(store) or []  # noqa: SLF001
+        except Exception:  # noqa: BLE001
+            rows = []
+        for row in rows:
+            for key in (str(row.get("code") or ""), (row.get("name") or "").strip()):
+                if key:
+                    present[key] = (row.get("name") or "").strip()
+        return cls(present, {}, readable=False)
+
+    @classmethod
     def read(cls, storage: Storage, adapter, store: str) -> "CartGuard":
         from . import standingcart
 
         reader = getattr(adapter, "cart_summary", None)
         if reader is None:
-            return cls.empty()
+            return cls.from_last_known(storage, store)
         try:
             summary = reader() or {}
         except Exception:  # noqa: BLE001
             logger.exception("Could not read the %s cart before filling it", store)
-            return cls.empty()
+            return cls.from_last_known(storage, store)
         if not summary.get("ok"):
-            return cls.empty()
+            return cls.from_last_known(storage, store)
         items = summary.get("items") or []
         present = {}
         for item in items:
@@ -393,18 +423,29 @@ def _outcome_for(result) -> tuple[str, str, str]:
     detail = (getattr(result, "detail", "") or "")[:160]
     low = detail.lower()
     if status == "added":
-        return "added", "", detail
+        # Phase 2: "added" is a claim; the evidence decides the outcome.
+        # An adapter that did not verify — or a fake that never said —
+        # yields `unverified`, never `verified`. This is the rule that
+        # stops "the click did not throw" from meaning "it is in the cart".
+        if getattr(result, "verification", "n/a") == "verified":
+            return "verified", "", detail
+        return "unverified", "", detail or "add sent, no positive evidence"
     if status == "ambiguous":
         return "unresolved_ambiguity", "ambiguous", f"{len(getattr(result, 'candidates', []) or [])} candidates"
     if status == "skipped":
         return "skipped", "", detail
     if status == "not_found":
         return "failed_product", "product", detail
-    # error
-    if "session expired" in low or "browser has been closed" in low:
+    # error — the adapter's own classification wins when it gave one.
+    kind = getattr(result, "failure_kind", "") or ""
+    if kind == "session" or "session expired" in low or "browser has been closed" in low:
         return "failed_session", "session", detail
-    if any(m.lower() in low for m in INFRASTRUCTURE_MARKERS):
+    if kind == "infrastructure" or any(m.lower() in low for m in INFRASTRUCTURE_MARKERS):
         return "failed_infra", "infrastructure", detail
+    if kind == "ambiguous":
+        # e.g. "the click did not change the cart" — could be lag, could
+        # be a dead button. Not a fact about the product either way.
+        return "unverified", "ambiguous", detail
     return "failed_product", "product", detail
 
 

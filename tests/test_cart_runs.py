@@ -49,6 +49,9 @@ class FakeAdapter:
             item_name=term, store=self.name, status=status, quantity=quantity,
             detail=detail, candidates=["א", "ב"] if status == "ambiguous" else [],
             product_code=f"P_{term}" if status == "added" else "",
+            # A fake that says "added" must also say it saw it, or Phase 2
+            # correctly records the add as unverified.
+            verification="verified" if status == "added" else "n/a",
         )
 
     def add_specific_product(self, name, quantity=1, **kw):
@@ -112,7 +115,7 @@ class RunLifecycleTests(unittest.TestCase):
                           [("חלב", 1), ("לחם", 1)], run_id=run_id)
         counts = self.storage.run_counts(run_id)
         self.assertEqual(counts["requested"], 2)
-        self.assertEqual(counts.get("added"), 1)
+        self.assertEqual(counts.get("verified"), 1)
         self.assertEqual(counts.get("failed_product"), 1)
 
     def test_the_run_ends_in_a_terminal_status(self):
@@ -190,12 +193,12 @@ class ConsumptionIsReadFromTheRunTests(unittest.TestCase):
         fake.search_and_add = lambda term, quantity=1: __import__(
             "grocery_bot.models", fromlist=["CartAddResult"]
         ).CartAddResult(item_name="חלב עמיד 3% 1 ליטר", store="fake", status="added",
-                        quantity=quantity, product_code="P_1")
+                        quantity=quantity, product_code="P_1", verification="verified")
         run_id = self.storage.start_cart_run("watch_list")
         add_terms_to_cart(self.storage, {"fake": lambda: fake},
                           [PlanTerm("חלב עמיד", 1, "adhoc", str(rid))], run_id=run_id)
         outcomes = self.storage.run_outcomes(run_id)
-        self.assertEqual(outcomes[("adhoc", str(rid))], "added")
+        self.assertEqual(outcomes[("adhoc", str(rid))], "verified")
 
     def test_a_failed_item_is_not_consumed(self):
         rid = self.storage.add_adhoc_request("נקטרינה", "ishay")
@@ -228,7 +231,7 @@ class FailureClassificationOnTheItemTests(unittest.TestCase):
         item = self.storage.run_items_for(run_id)[0]
         # The resolver may settle it from candidates; either way it is
         # never recorded as a product failure.
-        self.assertIn(item["outcome"], ("unresolved_ambiguity", "added"))
+        self.assertIn(item["outcome"], ("unresolved_ambiguity", "verified", "unverified"))
 
     def test_unknown_columns_are_refused_not_ignored(self):
         run_id = self.storage.start_cart_run("manual")

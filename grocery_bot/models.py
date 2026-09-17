@@ -150,6 +150,14 @@ class CartAddResult:
     # discount so the summary can say why, and so it is the easiest line
     # in the cart to find and delete. See dealfill.py.
     deal: str = ""
+    # Phase 2 (2026-09-17). "verified" means positive evidence the cart
+    # changed; "unverified" means the action was sent and nothing could
+    # confirm it; "n/a" for results that are not mutations. `status ==
+    # "added"` alone is no longer read as "in the cart" anywhere — see
+    # orchestrator._outcome_for. `failure_kind` ∈ product | session |
+    # infrastructure | ambiguous, set by the adapter when it knows.
+    verification: str = "n/a"
+    failure_kind: str = ""
 
 
 @dataclass
