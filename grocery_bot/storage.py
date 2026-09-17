@@ -282,6 +282,43 @@ CREATE INDEX IF NOT EXISTS idx_cart_failures_item
     ON cart_failures(store, item_name);
 CREATE INDEX IF NOT EXISTS idx_cart_failures_at ON cart_failures(failed_at);
 
+-- One concrete attempt to prepare a household shopping request. Phase 1
+-- of the reliability build (2026-09-17). Until this existed no run had an
+-- identity: fourteen consecutive failures were stamped with one time, a
+-- crash mid-fill left nothing to resume, and "17 of 20" could not be said
+-- because 20 was never stored. `trigger` is the origin and does not
+-- change on resume — resume is a lifecycle event on the same run.
+CREATE TABLE IF NOT EXISTS cart_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    trigger TEXT NOT NULL,         -- done | watch_list | start_order | terms | cycle | manual
+    started_at TEXT NOT NULL,      -- ISO8601 UTC
+    finished_at TEXT,
+    status TEXT NOT NULL           -- running | interrupted | completed | completed_with_unverified | aborted
+);
+
+-- One household need within a run. Identity is the intent, never the
+-- retailer: (run, source_kind, source_id) is unique, and store/product
+-- are how that need was *resolved*, which may differ per attempt.
+CREATE TABLE IF NOT EXISTS run_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER NOT NULL REFERENCES cart_runs(id),
+    source_kind TEXT NOT NULL,     -- adhoc | base | stock | deal | freeform
+    source_id TEXT NOT NULL,       -- row id / product code / normalised term
+    term TEXT NOT NULL,            -- what was asked for, in the household's words
+    quantity REAL NOT NULL DEFAULT 1,
+    store TEXT NOT NULL DEFAULT '',        -- resolution, not identity
+    product_code TEXT NOT NULL DEFAULT '', -- resolution, not identity
+    outcome TEXT NOT NULL DEFAULT 'pending',
+        -- pending | added | verified | unverified | unresolved_ambiguity
+        -- | failed_product | failed_infra | failed_session | skipped
+    failure_kind TEXT NOT NULL DEFAULT '', -- product | session | infrastructure | ambiguous
+    evidence TEXT NOT NULL DEFAULT '',     -- short, human-readable
+    attempted_at TEXT,
+    verified_at TEXT,
+    UNIQUE (run_id, source_kind, source_id)
+);
+CREATE INDEX IF NOT EXISTS idx_run_items_run ON run_items(run_id, outcome);
+
 -- When each product was last actually bought. Separate from stock_items
 -- because that table is rebuilt wholesale on every nightly sync, and a
 -- purchase date stored there would be thrown away with it.
@@ -448,6 +485,20 @@ def _name_match_rank(folded_term: str, name: str) -> int:
 # hand-lists both "תמ\"ל" and "תמל" as separate stockable patterns.
 _APOSTROPHES = "'׳’`" + '"״“”'
 _FOLD_TABLE = str.maketrans("", "", _APOSTROPHES)
+
+
+def normalize_term(term: str) -> str:
+    """The one normalisation every identity lookup shares.
+
+    Fold the apostrophe and quote families (`_fold_apostrophes`), collapse
+    whitespace, strip. Used for a free-form run item's `source_id`, and —
+    from Phase 5 — for `product_rejections.term`, so that a punctuation or
+    Hebrew-quote variant can never slip past a rejection that was written
+    for the same words. Deliberately *not* lowercased beyond what folding
+    does: Hebrew has no case, and Latin brand names ("GO", "Pro") are
+    better kept as typed.
+    """
+    return " ".join(_fold_apostrophes(str(term or "")).split()).strip()
 
 
 def _fold_apostrophes(term: str) -> str:
@@ -790,6 +841,111 @@ class Storage:
             )
             conn.commit()
             return int(cursor.lastrowid)
+
+    # -- cart runs and run items (Phase 1, 2026-09-17) -----------------------
+
+    def start_cart_run(self, trigger: str) -> int:
+        """Open a run. Returns its id; status is `running` until finished."""
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with closing(self._connect()) as conn:
+            cur = conn.execute(
+                "INSERT INTO cart_runs (trigger, started_at, status) VALUES (?, ?, 'running')",
+                (trigger, now),
+            )
+            conn.commit()
+            return int(cur.lastrowid)
+
+    def finish_cart_run(self, run_id: int, status: str) -> None:
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with closing(self._connect()) as conn:
+            conn.execute(
+                "UPDATE cart_runs SET status = ?, finished_at = ? WHERE id = ?",
+                (status, now, run_id),
+            )
+            conn.commit()
+
+    def mark_cart_run(self, run_id: int, status: str) -> None:
+        """Change status without closing the run (e.g. running -> interrupted)."""
+        with closing(self._connect()) as conn:
+            conn.execute("UPDATE cart_runs SET status = ? WHERE id = ?", (status, run_id))
+            conn.commit()
+
+    def running_cart_runs(self) -> list[dict]:
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT * FROM cart_runs WHERE status IN ('running', 'interrupted') ORDER BY id"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def add_run_items(self, run_id: int, plan_terms) -> dict:
+        """Register the run's needs. Returns {(source_kind, source_id): item_id}.
+
+        `INSERT OR IGNORE` on the unique key is the idempotency: the same
+        household need registered twice in one run — a resume, a retry,
+        a second store — resolves to the same row rather than a second
+        piece of work in the completion denominator.
+        """
+        keyed: dict = {}
+        with closing(self._connect()) as conn:
+            for pt in plan_terms:
+                source_id = pt.source_id if pt.source_id is not None else normalize_term(pt.term)
+                source_id = str(source_id)
+                conn.execute(
+                    "INSERT OR IGNORE INTO run_items "
+                    "(run_id, source_kind, source_id, term, quantity) VALUES (?, ?, ?, ?, ?)",
+                    (run_id, pt.source_kind, source_id, pt.term, float(pt.quantity or 1)),
+                )
+                row = conn.execute(
+                    "SELECT id FROM run_items WHERE run_id = ? AND source_kind = ? AND source_id = ?",
+                    (run_id, pt.source_kind, source_id),
+                ).fetchone()
+                keyed[(pt.source_kind, source_id)] = int(row["id"])
+            conn.commit()
+        return keyed
+
+    def update_run_item(self, item_id: int, **fields) -> None:
+        """Set current execution state on one run item.
+
+        Accepted fields: store, product_code, outcome, failure_kind,
+        evidence, attempted_at, verified_at. Unknown names are refused so a
+        typo cannot silently become a no-op.
+        """
+        allowed = {"store", "product_code", "outcome", "failure_kind", "evidence",
+                   "attempted_at", "verified_at"}
+        bad = set(fields) - allowed
+        if bad:
+            raise ValueError(f"run_items has no column(s) {sorted(bad)}")
+        if not fields:
+            return
+        sets = ", ".join(f"{k} = ?" for k in fields)
+        with closing(self._connect()) as conn:
+            conn.execute(
+                f"UPDATE run_items SET {sets} WHERE id = ?",
+                [*fields.values(), item_id],
+            )
+            conn.commit()
+
+    def run_items_for(self, run_id: int) -> list[dict]:
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT * FROM run_items WHERE run_id = ? ORDER BY id", (run_id,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def run_outcomes(self, run_id: int) -> dict:
+        """{(source_kind, source_id): outcome} — what consumption reads."""
+        return {
+            (r["source_kind"], r["source_id"]): r["outcome"]
+            for r in self.run_items_for(run_id)
+        }
+
+    def run_counts(self, run_id: int) -> dict:
+        """Outcome -> count, plus 'requested' — the denominator."""
+        items = self.run_items_for(run_id)
+        counts: dict = {"requested": len(items)}
+        for r in items:
+            counts[r["outcome"]] = counts.get(r["outcome"], 0) + 1
+        return counts
 
     def pending_deferred_cycle(self) -> dict | None:
         with closing(self._connect()) as conn:

@@ -1439,7 +1439,7 @@ class GroceryBot:
         await update.message.reply_text(f"🔥 ממלא את הסל: {names}. לא זז מפה.")
         try:
             reports = await asyncio.to_thread(
-                add_terms_to_cart, self.storage, factories, terms
+                add_terms_to_cart, self.storage, factories, terms, trigger="add_to_cart"
             )
         except Exception:
             logger.exception("add_to_cart failed")
@@ -2707,19 +2707,30 @@ class GroceryBot:
         # later against a cart that may be half-filled.
         await asyncio.to_thread(listwatch.note_ran, self.storage)
 
-        terms = [(item.text, item.quantity or 1) for item in items if item.text]
+        from .models import PlanTerm
+
+        # Each pending request keeps its own id into the run (Phase 1), so
+        # "was it bought" is read from the run item and never guessed by
+        # comparing the request text to the added product's name — the
+        # compare that left 17 of 21 items pending after they landed.
+        terms = [
+            PlanTerm(item.text, item.quantity or 1, "adhoc", str(item.id))
+            for item in items if item.text
+        ]
         if not terms:
             return
         await context.bot.send_message(
             chat_id=int(chat_id),
             text=f"🛒 מכניס לעגלה {len(terms)} פריטים מהרשימה…",
         )
+        run_id = await asyncio.to_thread(self.storage.start_cart_run, "watch_list")
         try:
             reports = await asyncio.to_thread(
-                add_terms_to_cart, self.storage, factories, terms, None, True,
+                add_terms_to_cart, self.storage, factories, terms, None, True, run_id,
             )
         except Exception:
             logger.exception("List watcher cart run failed")
+            await asyncio.to_thread(self.storage.finish_cart_run, run_id, "aborted")
             await context.bot.send_message(
                 chat_id=int(chat_id),
                 text="לא הצלחתי להכניס את הפריטים לעגלה. הם נשארו ברשימה — "
@@ -2730,16 +2741,18 @@ class GroceryBot:
         # Consume only what actually landed, for the same reason the full
         # cycle does: a transient failure must not silently delete a
         # request nobody will think to re-send.
-        added = {
-            (r.item_name or "").strip()
-            for report in reports.values()
-            for r in report.added
-        }
+        outcomes = await asyncio.to_thread(self.storage.run_outcomes, run_id)
         for item in items:
-            if (item.text or "").strip() in added:
+            # Phase 1: `added` is the strongest word this phase can use;
+            # Phase 2 narrows consumption to `verified`.
+            if outcomes.get(("adhoc", str(item.id))) in ("added", "verified"):
                 await asyncio.to_thread(
                     self.storage.mark_adhoc_consumed, item.id
                 )
+        await asyncio.to_thread(
+            self.storage.finish_cart_run, run_id,
+            "interrupted" if "pending" in outcomes.values() else "completed",
+        )
 
         summary, markup = self._store_cycle_summary(reports)
         await _send_html(context, int(chat_id), summary or "לא הצלחתי להוסיף כלום.",

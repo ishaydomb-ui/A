@@ -33,7 +33,7 @@ class PlanTests(unittest.TestCase):
         """A rare product (8% of orders) belongs in a standing cart —
         that is the whole difference from the order cycle's base list."""
         plan = standingcart.plan_refill(self.storage, "shufersal")
-        self.assertIn("אורז בסמטי", [t for t, _ in plan.terms])
+        self.assertIn("אורז בסמטי", [t.term for t in plan.terms])
 
     def test_a_product_not_bought_for_over_a_year_is_left_out(self):
         # A separate store, because record_last_purchase deliberately
@@ -44,14 +44,18 @@ class PlanTests(unittest.TestCase):
         ])
         self.storage.record_last_purchase("victory", [("P_9", "2024-01-01")])
         plan = standingcart.plan_refill(self.storage, "victory")
-        self.assertNotIn("אורז ישן", [t for t, _ in plan.terms])
+        self.assertNotIn("אורז ישן", [t.term for t in plan.terms])
 
     def test_a_chain_with_no_history_still_gets_a_full_cart(self):
         """Tiv Taam has no stock table of its own; filling nothing there
         would leave one of the two carts empty every week."""
         self.storage.add_base_list_item("קוטג", default_quantity=2)
         plan = standingcart.plan_refill(self.storage, "tivtaam")
-        self.assertEqual(plan.terms, [("קוטג", 2)])
+        # Since Phase 1 a plan term carries where it came from; the base
+        # row's id survives planning instead of being dropped here.
+        self.assertEqual([(t.term, t.quantity) for t in plan.terms], [("קוטג", 2)])
+        self.assertEqual(plan.terms[0].source_kind, "base")
+        self.assertTrue(plan.terms[0].source_id)
 
     def test_an_unknown_list_shape_fails_loudly(self):
         with self.assertRaises(KeyError):

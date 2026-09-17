@@ -71,7 +71,7 @@ class RefillPlan:
     """What a refill will put in one chain's cart, before it runs."""
 
     store: str
-    terms: list[tuple[str, int]]
+    terms: list  # of models.PlanTerm — was list[tuple[str, int]] until Phase 1
     deals: list
 
     @property
@@ -90,20 +90,31 @@ def plan_refill(storage, store: str, list_key: str = DEFAULT_LIST) -> RefillPlan
     if spec is None:
         raise KeyError(f"unknown list shape {list_key!r}")
 
+    from .models import PlanTerm
+
     rows = storage.list_stock_items(store)
     if not rows:
         # A chain with no purchase history of its own still deserves a
         # full cart: fall back to the household's curated base list
         # rather than filling nothing. Tiv Taam is exactly this case.
         base = storage.list_active_base_items()
-        terms = [(b.search_term_for(store), b.default_quantity) for b in base]
+        terms = [
+            PlanTerm(b.search_term_for(store), b.default_quantity, "base", str(b.id))
+            for b in base
+        ]
     else:
         built = build_list(spec, rows, storage.last_purchase_dates(store))
-        terms = [(row["product_name"], row.get("default_quantity") or 1)
-                 for row in built.items]
+        # The product code is the identity here, and it was in `row` all
+        # along — this is one of the three places it used to be dropped.
+        terms = [
+            PlanTerm(row["product_name"], row.get("default_quantity") or 1,
+                     "stock", str(row.get("product_code") or ""))
+            for row in built.items
+        ]
 
-    picks = dealfill.picks_for(storage, store, skip_terms=[t for t, _ in terms])
-    terms += [(p.term, p.quantity) for p in picks]
+    picks = dealfill.picks_for(storage, store, skip_terms=[t.term for t in terms])
+    # A pick carries no promotion id; the search term is its identity.
+    terms += [PlanTerm(p.term, p.quantity, "deal", None) for p in picks]
     return RefillPlan(store=store, terms=terms, deals=picks)
 
 

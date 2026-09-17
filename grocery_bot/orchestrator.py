@@ -11,6 +11,7 @@ import json
 
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Callable
 
 from . import dealfill
@@ -56,9 +57,20 @@ def run_order_cycle(
         except Exception:
             logger.exception("Progress callback failed; continuing the cycle")
 
+    from .models import PlanTerm
+
     started = time.monotonic()
     base_items = storage.list_active_base_items()
     adhoc_items = storage.list_pending_adhoc()
+
+    # The run and its needs, registered before any store is touched. Base
+    # and ad-hoc identities are store-independent by construction; a deal
+    # pick is chain-specific and keyed on its term.
+    run_id = storage.start_cart_run("cycle")
+    item_ids = storage.add_run_items(run_id, [
+        *[PlanTerm(b.name, b.default_quantity, "base", str(b.id)) for b in base_items],
+        *[PlanTerm(a.text, a.quantity, "adhoc", str(a.id)) for a in adhoc_items],
+    ])
 
     reports: dict[str, OrderCycleReport] = {}
     # An ad-hoc request is only used up once some store actually managed
@@ -121,6 +133,7 @@ def run_order_cycle(
                     result.amount = base_item.amount
                     result.unit = base_item.unit
                 report.record(result)
+                _record_attempt(storage, run_id, item_ids.get(("base", str(base_item.id))), store, result)
                 done += 1
                 _progress(done, total_items, result)
 
@@ -131,6 +144,7 @@ def run_order_cycle(
                 )
                 result.requested_by = adhoc.requested_by
                 report.record(result)
+                _record_attempt(storage, run_id, item_ids.get(("adhoc", str(adhoc.id))), store, result)
                 # Only a request that actually reached the cart is done
                 # with. "not_found" used to count as resolved, which meant
                 # the household was told "נוסף לרשימה", the cycle quietly
@@ -165,6 +179,10 @@ def run_order_cycle(
                 if result.status == "added":
                     result.deal = pick.label
                 report.record(result)
+                # Deals are registered lazily: they are chosen per store,
+                # inside the loop, so they cannot be listed up front.
+                deal_ids = storage.add_run_items(run_id, [PlanTerm(pick.term, pick.quantity, "deal", None)])
+                _record_attempt(storage, run_id, next(iter(deal_ids.values()), None), store, result)
                 done += 1
                 _progress(done, total_items, result)
 
@@ -179,7 +197,8 @@ def run_order_cycle(
     # failed to send on a real order — leaving no way at all to answer
     # "what did it add, and why". A record on disk survives a bad send.
     record_deals(storage, reports)
-    _log_run("cycle", started, reports)
+    _finish_run(storage, run_id)
+    _log_run("cycle", started, reports, run_id)
     return reports
 
 
@@ -283,7 +302,7 @@ class CartGuard:
         return ""
 
 
-def _log_run(kind: str, started: float, reports: dict) -> None:
+def _log_run(kind: str, started: float, reports: dict, run_id: int | None = None) -> None:
     """One journal line per cart run, per store.
 
     Phase 0 instrumentation (2026-09-17). Before this the journal held no
@@ -304,8 +323,9 @@ def _log_run(kind: str, started: float, reports: dict) -> None:
                    for m in INFRASTRUCTURE_MARKERS)
         )
         logger.info(
-            "RUN kind=%s store=%s requested=%d added=%d ambiguous=%d not_found=%d "
+            "RUN run=%s kind=%s store=%s requested=%d added=%d ambiguous=%d not_found=%d "
             "errors=%d skipped=%d infra=%d elapsed_s=%.0f",
+            run_id if run_id is not None else "-",
             kind, store, requested, len(report.added), len(report.ambiguous),
             len(report.not_found), len(report.errors),
             len(getattr(report, "skipped", []) or []), infra, elapsed,
@@ -362,12 +382,82 @@ def _remember_failures(storage: Storage, report) -> None:
         logger.exception("Could not record cart failures; the cycle itself is unaffected")
 
 
+def _outcome_for(result) -> tuple[str, str, str]:
+    """(outcome, failure_kind, evidence) for a run item, from one add result.
+
+    Phase 1 vocabulary. `added` stays `added` until Phase 2 splits it into
+    verified/unverified on real evidence — recording it as verified here
+    would be the exact lie this build exists to remove.
+    """
+    status = getattr(result, "status", "") or ""
+    detail = (getattr(result, "detail", "") or "")[:160]
+    low = detail.lower()
+    if status == "added":
+        return "added", "", detail
+    if status == "ambiguous":
+        return "unresolved_ambiguity", "ambiguous", f"{len(getattr(result, 'candidates', []) or [])} candidates"
+    if status == "skipped":
+        return "skipped", "", detail
+    if status == "not_found":
+        return "failed_product", "product", detail
+    # error
+    if "session expired" in low or "browser has been closed" in low:
+        return "failed_session", "session", detail
+    if any(m.lower() in low for m in INFRASTRUCTURE_MARKERS):
+        return "failed_infra", "infrastructure", detail
+    return "failed_product", "product", detail
+
+
+def _record_attempt(storage: Storage, run_id: int, item_id: int | None, store: str, result) -> None:
+    """Write the item's current state and one journal line for the attempt.
+
+    Attempt *history* lives in the journal, not in a table: one line per
+    attempt carrying run, item, store, product, result, kind and evidence,
+    timestamped by journald and greppable by run id. Inspected before
+    deciding (Phase 1): that is every field an attempts table would hold,
+    and the run item keeps the current authoritative state.
+    """
+    outcome, kind, evidence = _outcome_for(result)
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    logger.info(
+        "ATTEMPT run=%s item=%s store=%s term=%r status=%s outcome=%s kind=%s "
+        "product=%s evidence=%r",
+        run_id, item_id, store, (getattr(result, "item_name", "") or "")[:40],
+        getattr(result, "status", ""), outcome, kind or "-",
+        getattr(result, "product_code", "") or "-", evidence[:80],
+    )
+    if item_id is None:
+        return
+    try:
+        storage.update_run_item(
+            item_id, store=store, outcome=outcome, failure_kind=kind,
+            evidence=evidence, attempted_at=now,
+            product_code=getattr(result, "product_code", "") or "",
+        )
+    except Exception:  # noqa: BLE001 - bookkeeping must not kill a fill
+        logger.exception("Could not update run item %s", item_id)
+
+
+def _finish_run(storage: Storage, run_id: int) -> str:
+    """Close the run with the only status Phase 1 can justify.
+
+    `completed` if every item reached a terminal outcome, `interrupted`
+    if any is still pending. The unverified variant is Phase 2's.
+    """
+    counts = storage.run_counts(run_id)
+    status = "interrupted" if counts.get("pending") else "completed"
+    storage.finish_cart_run(run_id, status)
+    return status
+
+
 def add_terms_to_cart(
     storage: Storage,
     adapter_factories: dict[str, AdapterFactory],
-    terms: list[tuple[str, int]],
+    terms: list,
     on_progress=None,
     guard_cart: bool = False,
+    run_id: int | None = None,
+    trigger: str = "terms",
 ) -> dict[str, OrderCycleReport]:
     """Put specific items straight into the real cart.
 
@@ -385,7 +475,21 @@ def add_terms_to_cart(
     bot that answered "it was removed" would be refusing an instruction
     by citing the instruction it was given earlier.
     """
+    from .models import PlanTerm
+
     started = time.monotonic()
+    # Legacy tuples become free-form needs; PlanTerms keep their source.
+    plan_terms = [PlanTerm.coerce(t) for t in (terms or [])]
+    owns_run = run_id is None
+    if owns_run:
+        run_id = storage.start_cart_run(trigger)
+    item_ids = storage.add_run_items(run_id, plan_terms)
+
+    def _item_id(pt: PlanTerm) -> int | None:
+        from .storage import normalize_term
+        sid = pt.source_id if pt.source_id is not None else normalize_term(pt.term)
+        return item_ids.get((pt.source_kind, str(sid)))
+
     reports: dict[str, OrderCycleReport] = {}
     for store, make_adapter in adapter_factories.items():
         report = OrderCycleReport(store=store)
@@ -404,21 +508,24 @@ def add_terms_to_cart(
                 reports[store] = report
                 continue
 
-            prematched = _prefetch_matches(adapter, storage, store, [t for t, _ in terms])
+            prematched = _prefetch_matches(adapter, storage, store, [t.term for t in plan_terms])
             guard = CartGuard.read(storage, adapter, store) if guard_cart else CartGuard.empty()
-            for index, (term, quantity) in enumerate(terms, start=1):
+            for index, pt in enumerate(plan_terms, start=1):
                 result = _add_one(
-                    storage, adapter, store, term, quantity, prematched, guard
+                    storage, adapter, store, pt.term, int(pt.quantity or 1), prematched, guard
                 )
                 report.record(result)
+                _record_attempt(storage, run_id, _item_id(pt), store, result)
                 if on_progress is not None:
                     try:
-                        on_progress(index, len(terms), result)
+                        on_progress(index, len(plan_terms), result)
                     except Exception:
                         logger.exception("Progress callback failed; continuing")
         _remember_failures(storage, report)
         reports[store] = report
-    _log_run("terms", started, reports)
+    if owns_run:
+        _finish_run(storage, run_id)
+    _log_run("terms", started, reports, run_id)
     return reports
 
 

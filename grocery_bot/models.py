@@ -70,6 +70,44 @@ class AdHocRequest:
         return f"{line} ({self.brand})" if self.brand else line
 
 
+@dataclass(frozen=True)
+class PlanTerm:
+    """One household need on its way into a cart, with where it came from.
+
+    Replaces the bare ``(term, quantity)`` tuple that every fill source
+    used to hand to the orchestrator. Phase 1 of the reliability build,
+    2026-09-17: three of five sources — standing/stock, base list, deals
+    — had the originating id in hand and discarded it one line before
+    building the tuple, which is why "was this request bought" was later
+    answered by comparing request text to product name and got 17 of 21
+    wrong.
+
+    Identity is the **household intent**, never the retailer: the same
+    ``PlanTerm`` may be attempted at two chains and is still one need.
+    ``source_kind`` ∈ adhoc | base | stock | deal | freeform; ``source_id``
+    is the row id (adhoc, base), the product code (stock), or ``None``
+    for deals and free text — the store fills those from the normalised
+    term when the run item is created (see ``storage.normalize_term``).
+    """
+
+    term: str
+    quantity: int = 1
+    source_kind: str = "freeform"
+    source_id: str | None = None
+
+    @classmethod
+    def coerce(cls, value) -> "PlanTerm":
+        """Accept a legacy ``(term, quantity)`` tuple or a PlanTerm.
+
+        Kept so the CLI and any older caller keep working unchanged; a
+        tuple is a free-form need with no source row.
+        """
+        if isinstance(value, cls):
+            return value
+        term, quantity = value
+        return cls(term=str(term), quantity=int(quantity or 1))
+
+
 @dataclass
 class CartAddResult:
     """Outcome of trying to add a single item to a single store's cart."""

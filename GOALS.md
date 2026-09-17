@@ -663,6 +663,32 @@
   **Rollback:** כל השינוי אדיטיבי — שדה `backend` שאף handler לא קורא, שתי שורות
   לוג, ועמודת barcode שהייתה קיימת וריקה. הגיבוי הידני מאפשר שחזור מלא.
 
+- **2026-09-17 — Phase 1: ריצות קנייה עמידות (`cart_runs` + `run_items`), וזהות מקור
+  שלא נזרקת יותר.**
+  **מה השתנה:** שתי טבלאות חדשות. `cart_runs(id, trigger, started_at, finished_at,
+  status)` — ה-trigger הוא המקור ואינו משתנה ב-resume. `run_items` — צורך אחד של
+  המשפחה בריצה; **הזהות היא הכוונה, לא הרשת**: `UNIQUE(run_id, source_kind, source_id)`,
+  ו-`store`/`product_code` הן תכונות של הפתרון. `source_kind ∈ adhoc|base|stock|deal|freeform`;
+  ל-freeform ה-`source_id` הוא `normalize_term(term)` (קיפול גרשיים + כיווץ רווחים —
+  אותה נורמליזציה שתשמש את `product_rejections` בשלב 5).
+  **`RefillPlan.terms` כבר לא `list[tuple[str,int]]`** אלא `list[PlanTerm]` עם
+  `(term, quantity, source_kind, source_id)`. שלושת המקומות שזרקו מזהה שהיה ביד —
+  stock (`product_code`), base (`row id`), deal — שומרים אותו עכשיו. `PlanTerm.coerce`
+  מקבל tuple ישן, אז ה-CLI ממשיך לעבוד.
+  **צריכה נקבעת מהריצה:** `watch_list` קורא `run_outcomes(run_id)` במקום להשוות
+  טקסט בקשה לשם מוצר — ההשוואה שהשאירה 17 מ-21 פריטים "ממתינים" אחרי שנחתו.
+  **היסטוריית ניסיונות — ביומן, לא בטבלה.** נבדק לפני ההחלטה: שורת
+  `ATTEMPT run= item= store= term= status= outcome= kind= product= evidence=` לכל
+  ניסיון, עם חותמת journald, ניתנת ל-grep לפי run. זה כל שדה שטבלת attempts הייתה
+  מחזיקה; ה-run_item שומר את המצב הסמכותי הנוכחי. לא נוספה טבלה.
+  **אוצר מילים של שלב 1:** `added` נשאר `added` — הפיצול ל-verified/unverified הוא
+  של שלב 2 על ראיות אמיתיות; לרשום verified כאן היה בדיוק השקר שהבנייה הזו באה
+  להסיר. `failed_infra`/`failed_session`/`failed_product` מסווגים כבר עכשיו.
+  **באג שנתפס:** `_record_attempt` השתמש ב-`datetime.now(timezone.utc)` בלי import
+  — 34 שגיאות בטסטים הממוקדים, תוקן לפני הקומיט.
+  **Rollback:** אדיטיבי. שתי טבלאות שאפשר להפיל; `add_terms_to_cart` מקבל גם tuples;
+  אם `run_id` לא הועבר הפונקציה פותחת וסוגרת ריצה בעצמה.
+
 ## למי זה מיועד
 שני משתמשים: אני ולירן. לא מוצר להפצה, כלי אישי.
 
