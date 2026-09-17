@@ -10,6 +10,7 @@ browser, so each is built with `__new__` and given a stub page.
 """
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from grocery_bot.adapters.tivtaam import TivTaamAdapter
@@ -211,3 +212,81 @@ class GuardOnUnreadableCartTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ShufersalCartSettleTests(unittest.TestCase):
+    """The cart page renders its lines 10–25s after load, after a discount pass.
+
+    Measured live 2026-09-17: 0 articles at t+10s, 100 at t+25s, on a
+    ~130-line cart. The old 15s selector wait expired inside that window.
+    """
+
+    class _SettlingPage:
+        """Body says "מחשבים" for `computing_polls` reads, then shows the total."""
+
+        def __init__(self, computing_polls, articles=3):
+            self.computing_polls = computing_polls
+            self.reads = 0
+            self.articles = articles
+
+        def goto(self, *a, **k): return None
+        def wait_for_timeout(self, ms): return None
+        def wait_for_selector(self, *a, **k): return None
+
+        def inner_text(self, sel):
+            self.reads += 1
+            # None means the page never finishes computing. A large
+            # finite number is not "never": with a no-op sleep the settle
+            # loop makes millions of reads inside a one-second budget.
+            if self.computing_polls is None or self.reads <= self.computing_polls:
+                return "מחשבים את ההנחות..."
+            return "סה\"כ לתשלום 1,848.63 ₪"
+
+        def eval_on_selector_all(self, *a, **k):
+            return [{"code": f"P_{i}", "qty": "1", "name": f"מוצר {i}"} for i in range(self.articles)]
+
+        def locator(self, sel):
+            return _Locator(0)
+
+    def _adapter(self, page):
+        ad = ShufersalAdapter.__new__(ShufersalAdapter)
+        ad._page = page
+        return ad
+
+    def test_lines_are_read_once_the_discount_pass_ends(self):
+        from grocery_bot.adapters import shufersal as S
+        ad = self._adapter(self._SettlingPage(computing_polls=3))
+        with mock.patch.object(S, "CART_SETTLE_SECONDS", 5):
+            s = ad.cart_summary()
+        self.assertTrue(s["ok"])
+        self.assertEqual(len(s["items"]), 3)
+        self.assertTrue(s["complete"])
+
+    def test_a_page_that_never_settles_is_a_failed_read(self):
+        from grocery_bot.adapters import shufersal as S
+        ad = self._adapter(self._SettlingPage(computing_polls=None))
+        with mock.patch.object(S, "CART_SETTLE_SECONDS", 1), \
+             mock.patch.object(S, "CART_SETTLE_POLL_MS", 10):
+            s = ad.cart_summary()
+        self.assertFalse(s["ok"])
+        self.assertEqual(s["read"], "failed")
+
+    def test_a_read_at_the_page_cap_is_marked_partial(self):
+        from grocery_bot.adapters import shufersal as S
+        ad = self._adapter(self._SettlingPage(computing_polls=0, articles=S.CART_PAGE_SIZE))
+        with mock.patch.object(S, "CART_SETTLE_SECONDS", 5):
+            s = ad.cart_summary()
+        self.assertTrue(s["ok"])
+        self.assertFalse(s["complete"])
+
+
+class PresenceOnPartialReadTests(unittest.TestCase):
+    def test_absent_from_a_partial_read_is_unknown(self):
+        from grocery_bot.orchestrator import presence_check
+
+        class Partial:
+            def cart_summary(self):
+                return {"ok": True, "complete": False,
+                        "items": [{"code": "P_1", "name": "חלב"}], "total": 1848.63}
+        self.assertEqual(presence_check(Partial(), "shufersal", "P_999", "טחינה"), "unknown")
+        self.assertEqual(presence_check(Partial(), "shufersal", "P_1", "חלב"), "present")

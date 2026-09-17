@@ -13,7 +13,7 @@ import logging
 import time
 from datetime import datetime, timezone
 
-from . import breaker
+from . import breaker, identity
 from typing import Callable
 
 from . import dealfill
@@ -565,6 +565,11 @@ def presence_check(adapter, store: str, product_code: str, name: str) -> str:
     # no names, so "absent" cannot be positively established from them.
     if items and all(not (i.get("name") or "").strip() for i in items):
         return "unknown"
+    # A partial read — Shufersal's page shows 100 lines of a longer cart
+    # — can say "present" but never "absent": the item may be on the
+    # part of the cart nobody rendered.
+    if summary.get("complete") is False:
+        return "unknown"
     return "absent"
 
 
@@ -700,11 +705,12 @@ def add_terms_to_cart(
                         ))
                         continue
                     # absent → fall through and add
+                ident = identity.resolve(storage, store, pt)
                 result, alive = _attempt(
                     brk, adapter,
-                    lambda pt=pt: _add_one(
+                    lambda pt=pt, ident=ident: _add_one(
                         storage, adapter, store, pt.term, int(pt.quantity or 1),
-                        prematched, guard,
+                        prematched, guard, identity=ident,
                     ),
                 )
                 report.record(result)
@@ -759,6 +765,7 @@ def _add_one(
     quantity: int,
     prematched: dict | None = None,
     guard: "CartGuard | None" = None,
+    identity=None,
 ):
     """Add one term, honouring a previously remembered product choice.
 
@@ -811,6 +818,30 @@ def _add_one(
 
     # A bulk-matched hit skips the search entirely: we already have the
     # product code, so this is a direct add rather than a page load.
+    # Phase 6: a deterministic identity, resolved from the feed by
+    # barcode (or the retailer's own code) before the browser is asked to
+    # guess. Ranked below a remembered human/purchase choice and above
+    # the bulk matcher and free search. On a miss it falls through — the
+    # name path is the fallback, not the competitor.
+    if identity is not None:
+        blocked = guard.blocks(identity.product_code, identity.name)
+        if blocked:
+            return CartAddResult(
+                item_name=term, store=store, status="skipped", detail=blocked,
+                product_code=identity.product_code,
+            )
+        result = adapter.add_specific_product(
+            identity.name, quantity, product_code=identity.product_code,
+            search_term=identity.name,
+        )
+        if result.status != "not_found":
+            result.auto_resolved = f"identity:{identity.basis}"
+            if not result.product_code:
+                result.product_code = identity.product_code
+            return result
+        logger.info("Identity %s for %r did not resolve at %s; falling back to name path",
+                    identity.basis, term[:30], store)
+
     hit = (prematched or {}).get(term)
     if hit and hit.get("code"):
         blocked = guard.blocks(hit["code"], hit.get("name") or "")

@@ -34,6 +34,7 @@ purchasable` reads "false" for anonymous visitors.
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 from urllib.parse import quote
 
@@ -93,6 +94,15 @@ QUANTITY_INPUT_SELECTOR = "input.js-qty-selector-input"
 # gated by responsive CSS and neither is ever actually clickable — this
 # per-item (×) button, scoped to one product's article, is what works.
 CART_LINE_ITEM_SELECTOR = 'article[data-product-code="{code}"]'
+
+# The cart page's discount pass ("מחשבים את ההנחות") delays every line
+# item and the payable total. Measured 2026-09-17 on a ~130-line cart:
+# nothing at 10s, everything at 25s. Sixty seconds is generous on
+# purpose — a cart read that gives up early is the lie this project has
+# already been caught by. The page also renders at most 100 lines.
+CART_SETTLE_SECONDS = 60
+CART_SETTLE_POLL_MS = 1_500
+CART_PAGE_SIZE = 100
 CART_ITEM_REMOVE_SELECTOR = 'a[data-miglog-role="cart-item-remover"]'
 # Results render client-side, so the tiles must be waited for explicitly.
 RESULTS_TIMEOUT_MS = 30_000
@@ -277,6 +287,27 @@ class ShufersalAdapter(StoreAdapter):
                 quantity=quantity,
             )
 
+    def _wait_cart_settled(self, seconds: int | None = None) -> bool:
+        """Wait for the cart page's discount computation to finish.
+
+        True once the "מחשבים" banner is gone and the payable total is
+        on the page; False when that never happens within the budget.
+        Polled on the body text because the line items and the total
+        both appear only after this pass, and there is no single element
+        whose presence marks the end of it.
+        """
+        budget = seconds or CART_SETTLE_SECONDS
+        deadline = time.monotonic() + budget
+        while time.monotonic() < deadline:
+            try:
+                body = self._page.inner_text("body")
+            except Exception:
+                body = ""
+            if body and "מחשבים" not in body and "לתשלום" in body:
+                return True
+            self._page.wait_for_timeout(CART_SETTLE_POLL_MS)
+        return False
+
     def remove_item(self, product_code: str) -> bool:
         """Remove one line item from the real cart by product code.
 
@@ -287,6 +318,9 @@ class ShufersalAdapter(StoreAdapter):
         """
         try:
             self._page.goto(CART_URL, wait_until="domcontentloaded", timeout=30_000)
+            # Same render delay as cart_summary: the article is not in the
+            # DOM until the discount pass ends, up to ~25s after load.
+            self._wait_cart_settled()
             article = self._page.locator(CART_LINE_ITEM_SELECTOR.format(code=product_code))
             # The cart page renders its line items after an async discount
             # computation ("מחשבים את ההנחות..."); domcontentloaded fires
@@ -429,9 +463,21 @@ class ShufersalAdapter(StoreAdapter):
         """
         try:
             self._page.goto(CART_URL, wait_until="domcontentloaded", timeout=30_000)
+            # Measured live 2026-09-17 on a ~130-line cart: line items
+            # render between 10 and 25 seconds after domcontentloaded,
+            # once the page's "מחשבים את ההנחות" pass finishes. The old
+            # 15-second selector wait expired inside that window, so the
+            # reader returned zero lines beside a mid-computation total —
+            # ₪1,831.83 on one read, ₪1,848.63 thirty seconds later. Wait
+            # for the computation to end, and say so when it does not.
+            settled = self._wait_cart_settled()
+            if not settled:
+                logger.warning("Shufersal: cart still computing after %ss", CART_SETTLE_SECONDS)
+                return {"ok": False, "items": [], "total": None, "url": CART_URL,
+                        "read": "failed", "complete": False}
             try:
                 self._page.wait_for_selector(
-                    'article[data-product-code]', timeout=15_000
+                    'article[data-product-code]', timeout=10_000
                 )
             except Exception:
                 pass  # an empty cart legitimately has no line items
@@ -472,12 +518,21 @@ class ShufersalAdapter(StoreAdapter):
             if not items and (total or 0) > 0:
                 logger.warning("Shufersal: cart read inconsistent (0 lines, total %s)", total)
                 return {"ok": False, "items": [], "total": total, "url": CART_URL,
-                        "read": "failed"}
+                        "read": "failed", "complete": False}
+            # The page shows at most CART_PAGE_SIZE lines. Exactly that
+            # many means there may be more we cannot see, and "not in this
+            # list" must then not be read as "not in the cart".
+            complete = len(items) < CART_PAGE_SIZE
+            if not complete:
+                logger.info("Shufersal: cart page at its %d-line cap; read is partial", CART_PAGE_SIZE)
             return {"ok": True, "items": items, "total": total, "url": CART_URL,
-                    "read": "verified"}
+                    "read": "verified", "complete": complete}
         except Exception:
             logger.exception("Shufersal: could not read the cart")
-            return {"ok": False, "items": [], "total": None, "url": CART_URL}
+            # An exception is a failed read, and says so — never a bare
+            # False that a caller could mistake for "nothing there".
+            return {"ok": False, "items": [], "total": None, "url": CART_URL,
+                    "read": "failed", "complete": False}
 
     def close(self) -> None:
         try:
