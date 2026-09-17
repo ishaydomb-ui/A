@@ -105,3 +105,19 @@ class TheSeamTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ToolAllowlistTests(unittest.TestCase):
+    """The mapping is the allowlist: an unmapped tool is never run.
+
+    Pinned 2026-09-17 (Phase 9 safety review) so that mapping a cart
+    tool or a forbidden name onto an intent cannot happen quietly.
+    """
+
+    def test_no_cart_tool_is_mapped_to_an_intent(self):
+        self.assertEqual(set(hybrid.TOOL_TO_INTENT) & hybrid.CART_TOOLS, set())
+
+    def test_no_forbidden_name_is_mapped_or_catalogued(self):
+        from grocery_bot import planner
+        self.assertEqual(set(hybrid.TOOL_TO_INTENT) & planner.FORBIDDEN, set())
+        self.assertEqual(set(planner.TOOLS) & planner.FORBIDDEN, set())

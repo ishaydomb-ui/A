@@ -53,29 +53,22 @@ CART_SUMMARY_SELECTOR = "[ng-click*='toggleCart'], .summary.clean-cart-button"
 # The cart header is identified by its own wording, not by position. A
 # bare `.first` over the selector above picks whichever candidate comes
 # first in the DOM, which is not always the cart — and when it picked
-# another one, the count read 0 with a full cart. That made `clear_cart`
-# report success on a cart it had not emptied, and made a successful add
-# report "the click did not change the cart".
+# another one, the count read 0 with a full cart, which made a successful
+# add report "the click did not change the cart".
 CART_SUMMARY_MARKERS = ("בעגלה", "סך הכל")
 # Per-line remove, from the panel's own markup:
 # ng-click="...announceCartLineRemoved(line); $root.cart.removeLine(line)"
+# Not wired to anything since 2026-09-17: `clear_cart` (the only caller,
+# itself never called) was removed in the Phase 9 safety review — the
+# bot has no business emptying the household's cart. The selector stays
+# as the seed for a verified per-line `remove_item`, which Tiv Taam
+# replace ("X במקום Y") will need.
 CART_LINE_REMOVE_SELECTOR = "button.delete.hover-action"
-# The panel's broom, ng-click="...sideNavCtrl.clearCart()". Kept for
-# reference: clicking it did *not* empty the cart in testing, so
-# `clear_cart` removes line by line instead.
-CART_CLEAR_SELECTOR = ".clean-cart-icon"
 CART_TOGGLE_SELECTOR = ".toggle-cart, .cart-icon"
-# A guard on the removal loop, not a cart-size limit. An unbounded
-# "until the cart is empty" loop cannot tell "not finished" from "never
-# going to finish" — the same trap that once waited 23 hours for a file.
-MAX_CART_LINES_TO_CLEAR = 60
 # The header count lags the click by a second or two, so an add is
 # verified by polling rather than by one read after a fixed sleep.
 ADD_VERIFY_POLLS = 6
 ADD_VERIFY_POLL_MS = 2000
-# Clearing reloads and re-opens the panel between rounds; the list
-# re-renders as lines go, and one pass stopped after the first item.
-CLEAR_ROUNDS = 5
 PANEL_RENDER_POLLS = 6
 
 # Cookie consent sits over the page and silently eats the first click on
@@ -535,8 +528,8 @@ class TivTaamAdapter(StoreAdapter):
 
         try:
             # Load fresh rather than trusting whatever this adapter was
-            # last looking at: a summary taken after a `clear_cart`
-            # otherwise reported the pre-clear total from a stale DOM.
+            # last looking at: a summary read after line removals once
+            # reported the pre-removal total from a stale DOM.
             self._reopen()
             text = self._summary_text()
             if text is None:
@@ -599,60 +592,6 @@ class TivTaamAdapter(StoreAdapter):
         except Exception:
             logger.debug("Tiv Taam: cart panel would not open", exc_info=True)
             return []
-
-    def clear_cart(self) -> bool:
-        """Empty the cart, and verify it actually emptied.
-
-        Added 2026-09-02. HANDOFF claimed "search, add, verify, clear" was
-        verified against the real account, but no clear method existed
-        here — whatever clearing happened that day was done by hand. The
-        control is the panel's own broom (`sideNavCtrl.clearCart()`).
-
-        Returns False rather than raising if the cart could not be
-        emptied, and never reports success on a click alone: the count is
-        read back, because a click that silently does nothing is the
-        failure mode this adapter already guards against on the way in.
-        """
-        try:
-            # Each round reloads the site and re-opens the panel before
-            # touching anything. That outer reload is what made this work:
-            # removing a line re-renders the list, and continuing to click
-            # into a half-updated panel silently stopped after the first
-            # item while reporting the cart empty.
-            for _ in range(CLEAR_ROUNDS):
-                self._reopen()
-                if not self._page.locator(".product-in-cart").count():
-                    return True
-                if not self._open_cart_panel():
-                    continue
-
-                # Per-line removal rather than the panel's broom
-                # (`sideNavCtrl.clearCart()`). The broom was tried first
-                # and did not empty the cart; each line's own delete
-                # button did. Re-reading the buttons every iteration
-                # matters — the list re-renders, so a locator captured up
-                # front goes stale.
-                for _ in range(MAX_CART_LINES_TO_CLEAR):
-                    buttons = self._page.locator(CART_LINE_REMOVE_SELECTOR)
-                    if not buttons.count():
-                        break
-                    try:
-                        buttons.first.click(timeout=8_000)
-                    except Exception:
-                        break
-                    self._page.wait_for_timeout(3_500)
-
-            # Verify on the line elements, not on the header count. The
-            # header read 0 on a cart that still held an item, which made
-            # an earlier version of this method report success on a cart
-            # it had not emptied — the worst possible lie for a method
-            # whose whole job is leaving the household's cart as it found
-            # it. A line element is the item itself.
-            self._reopen()
-            return not self._page.locator(".product-in-cart").count()
-        except Exception:
-            logger.exception("Tiv Taam: could not clear the cart")
-            return False
 
     def _open_cart_panel(self) -> bool:
         """Make the cart panel actually render. False if it would not.

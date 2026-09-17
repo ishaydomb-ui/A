@@ -179,19 +179,12 @@ class CartSummaryContractTest(unittest.TestCase):
         summary = adapter.cart_summary()
         self.assertEqual(len(summary["items"]), 2)
 
-    def test_clear_cart_verifies_on_lines_not_on_the_header_count(self):
-        # An earlier version trusted the header, which read 0 on a cart
-        # that still held an item — so it reported success on a cart it
-        # had not emptied. For a method whose whole job is putting the
-        # household's cart back as it found it, that is the worst
-        # available failure.
-        adapter = self._adapter()
-        adapter._open_cart_panel = mock.MagicMock(return_value=True)
-        adapter._cart_count = mock.MagicMock(return_value=0)
-        still_there = mock.MagicMock()
-        still_there.count.return_value = 1
-        adapter._page.locator.return_value = still_there
-        self.assertFalse(adapter.clear_cart())
+    def test_there_is_no_way_to_empty_the_household_cart(self):
+        # `clear_cart` was removed 2026-09-17 (Phase 9 safety review): no
+        # code path called it, and emptying a household's whole cart is
+        # not a cart-preparation operation. A per-line remover may come
+        # back, verified live, when Tiv Taam replace needs it.
+        self.assertFalse(hasattr(self._adapter(), "clear_cart"))
 
     # No checkout guard here on purpose: `SafetyTest` above already does
     # it properly, parsing the module and stripping docstrings first —
