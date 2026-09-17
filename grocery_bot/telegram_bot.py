@@ -2664,6 +2664,57 @@ class GroceryBot:
         return
 
 
+    async def resume_runs(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Pick up any cart run the previous process left `running`. Phase 7.
+
+        A deploy cannot interrupt a fill — `scripts/refresh_bot.sh` refuses
+        while a child browser is active — so this exists for the other
+        endings: crash, OOM, a manual kill, an unexpected restart. Before
+        this, nothing looked for an interrupted run on startup, and the
+        six-hour cooldown the run had set for the list watcher then
+        blocked the only path that might have retried it.
+
+        One shot, on the existing job queue, 30s after start. Each open
+        run is marked `interrupted` and resumed under its **own id**:
+        items already verified are untouched, and an add that was sent
+        but never confirmed is presence-checked before any replay
+        (orchestrator.resume_run). The run's trigger is not changed.
+        """
+        from .orchestrator import resume_run
+
+        open_runs = await asyncio.to_thread(self.storage.running_cart_runs)
+        if not open_runs:
+            return
+        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy)
+        if not status.available:
+            logger.warning("RESUME: %d open run(s) but no Israeli exit; leaving them interrupted",
+                           len(open_runs))
+            for run in open_runs:
+                await asyncio.to_thread(self.storage.mark_cart_run, run["id"], "interrupted")
+            return
+        factories = _build_adapter_factories(self.config)
+        if not factories:
+            return
+        chat_id = self.storage.get_state("digest_chat_id")
+        for run in open_runs:
+            run_id = run["id"]
+            logger.warning("RESUME run=%s trigger=%s left %s by a previous process; resuming",
+                           run_id, run["trigger"], run["status"])
+            await asyncio.to_thread(self.storage.mark_cart_run, run_id, "interrupted")
+            try:
+                reports = await asyncio.to_thread(
+                    resume_run, self.storage, factories, run_id, self.config.playwright_proxy,
+                )
+            except Exception:
+                logger.exception("RESUME run=%s failed", run_id)
+                await asyncio.to_thread(self.storage.mark_cart_run, run_id, "interrupted")
+                continue
+            if chat_id and reports:
+                summary, markup = self._store_cycle_summary(reports)
+                await _send_html(context, int(chat_id),
+                                 summary or "המשכתי ריצה שנקטעה; לא היה מה להוסיף.",
+                                 reply_markup=markup)
+
     async def watch_list(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Tell the household what was added, then put it in the cart.
 
@@ -3214,6 +3265,10 @@ def build_application(config: Config, storage: Storage) -> Application:
             first=60,
             name="watch_list",
         )
+        # Phase 7: once, shortly after start — a run the previous process
+        # left `running` is resumed under its own id. Before the watcher's
+        # first tick on purpose, so its cooldown cannot shadow this.
+        application.job_queue.run_once(bot.resume_runs, when=30, name="resume_runs")
         import datetime as _dt
         import zoneinfo as _zi
 
