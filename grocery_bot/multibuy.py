@@ -178,26 +178,26 @@ def _promotions_for(storage, item_code: str) -> list[dict]:
 
 def format_offers(offers: list[MultiBuyOffer], limit: int = 8) -> str:
     """A Telegram summary of which "add & save" buttons are worth pressing."""
-    from .mdtext import escape
+    from .htmltext import bold, italic
 
     if not offers:
-        return "לא מצאתי מבצעי *הוסף וחסוך* ששווים את זה על מה שבסל."
+        return f"לא מצאתי מבצעי {bold('הוסף וחסוך')} ששווים את זה על מה שבסל."
 
-    lines = ["*הוסף וחסוך — מה באמת משתלם*", ""]
+    lines = [bold("הוסף וחסוך — מה באמת משתלם"), ""]
     for offer in offers[:limit]:
         keeps = {True: "🧺", False: "🥬", None: "•"}[offer.keeps]
         lines.append(
-            f"{keeps} *{escape(offer.name)}*\n"
-            f"   ₪{offer.regular_price:.2f} → *₪{offer.unit_price:.2f}* ליחידה "
+            f"{keeps} {bold(offer.name)}\n"
+            f"   ₪{offer.regular_price:.2f} → {bold(f'₪{offer.unit_price:.2f}')} ליחידה "
             f"(חיסכון ₪{offer.unit_saving:.2f}, {offer.saving_rate * 100:.0f}%)"
         )
         if offer.is_upsell:
-            lines.append(
-                f"   _צריך לקנות {offer.min_qty:.0f} — תוספת של "
-                f"₪{offer.extra_outlay:.2f} היום_"
-            )
+            lines.append(italic(
+                f"   צריך לקנות {offer.min_qty:.0f} — תוספת של "
+                f"₪{offer.extra_outlay:.2f} היום"
+            ))
         else:
-            lines.append("   _המחיר כבר מוזל, אין צורך להוסיף יחידות_")
+            lines.append(italic("   המחיר כבר מוזל, אין צורך להוסיף יחידות"))
     lines.append("")
-    lines.append("_🧺 נשמר במזווה · 🥬 מתקלקל — כדאי רק אם באמת ייאכל · • לא ידוע_")
+    lines.append(italic("🧺 נשמר במזווה · 🥬 מתקלקל — כדאי רק אם באמת ייאכל · • לא ידוע"))
     return "\n".join(lines)

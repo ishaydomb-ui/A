@@ -23,7 +23,7 @@ import datetime
 import logging
 
 from .catalog import find_cheaper_equivalents
-from .mdtext import escape as md
+from .htmltext import bold, escape as md, italic
 from .learn import ALL_CHAINS, days_since_last_order, typical_gap_days
 from .listbuilder import available_lists, build as build_list
 from .radar import find_stockup_deals
@@ -48,9 +48,9 @@ def compose(storage, store: str = "shufersal") -> tuple[str, str]:
     since = days_since_last_order(storage, ALL_CHAINS)
     gap = typical_gap_days(storage, ALL_CHAINS)
 
-    lines: list[str] = [f"🛒 *הגיע זמן קנייה* · {now.strftime('%d.%m')}"]
+    lines: list[str] = [f"🛒 {bold('הגיע זמן קנייה')} · {now.strftime('%d.%m')}"]
     if since is not None:
-        lines.append(f"_עברו {since:.0f} ימים מההזמנה האחרונה (הקצב שלכם ~{gap:.0f} ימים)._")
+        lines.append(italic(f"עברו {since:.0f} ימים מההזמנה האחרונה (הקצב שלכם ~{gap:.0f} ימים)."))
     lines.append("")
 
     # --- the list ---------------------------------------------------------
@@ -62,11 +62,11 @@ def compose(storage, store: str = "shufersal") -> tuple[str, str]:
     for row in spec.items:
         by_department[row["department"]] = by_department.get(row["department"], 0) + 1
     departments = " · ".join(f"{md(name)} {count}" for name, count in sorted(by_department.items(), key=lambda p: -p[1]))
-    lines.append(f"*הרשימה:* {len(spec.items)} מוצרים ({departments})")
+    lines.append(f"{bold('הרשימה:')} {len(spec.items)} מוצרים ({departments})")
 
     if requests:
         lines.append("")
-        lines.append("*בקשות אישיות:*")
+        lines.append(bold("בקשות אישיות:"))
         for item in requests:
             who = f" — 🙋 {md(item.requested_by)}" if item.requested_by else ""
             lines.append(f"• {md(item.text)}{who}")
@@ -75,12 +75,12 @@ def compose(storage, store: str = "shufersal") -> tuple[str, str]:
     deals = find_stockup_deals(storage, store)[:MAX_DEALS]
     if deals:
         lines.append("")
-        lines.append("*שווה לאגור השבוע:*")
+        lines.append(bold("שווה לאגור השבוע:"))
         for deal in deals:
             mark = "🧺 " if deal.pantryable else ""
             rarity = _rarity_note(storage, deal)
             lines.append(
-                f"• {mark}{md(deal.catalog_name)} — *{deal.deal_price:.2f}₪* "
+                f"• {mark}{md(deal.catalog_name)} — {bold(f'{deal.deal_price:.2f}₪')} "
                 f"(במקום {deal.shelf_price:.2f}) −{deal.discount * 100:.0f}%{rarity}"
             )
 
@@ -88,11 +88,11 @@ def compose(storage, store: str = "shufersal") -> tuple[str, str]:
     swaps = _swap_suggestions(storage, rows, store)
     if swaps:
         lines.append("")
-        lines.append("*זול יותר מהרגיל שלכם (לפי ₪ ליחידת מידה):*")
+        lines.append(bold("זול יותר מהרגיל שלכם (לפי ₪ ליחידת מידה):"))
         lines += swaps
 
     lines.append("")
-    lines.append("_להעתיק את ההודעה הבאה ל'הזמנה מהירה' באפליקציה, לסנן שם ולסיים._")
+    lines.append(italic("להעתיק את ההודעה הבאה ל'הזמנה מהירה' באפליקציה, לסנן שם ולסיים."))
 
     paste = "\n".join(row["product_name"] for row in spec.items)
     if requests:

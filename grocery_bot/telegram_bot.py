@@ -261,21 +261,21 @@ class GroceryBot:
             return
         await update.message.reply_text(
             "היי! פשוט דברו איתי רגיל, בלי פקודות. למשל:\n\n"
-            "• *תוסיף 300 גרם פסטרמה* — מוסיף לרשימה עם משקל\n"
-            "• *צריך טונה סטארקיסט 4 יחידות* — שומר גם את היצרן\n"
-            "• *תוריד את הטונה* — מוריד מהרשימה\n"
-            "• *מה יש ברשימה* — הרשימה המלאה והמעודכנת\n"
-            "• *כמה עולה קוטג* — מחיר נוכחי בסניף + מבצע אם יש (כולל ₪ לק\"ג)\n"
-            "• */cheaper שניצלונים* — יש חלופה זולה יותר ליחידת מידה?\n"
-            "• *מה יש במבצע* — מבצעים אמיתיים על מה שאתם קונים\n"
-            "• *מתכון לפאי תפוחים* — מפרק למצרכים ומוסיף לרשימה\n"
-            "• *תכנן לי תפריט שבועי* — 5 ארוחות + רשימת קניות מאוחדת\n\n"
-            "*רשימה מול סל:*\n"
-            "• *תוסיף X* — נכנס לרשימה שממתינה למחזור הבא\n"
-            "• *תוסיף X לעגלה* — נכנס עכשיו לסל האמיתי בשופרסל\n"
-            "• *מלא את העגלה* — מריץ מחזור מלא על כל מה שברשימה\n\n"
-            "_תמיד עוצר על סל מוכן — הבדיקה והתשלום נשארים אצלכם._",
-            parse_mode="Markdown",
+            "• <b>תוסיף 300 גרם פסטרמה</b> — מוסיף לרשימה עם משקל\n"
+            "• <b>צריך טונה סטארקיסט 4 יחידות</b> — שומר גם את היצרן\n"
+            "• <b>תוריד את הטונה</b> — מוריד מהרשימה\n"
+            "• <b>מה יש ברשימה</b> — הרשימה המלאה והמעודכנת\n"
+            "• <b>כמה עולה קוטג</b> — מחיר נוכחי בסניף + מבצע אם יש (כולל ₪ לק\"ג)\n"
+            "• <b>/cheaper שניצלונים</b> — יש חלופה זולה יותר ליחידת מידה?\n"
+            "• <b>מה יש במבצע</b> — מבצעים אמיתיים על מה שאתם קונים\n"
+            "• <b>מתכון לפאי תפוחים</b> — מפרק למצרכים ומוסיף לרשימה\n"
+            "• <b>תכנן לי תפריט שבועי</b> — 5 ארוחות + רשימת קניות מאוחדת\n\n"
+            "<b>רשימה מול סל:</b>\n"
+            "• <b>תוסיף X</b> — נכנס לרשימה שממתינה למחזור הבא\n"
+            "• <b>תוסיף X לעגלה</b> — נכנס עכשיו לסל האמיתי בשופרסל\n"
+            "• <b>מלא את העגלה</b> — מריץ מחזור מלא על כל מה שברשימה\n\n"
+            "<i>תמיד עוצר על סל מוכן — הבדיקה והתשלום נשארים אצלכם.</i>",
+            parse_mode="HTML",
         )
 
     async def list_base_items(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1099,8 +1099,8 @@ class GroceryBot:
         rows = self.storage.list_stock_items(store)
         if not rows:
             await update.message.reply_text(
-                "אין עדיין היסטוריה. הריצו `python -m grocery_bot.cli build-stock`.",
-                parse_mode="Markdown",
+                "אין עדיין היסטוריה. הריצו <code>python -m grocery_bot.cli build-stock</code>.",
+                parse_mode="HTML",
             )
             return
 
@@ -1109,12 +1109,12 @@ class GroceryBot:
         if wanted not in specs:
             await update.message.reply_text(
                 "איזו רשימה?\n"
-                "• `/list_full core` — ליבה 35%+\n"
-                "• `/list_full full` — מלאה 15%+\n"
-                "• `/list_full everything` — באמת הכל, בלי מה שלא נקנה שנה\n"
-                "• `/list_full fresh` — טרי בלבד\n"
-                "• `/list_full pantry` — מזווה ובית",
-                parse_mode="Markdown",
+                "• <code>/list_full core</code> — ליבה 35%+\n"
+                "• <code>/list_full full</code> — מלאה 15%+\n"
+                "• <code>/list_full everything</code> — באמת הכל, בלי מה שלא נקנה שנה\n"
+                "• <code>/list_full fresh</code> — טרי בלבד\n"
+                "• <code>/list_full pantry</code> — מזווה ובית",
+                parse_mode="HTML",
             )
             return
 
@@ -1125,15 +1125,17 @@ class GroceryBot:
 
         summary = summarise(spec)
         if requests:
+            from .htmltext import bold, escape as _esc
+
             # Named separately from the standing list: these are things a
             # person specifically asked for this week, and knowing which
             # of the two asked is exactly what distinguishes them from an
             # item that arrived off the frequency list or a promotion.
-            summary += "\n\n*בקשות אישיות שנוספו:*\n" + "\n".join(
-                f"• {item.text}" + (f" — 🙋 {item.requested_by}" if item.requested_by else "")
+            summary += "\n\n" + bold("בקשות אישיות שנוספו:") + "\n" + "\n".join(
+                f"• {_esc(item.text)}" + (f" — 🙋 {_esc(item.requested_by)}" if item.requested_by else "")
                 for item in requests
             )
-        await update.message.reply_text(summary, parse_mode="Markdown")
+        await update.message.reply_text(summary, parse_mode="HTML")
 
         body = as_paste_text(spec)
         if requests:
@@ -1144,12 +1146,14 @@ class GroceryBot:
         # Sent as its own bare message so it can be copied in one gesture;
         # anything else in it would be pasted into the box as a product.
         await update.message.reply_text(body)
+        from .htmltext import bold as _bold
+
         note = (
-            f"☝️ להעתיק ולהדביק ב*הזמנה מהירה* באפליקציה"
+            f"☝️ להעתיק ולהדביק ב{_bold('הזמנה מהירה')} באפליקציה"
             f"{f' (כולל {len(requests)} בקשות אישיות)' if requests else ''}.\n"
             "שופרסל תתאים מוצרים לפי ההיסטוריה שלכם, ואתם מסננים שם."
         )
-        await update.message.reply_text(note, parse_mode="Markdown")
+        await update.message.reply_text(note, parse_mode="HTML")
 
 
     async def cheaper(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1203,8 +1207,8 @@ class GroceryBot:
         if not stock:
             await update.message.reply_text(
                 "עדיין אין לי מספיק היסטוריה כדי להציע רשימה. "
-                "הריצו `python -m grocery_bot.cli import-history` בשרת.",
-                parse_mode="Markdown",
+                "הריצו <code>python -m grocery_bot.cli import-history</code> בשרת.",
+                parse_mode="HTML",
             )
             return
 
@@ -1233,7 +1237,7 @@ class GroceryBot:
         """One accordion panel instead of a message per department."""
         text, markup = self._panel(proposal_id, open_index=0)
         message = await context.bot.send_message(
-            chat_id=chat_id, text=text, parse_mode="Markdown", reply_markup=markup
+            chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=markup
         )
         # Pin the panel so "where is the process" is always one tap away.
         try:
@@ -1304,7 +1308,7 @@ class GroceryBot:
 
         text, markup = self._panel(proposal_id, open_index)
         try:
-            await query.edit_message_text(text=text, parse_mode="Markdown", reply_markup=markup)
+            await query.edit_message_text(text=text, parse_mode="HTML", reply_markup=markup)
         except Exception:
             # "Message is not modified" when a tap changed nothing visible —
             # harmless, the toast above already acknowledged it.
@@ -1385,7 +1389,7 @@ class GroceryBot:
             return
 
         await update.message.reply_text(
-            format_report_summary(reports) or "לא היה מה להוסיף.", parse_mode="Markdown"
+            format_report_summary(reports) or "לא היה מה להוסיף.", parse_mode="HTML"
         )
         carts = await asyncio.to_thread(self._read_carts, factories)
         await self._send_cart_state(update.effective_chat.id, context, reports, carts)
@@ -1396,7 +1400,7 @@ class GroceryBot:
         await context.bot.send_message(
             chat_id=chat_id,
             text=render_final_by_store(reports, carts),
-            parse_mode="Markdown",
+            parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(buttons),
         )
         # The ₪599 gift is Shufersal's, and DEFAULT_GIFT_THRESHOLD is its
@@ -1443,7 +1447,7 @@ class GroceryBot:
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=waste.question_text(item),
-                parse_mode="Markdown",
+                parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup([[
                     InlineKeyboardButton("הכל נאכל", callback_data="wst:0"),
                     InlineKeyboardButton("חלק נזרק", callback_data="wst:0.5"),
@@ -1496,7 +1500,7 @@ class GroceryBot:
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=prompt.text,
-                parse_mode="Markdown",
+                parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(
                     [[InlineKeyboardButton("✅ הטענתי", callback_data="cardok")]]
                 ),
@@ -1513,8 +1517,8 @@ class GroceryBot:
         await asyncio.to_thread(cardreminder.confirm, self.storage)
         await query.answer("נרשם")
         await query.edit_message_text(
-            "✅ *רשמתי שהטענת את הכרטיס החודש* — לא אשאל שוב עד החודש הבא.",
-            parse_mode="Markdown",
+            "✅ <b>רשמתי שהטענת את הכרטיס החודש</b> — לא אשאל שוב עד החודש הבא.",
+            parse_mode="HTML",
         )
 
     async def _send_threshold_check(self, chat_id, context, results, cart) -> None:
@@ -1552,7 +1556,7 @@ class GroceryBot:
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=threshold.format_check(result),
-                parse_mode="Markdown",
+                parse_mode="HTML",
             )
         except Exception:
             # Never let an advisory step break the hand-off: the cart is
@@ -1577,7 +1581,7 @@ class GroceryBot:
                 waste.record, self.storage, items, requested_by
             )
         await update.message.reply_text(
-            waste.acknowledge(items), parse_mode="Markdown"
+            waste.acknowledge(items), parse_mode="HTML"
         )
 
     async def _do_add(self, update, context, parsed, requested_by: str) -> None:
@@ -1601,14 +1605,16 @@ class GroceryBot:
             self.storage, subject=last.name, store=parsed.store,
             quantity=int(last.amount) if last.amount else 0, action="נוסף לרשימה",
         )
-        message = "נוסף לרשימה: " + ", ".join(added)
+        from .htmltext import escape as _esc, italic as _it
+
+        message = "נוסף לרשימה: " + ", ".join(_esc(a) for a in added)
         if parsed.used_fallback:
             # The rule-based fallback files anything it can't classify as an
             # item, so a whole sentence can land on the list looking like a
             # product. Say so instead of letting a silent degradation look
             # like the bot simply misunderstood.
-            message += "\n\n⚠️ _הבנת השפה לא זמינה כרגע, אז ייתכן שפירשתי לא נכון. אפשר לתקן עם 'תוריד ...'._"
-        await update.message.reply_text(message, parse_mode="Markdown")
+            message += "\n\n⚠️ " + _it("הבנת השפה לא זמינה כרגע, אז ייתכן שפירשתי לא נכון. אפשר לתקן עם 'תוריד ...'.")
+        await update.message.reply_text(message, parse_mode="HTML")
 
     async def _do_remove(self, update, context, parsed, requested_by: str) -> None:
         if not parsed.items:
@@ -1724,19 +1730,19 @@ class GroceryBot:
             ),
         )
 
-        from .mdtext import escape as _md
+        from .htmltext import bold as _b, escape as _md, italic as _it
 
-        lines = [f"*{_md(dish)}* — {len(ingredients)} מצרכים:", ""]
+        lines = [f"{_b(dish)} — {len(ingredients)} מצרכים:", ""]
         if missing:
-            lines.append("*כנראה צריך לקנות:*")
+            lines.append(_b("כנראה צריך לקנות:"))
             lines += [f"🛒 {_md(_describe_parsed(i))}" for i in missing]
         if have:
             lines.append("")
-            lines.append("*כנראה יש לכם (לפי הרגלי הקנייה):*")
+            lines.append(_b("כנראה יש לכם (לפי הרגלי הקנייה):"))
             lines += [f"✔️ {_md(_describe_parsed(i))}" for i in have]
         if note:
-            lines.append(f"\n_{_md(note)}_")
-        lines.append("\n_כלום עוד לא נוסף — בחרו:_")
+            lines.append("\n" + _it(note))
+        lines.append("\n" + _it("כלום עוד לא נוסף — בחרו:"))
 
         buttons = [[InlineKeyboardButton(f"🛒 הוסף רק מה שחסר ({len(missing)})",
                                          callback_data=f"rcpmiss:{token}")]]
@@ -1745,7 +1751,7 @@ class GroceryBot:
             InlineKeyboardButton("ביטול", callback_data=f"rcpno:{token}"),
         ])
         await context.bot.send_message(
-            chat_id=chat_id, text="\n".join(lines), parse_mode="Markdown",
+            chat_id=chat_id, text="\n".join(lines), parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(buttons),
         )
 
@@ -1781,15 +1787,15 @@ class GroceryBot:
             )
         self.storage.set_state(f"recipe_{token}", "")
 
-        from .mdtext import escape as _md
+        from .htmltext import bold as _b, escape as _md, italic as _it
 
         names = ", ".join(_md(item["name"]) for item in chosen)
         skipped = len(payload["missing"]) + len(payload["have"]) - len(chosen)
-        suffix = f"\n_({skipped} דילגנו — כנראה יש לכם)_" if skipped else ""
+        suffix = "\n" + _it(f"({skipped} דילגנו — כנראה יש לכם)") if skipped else ""
         try:
             await query.edit_message_text(
-                f"*{_md(payload['dish'])}* — נוספו {len(chosen)} לרשימה:\n{names}{suffix}",
-                parse_mode="Markdown",
+                f"{_b(payload['dish'])} — נוספו {len(chosen)} לרשימה:\n{names}{suffix}",
+                parse_mode="HTML",
             )
         except Exception:
             logger.debug("recipe edit failed", exc_info=True)
@@ -1815,14 +1821,14 @@ class GroceryBot:
             await update.message.reply_text("לא הצלחתי לבנות תפריט הפעם. נסו שוב עוד רגע.")
             return
 
-        from .mdtext import escape as _md
+        from .htmltext import bold as _b, escape as _md
 
-        lines = ["*תפריט שבועי:*"]
+        lines = [_b("תפריט שבועי:")]
         lines += [
             f"• {_md(day)}: {_md(dish)}" if day else f"• {_md(dish)}"
             for day, dish in plan.meals
         ]
-        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+        await update.message.reply_text("\n".join(lines), parse_mode="HTML")
         # Ingredients go through the same look-what-you-need preview as a
         # single recipe: same approval, same probably-have marking.
         await self._preview_ingredients(
@@ -1914,8 +1920,8 @@ class GroceryBot:
         loop = asyncio.get_running_loop()
         view = await context.bot.send_message(
             chat_id=chat_id,
-            text="🍳 *מאתר את כל המוצרים ברשת — כ-40 שניות, ואז מתחיל למלא.*",
-            parse_mode="Markdown",
+            text="🍳 <b>מאתר את כל המוצרים ברשת — כ-40 שניות, ואז מתחיל למלא.</b>",
+            parse_mode="HTML",
         )
         if pin:
             # Pinning keeps it reachable during a long run; not every chat
@@ -1933,7 +1939,7 @@ class GroceryBot:
         async def _redraw(text: str) -> None:
             try:
                 await context.bot.edit_message_text(
-                    chat_id=chat_id, message_id=view.message_id, text=text, parse_mode="Markdown"
+                    chat_id=chat_id, message_id=view.message_id, text=text, parse_mode="HTML"
                 )
             except Exception:
                 # A failed edit (unchanged text, rate limit) is cosmetic.
@@ -1968,7 +1974,7 @@ class GroceryBot:
                 chat_id=chat_id,
                 message_id=message_id,
                 text=render_final_by_store(reports, carts),
-                parse_mode="Markdown",
+                parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(buttons),
             )
         except Exception:
@@ -2779,12 +2785,14 @@ def _format_choice(
     set lives in **one** message that is edited as it is answered, so the
     counter is the only way to know how much is left.
     """
+    from .htmltext import bold as _b, escape as _esc
+
     cards = pending.get("candidate_cards") or []
     names = pending.get("candidates") or []
     lines = []
     if total > 1:
-        lines.append(f"❓ *{total} בחירות* — {position} מתוך {total}")
-    lines.append(f"*{pending['original_term']}* — איזה מהם?")
+        lines.append(f"❓ {_b(f'{total} בחירות')} — {position} מתוך {total}")
+    lines.append(f"{_b(pending['original_term'])} — איזה מהם?")
 
     if cards:
         cheapest = _cheapest_index(cards)
@@ -2794,7 +2802,7 @@ def _format_choice(
     else:
         # Older rows saved before candidate detail was stored.
         for i, name in enumerate(names[: len(_NUMBER_EMOJI)]):
-            lines.append(f"{_NUMBER_EMOJI[i]} {name}")
+            lines.append(f"{_NUMBER_EMOJI[i]} {_esc(name)}")
 
     count = min(len(cards or names), len(_NUMBER_EMOJI))
     row = [

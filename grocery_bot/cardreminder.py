@@ -40,12 +40,14 @@ class CardPrompt:
 
     @property
     def text(self) -> str:
+        from .htmltext import bold, italic
+
         saving = CARD_MONTHLY_CEILING * CARD_DISCOUNT_RATE
         return (
-            f"💳 *הטענת את הכרטיס החודש?*\n"
+            f"💳 {bold('הטענת את הכרטיס החודש?')}\n"
             f"אפשר להטעין עד ₪{CARD_MONTHLY_CEILING:.0f} ב-7% הנחה — "
             f"כלומר ₪{saving:.0f} שנשארים אצלכם.\n"
-            f"_תענו 'הטענתי' ולא אשאל שוב החודש._"
+            + italic("תענו 'הטענתי' ולא אשאל שוב החודש.")
         )
 
 

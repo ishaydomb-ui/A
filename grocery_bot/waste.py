@@ -213,7 +213,9 @@ def pick_targeted(
 
 def question_text(item) -> str:
     """The single waste question for `item`. Neutral, one tap to answer."""
-    return f"רגע לפני שסוגרים — *{item.name}*: נגמר או שנשאר וחלקו נזרק?"
+    from .htmltext import bold
+
+    return f"רגע לפני שסוגרים — {bold(item.name)}: נגמר או שנשאר וחלקו נזרק?"
 
 
 def patterns(storage, store: str = "shufersal") -> list[WastePattern]:
@@ -255,23 +257,23 @@ def _match_stock(name: str, stock: dict) -> dict | None:
 
 
 def format_patterns(found: list[WastePattern]) -> str:
-    from .mdtext import escape
+    from .htmltext import bold, escape, italic
 
     if not found:
         return ""
-    lines = ["*מה נזרק שוב ושוב*", ""]
+    lines = [bold("מה נזרק שוב ושוב"), ""]
     for pattern in found:
         lines.append(
-            f"• *{escape(pattern.item_name)}* — נזרק בערך "
+            f"• {bold(pattern.item_name)} — נזרק בערך "
             f"{pattern.waste_rate * 100:.0f}% ממה שנקנה "
-            f"({pattern.reports} דיווחים)\n   _{pattern.suggestion}_"
+            f"({pattern.reports} דיווחים)\n   " + italic(pattern.suggestion)
         )
     return "\n".join(lines)
 
 
 def acknowledge(items) -> str:
     """The reply to a waste report. Factual, and never a comment on waste."""
-    from .mdtext import escape
+    from .htmltext import escape
 
     if not items:
         return "לא הבנתי מה נזרק — אפשר לכתוב למשל 'זרקתי חצי חסה ושתי עגבניות'."

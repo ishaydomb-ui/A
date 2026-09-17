@@ -170,16 +170,16 @@ def not_yet(storage, store: str = "shufersal", today: date | None = None) -> lis
 
 
 def format_due(items: list[ShelfItem], limit: int = 10, today: date | None = None) -> str:
-    from .mdtext import escape
+    from .htmltext import bold
 
     if not items:
         return "אין מוצרי מזווה שהגיע הזמן לחדש."
-    lines = ["*מהמזווה — כנראה נגמר*", ""]
+    lines = [bold("מהמזווה — כנראה נגמר"), ""]
     for item in items[:limit]:
         overdue = -(item.days_until_due(today) or 0)
         interval = item.expected_interval_days
         lines.append(
-            f"• *{escape(item.name)}* — נקנה לפני {item.days_since(today)} ימים "
+            f"• {bold(item.name)} — נקנה לפני {item.days_since(today)} ימים "
             f"(בערך כל {interval:.0f})"
             + (f", באיחור של {overdue:.0f}" if overdue > 0 else "")
         )

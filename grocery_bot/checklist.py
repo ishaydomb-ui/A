@@ -14,7 +14,7 @@ gets one toggle button showing its state, and a department carries
 """
 from __future__ import annotations
 
-from .mdtext import escape as md
+from .htmltext import bold, escape as md, italic
 
 TICK = "✅"
 UNTICK = "⬜"
@@ -31,14 +31,14 @@ def _quantity_label(item: dict) -> str:
 def render_department(department: str, items: list[dict], index: int, total: int) -> str:
     """The message body for one department's checklist."""
     chosen = sum(1 for item in items if item.get("selected"))
-    lines = [f"*{department}* ({chosen}/{len(items)}) · מחלקה {index}/{total}", ""]
+    lines = [f"{bold(department)} ({chosen}/{len(items)}) · מחלקה {index}/{total}", ""]
     for position, item in enumerate(items, start=1):
         mark = TICK if item.get("selected") else UNTICK
         quantity = _quantity_label(item)
         suffix = f" · {quantity}" if quantity else ""
         lines.append(f"{mark} {position}. {md(item['product_name'])}{suffix}")
     lines.append("")
-    lines.append("_הקישו על מספר כדי להוסיף או להסיר._")
+    lines.append(italic("הקישו על מספר כדי להוסיף או להסיר."))
     return "\n".join(lines)
 
 
@@ -48,12 +48,12 @@ def render_summary(departments: list[tuple[str, list[dict]]]) -> str:
         1 for _, items in departments for item in items if item.get("selected")
     )
     total_items = sum(len(items) for _, items in departments)
-    lines = [f"🧾 *סיכום ההצעה* — {total_selected} מתוך {total_items} פריטים", ""]
+    lines = [f"🧾 {bold('סיכום ההצעה')} — {total_selected} מתוך {total_items} פריטים", ""]
     for name, items in departments:
         chosen = sum(1 for item in items if item.get("selected"))
-        lines.append(f"• {name}: {chosen}/{len(items)}")
+        lines.append(f"• {md(name)}: {chosen}/{len(items)}")
     lines.append("")
-    lines.append("_אפשר עדיין לשנות בכל מחלקה. 'אישור ומילוי' ימלא את הסל._")
+    lines.append(italic("אפשר עדיין לשנות בכל מחלקה. 'אישור ומילוי' ימלא את הסל."))
     return "\n".join(lines)
 
 
@@ -71,18 +71,18 @@ def render_panel(
     """
     total_selected = sum(1 for _, items in departments for i in items if i.get("selected"))
     total = sum(len(items) for _, items in departments)
-    lines = [f"🛒 *הצעת קנייה* — {total_selected}/{total} מסומנים", ""]
+    lines = [f"🛒 {bold('הצעת קנייה')} — {total_selected}/{total} מסומנים", ""]
     for index, (name, items) in enumerate(departments):
         chosen = sum(1 for i in items if i.get("selected"))
         if index == open_index:
-            lines.append(f"▾ *{name}* ({chosen}/{len(items)})")
+            lines.append(f"▾ {bold(name)} ({chosen}/{len(items)})")
             for position, item in enumerate(items, start=1):
                 mark = TICK if item.get("selected") else UNTICK
                 quantity = _quantity_label(item)
                 suffix = f" · {quantity}" if quantity else ""
                 lines.append(f"   {mark} {position}. {md(item['product_name'])}{suffix}")
         else:
-            lines.append(f"▸ {name} ({chosen}/{len(items)})")
+            lines.append(f"▸ {md(name)} ({chosen}/{len(items)})")
     lines.append("")
-    lines.append("_הקישו על מחלקה לפתוח, על מספר לסמן/להסיר._")
+    lines.append(italic("הקישו על מחלקה לפתוח, על מספר לסמן/להסיר."))
     return "\n".join(lines)

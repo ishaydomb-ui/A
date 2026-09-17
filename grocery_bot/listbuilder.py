@@ -34,7 +34,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .mdtext import escape as md
+from .htmltext import escape as md
 
 # Departments that turn over weekly, versus those bought every few shops.
 FRESH_DEPARTMENTS = {"פירות וירקות", "מוצרי חלב וקירור"}
@@ -142,13 +142,15 @@ def as_paste_text(spec: ListSpec) -> str:
 
 def summarise(spec: ListSpec) -> str:
     """A human summary of a list, grouped the way the shop is laid out."""
+    from .htmltext import bold, italic
+
     if not spec.items:
-        return f"*{spec.title}* — אין מוצרים שעונים על הסף."
+        return f"{bold(spec.title)} — אין מוצרים שעונים על הסף."
     by_department: dict[str, list[dict]] = {}
     for row in spec.items:
         by_department.setdefault(row.get("department") or "שונות", []).append(row)
 
-    lines = [f"*{spec.title}* — {len(spec.items)} מוצרים", f"_{spec.description}_", ""]
+    lines = [f"{bold(spec.title)} — {len(spec.items)} מוצרים", italic(spec.description), ""]
     for department, rows in sorted(by_department.items(), key=lambda pair: -len(pair[1])):
         lines.append(f"▸ {md(department)} ({len(rows)})")
     return "\n".join(lines)

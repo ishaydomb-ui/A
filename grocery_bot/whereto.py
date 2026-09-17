@@ -139,28 +139,28 @@ def best_switch(quotes: list[ChainQuote]) -> ChainQuote | None:
 
 
 def format_quotes(quotes: list[ChainQuote], limit: int = 5) -> str:
-    from .mdtext import escape
+    from .htmltext import bold, italic
 
     usable = [q for q in quotes if q.comparable]
     if not usable:
         return "אין מספיק חפיפה בין הסלים כדי להשוות רשתות השבוע."
 
-    lines = ["*כמה יעלה אותו סל במקום אחר*", ""]
+    lines = [bold("כמה יעלה אותו סל במקום אחר"), ""]
     for quote in usable[:limit]:
         mark = "🟢" if quote.worth_switching else "▪️"
-        regular = "" if is_regular(quote.chain) else " _(רשת שאתם לא קונים בה)_"
+        regular = "" if is_regular(quote.chain) else " " + italic("(רשת שאתם לא קונים בה)")
         lines.append(
-            f"{mark} *{escape(display_name(quote.chain))}*{regular}\n"
+            f"{mark} {bold(display_name(quote.chain))}{regular}\n"
             f"   ₪{quote.subtotal:.2f} מול ₪{quote.baseline_subtotal:.2f} "
             f"({quote.matched}/{quote.total_lines} פריטים) → "
-            f"*{quote.saving_with_delivery:+.2f} ₪* כולל משלוח"
+            f"{bold(f'{quote.saving_with_delivery:+.2f} ₪')} כולל משלוח"
         )
     best = best_switch(quotes)
     lines.append("")
     if best:
-        lines.append(
-            f"_שווה לשקול להעביר את כל הקנייה ל{escape(display_name(best.chain))} השבוע._"
-        )
+        lines.append(italic(
+            f"שווה לשקול להעביר את כל הקנייה ל{display_name(best.chain)} השבוע."
+        ))
     else:
-        lines.append("_אין הפרש שמצדיק מעבר השבוע._")
+        lines.append(italic("אין הפרש שמצדיק מעבר השבוע."))
     return "\n".join(lines)

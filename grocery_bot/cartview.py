@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from .mdtext import escape as md
+from .htmltext import bold, escape as md, italic
 
 # Telegram rejects rapid edits to the same message (and eventually rate
 # limits the bot), so progress is redrawn at most this often. Two seconds
@@ -82,11 +82,11 @@ def _row(result) -> str:
 def render_progress(results: list, done: int, total: int, when: datetime | None = None) -> str:
     """The in-flight view: what has gone in so far, and how far along."""
     stamp = (when or datetime.now()).strftime("%H:%M")
-    lines = [f"🛒 *ממלא את העגלה…* ({done}/{total}) · {stamp}", ""]
+    lines = [f"🛒 {bold(f'ממלא את העגלה… ({done}/{total})')} · {stamp}", ""]
 
     visible = results[-MAX_VISIBLE_ROWS:]
     if len(results) > MAX_VISIBLE_ROWS:
-        lines.append(f"_…ועוד {len(results) - MAX_VISIBLE_ROWS} פריטים קודמים_")
+        lines.append(italic(f"…ועוד {len(results) - MAX_VISIBLE_ROWS} פריטים קודמים"))
     lines += [_row(r) for r in visible]
 
     estimate = sum(
@@ -95,8 +95,8 @@ def render_progress(results: list, done: int, total: int, when: datetime | None 
         if r.status == "added"
     )
     added = sum(1 for r in results if r.status == "added")
-    lines += ["", f"*בערך {_money(estimate)}* · {added} פריטים"]
-    lines.append("_הערכה לפי מחירי מדף — הסכום הסופי בסוף התהליך._")
+    lines += ["", f"{bold(f'בערך {_money(estimate)}')} · {added} פריטים"]
+    lines.append(italic("הערכה לפי מחירי מדף — הסכום הסופי בסוף התהליך."))
     return "\n".join(lines)
 
 
@@ -107,7 +107,7 @@ def _cart_body(results: list, cart: dict | None) -> list[str]:
 
     lines = [_row(r) for r in added[:MAX_VISIBLE_ROWS]]
     if len(added) > MAX_VISIBLE_ROWS:
-        lines.append(f"_…ועוד {len(added) - MAX_VISIBLE_ROWS} פריטים_")
+        lines.append(italic(f"…ועוד {len(added) - MAX_VISIBLE_ROWS} פריטים"))
 
     if problems:
         lines.append("")
@@ -115,8 +115,10 @@ def _cart_body(results: list, cart: dict | None) -> list[str]:
 
     lines.append("")
     if cart and cart.get("ok") and cart.get("total") is not None:
-        lines.append(f"*סה\"כ לתשלום: {_money(cart['total'])}* · {len(cart.get('items', []))} פריטים")
-        lines.append("_כולל דמי משלוח/שירות, לפי הסל באתר._")
+        total = _money(cart["total"])
+        item_count = len(cart.get("items", []))
+        lines.append(f"{bold(f'סה\"כ לתשלום: {total}')} · {item_count} פריטים")
+        lines.append(italic("כולל דמי משלוח/שירות, לפי הסל באתר."))
     else:
         estimate = sum(
             (getattr(r, "price", None) or 0) * (getattr(r, "quantity", 1) or 1) for r in added
@@ -131,15 +133,15 @@ def _cart_body(results: list, cart: dict | None) -> list[str]:
 def render_final(results: list, cart: dict | None, when: datetime | None = None) -> str:
     """The finished view for a single chain."""
     stamp = (when or datetime.now()).strftime("%H:%M")
-    lines = [f"🛒 *העגלה מוכנה* · {stamp}", ""]
+    lines = [f"🛒 {bold('העגלה מוכנה')} · {stamp}", ""]
     lines += _cart_body(results, cart)
 
     # The hand-off matters as much as the list: this is the moment the
     # user switches to the store's app, and without saying so explicitly
     # they are left guessing whether anything else is expected of them.
     lines.append("")
-    lines.append("*מה עכשיו:* להיכנס לשופרסל, לעבור על הסל, ולשלם.")
-    lines.append("⚠️ _לא בוצעה קנייה — הסל מוכן לבדיקה ותשלום שלך._")
+    lines.append(f"{bold('מה עכשיו:')} להיכנס לשופרסל, לעבור על הסל, ולשלם.")
+    lines.append("⚠️ " + italic("לא בוצעה קנייה — הסל מוכן לבדיקה ותשלום שלך."))
     return "\n".join(lines)
 
 
@@ -169,13 +171,13 @@ def render_final_by_store(
         return render_final(results, carts.get(store), when)
 
     stamp = (when or datetime.now()).strftime("%H:%M")
-    lines = [f"🛒 *הסלים מוכנים* · {stamp}"]
+    lines = [f"🛒 {bold('הסלים מוכנים')} · {stamp}"]
     for store in stores:
         lines.append("")
-        lines.append(f"*{display_name(store)}*")
+        lines.append(bold(display_name(store)))
         lines += _cart_body(list(reports[store].results), carts.get(store))
 
     lines.append("")
-    lines.append("*מה עכשיו:* לבחור רשת, לעבור על הסל שלה, ולשלם.")
-    lines.append("⚠️ _לא בוצעה קנייה — הסלים מוכנים לבדיקה ותשלום שלך._")
+    lines.append(f"{bold('מה עכשיו:')} לבחור רשת, לעבור על הסל שלה, ולשלם.")
+    lines.append("⚠️ " + italic("לא בוצעה קנייה — הסלים מוכנים לבדיקה ותשלום שלך."))
     return "\n".join(lines)

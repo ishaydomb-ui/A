@@ -556,7 +556,7 @@ def format_removal_report(rows: list[dict], store_name: str) -> str:
     """
     if not rows:
         return ""
-    from .mdtext import escape as md
+    from .htmltext import escape as md
 
     counted = {}
     for row in rows:

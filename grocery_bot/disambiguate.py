@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .mdtext import escape as md
+from .htmltext import escape as md
 
 
 @dataclass

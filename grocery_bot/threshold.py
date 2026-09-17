@@ -158,52 +158,52 @@ def threshold_from_order(order: dict) -> tuple[float, float, str] | None:
 
 def format_check(result: ThresholdCheck) -> str:
     """The message shown just before the household goes to pay."""
-    from .mdtext import escape
+    from .htmltext import bold, escape, italic
 
     lines = []
     if result.qualifies:
-        lines.append(f"✅ *הסל עובר את הסף של ₪{result.threshold:.0f}* — {escape(result.reward)}")
+        lines.append(f"✅ {bold(f'הסל עובר את הסף של ₪{result.threshold:.0f}')} — {escape(result.reward)}")
     elif result.worth_chasing:
         lines.append(
-            f"⚠️ *חסרים ₪{result.shortfall:.2f} לסף של ₪{result.threshold:.0f}* "
+            f"⚠️ {bold(f'חסרים ₪{result.shortfall:.2f} לסף של ₪{result.threshold:.0f}')} "
             f"({escape(result.reward)})"
         )
     else:
-        lines.append(f"_הסל רחוק מהסף של ₪{result.threshold:.0f} — לא שווה לרדוף אחריו._")
+        lines.append(italic(f"הסל רחוק מהסף של ₪{result.threshold:.0f} — לא שווה לרדוף אחריו."))
 
     if result.upsells:
-        lines += ["", "*יחידה שנייה שמוזילה את המחיר ליחידה:*"]
+        lines += ["", bold("יחידה שנייה שמוזילה את המחיר ליחידה:")]
         for offer in result.upsells[:5]:
             lines.append(
-                f"• *{escape(offer.name)}* — עוד אחד ותשלמו "
+                f"• {bold(offer.name)} — עוד אחד ותשלמו "
                 f"₪{offer.unit_price:.2f} במקום ₪{offer.regular_price:.2f} "
-                f"_(תוספת ₪{offer.extra_outlay:.2f} היום, חיסכון "
-                f"₪{offer.unit_saving:.2f} ליחידה)_"
+                + italic(f"(תוספת ₪{offer.extra_outlay:.2f} היום, חיסכון "
+                         f"₪{offer.unit_saving:.2f} ליחידה)")
             )
 
     closing = result.closing_offers
     if closing:
         lines += [
             "",
-            f"_כל אחד מאלה גם יעביר אתכם את הסף של ₪{result.threshold:.0f}._",
+            italic(f"כל אחד מאלה גם יעביר אתכם את הסף של ₪{result.threshold:.0f}."),
         ]
 
     if not result.qualifies and result.worth_chasing and not closing and result.upsells:
         combination = result.combination_to_close()
         if combination:
-            names = " + ".join(escape(o.name) for o in combination)
+            names = " + ".join(o.name for o in combination)
             spend = sum(o.extra_outlay for o in combination)
             saved = sum(o.unit_saving for o in combination)
             lines += [
                 "",
-                f"_{names} ביחד — תוספת ₪{spend:.2f}, חיסכון ₪{saved:.2f}, "
-                f"וגם עוברים את הסף._",
+                italic(f"{names} ביחד — תוספת ₪{spend:.2f}, חיסכון ₪{saved:.2f}, "
+                       f"וגם עוברים את הסף."),
             ]
         else:
             lines += [
                 "",
-                f"_אף אחד מהם לבדו לא מספיק לסף — צריך עוד ₪{result.shortfall:.2f}._",
+                italic(f"אף אחד מהם לבדו לא מספיק לסף — צריך עוד ₪{result.shortfall:.2f}."),
             ]
 
-    lines += ["", "_לא מוסיף כלום מעצמי — ההחלטה שלכם._"]
+    lines += ["", italic("לא מוסיף כלום מעצמי — ההחלטה שלכם.")]
     return "\n".join(lines)
