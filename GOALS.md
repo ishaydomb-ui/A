@@ -643,6 +643,26 @@
   **התוצאה:** 0 שאלות פתוחות, ו-`_ask_ambiguities` מחליט מעכשיו במקום
   לשאול.
 
+- **2026-09-17 — Phase 0 of the reliability build: baseline, instrumentation, barcode backfill.**
+  **גיבוי מפורש:** `data/backups/grocery_bot.pre-reliability-build.20260917-163229.sqlite3`
+  (125MB, `PRAGMA integrity_check` = ok, 21 טבלאות). **קומיט בסיס:** `99acd89`.
+  `.gitignore` לא כיסה את `data/backups/` (הדפוס `data/*.sqlite3` תופס רק ילדים
+  ישירים) — תוקן לפני כל `git add`, אחרת 125MB היו נכנסים לריפו.
+  **מדידה שלא הייתה:** ליומן לא היה **אף** קו latency — worst case של 210s תועד,
+  המקרה הטיפוסי מעולם לא נמדד. עכשיו: שורת `MSG backend=… understand_s=… total_s=… intent=…`
+  לכל הודעה (`handle_message` עוטף את `_handle_message_inner`; `ParsedMessage.backend`
+  ∈ classifier|planner|loop|rules), ושורת `RUN kind=… store=… requested=… added=…
+  ambiguous=… not_found=… errors=… skipped=… infra=… elapsed_s=…` לכל ריצת עגלה
+  (`orchestrator._log_run`). run id, verified/unverified — יתווספו בשלבים 1–2.
+  **Backfill:** `stock_items.barcode` לטיב טעם היה ריק ב-390/390 (הבנייה מחדש שלי
+  מ-16/09 השמיטה את השדה). preview → 377 ניתנים למילוי, 0 קונפליקטים, 13 ללא
+  ברקוד בשום שורת הזמנה → apply 377 → re-run **0** → verify 377/13. אידמפוטנטי.
+  **באג שנתפס בדרך:** עריכת ה-`started` בראש `add_terms_to_cart` לא נחתה
+  (עוגן לא ייחודי), מה שהשאיר `NameError` רדום שהטסטים לא כיסו כי הם קוראים
+  ל-`run_order_cycle`. נתפס ב-smoke ישיר עם FakeAdapter לפני הקומיט.
+  **Rollback:** כל השינוי אדיטיבי — שדה `backend` שאף handler לא קורא, שתי שורות
+  לוג, ועמודת barcode שהייתה קיימת וריקה. הגיבוי הידני מאפשר שחזור מלא.
+
 ## למי זה מיועד
 שני משתמשים: אני ולירן. לא מוצר להפצה, כלי אישי.
 

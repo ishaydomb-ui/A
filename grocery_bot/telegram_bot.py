@@ -750,6 +750,32 @@ class GroceryBot:
         )
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Time the whole turn, then route it. See `_handle_message_inner`.
+
+        One journal line per household message: which understanding
+        backend answered, how long understanding took, and how long the
+        household waited end to end. Added 2026-09-17 (Phase 0) because
+        the journal held **zero** latency lines — a 210s worst case had
+        been documented and the typical case never measured. The
+        conversation-architecture comparison in Phase 11 rests on this.
+        """
+        import time
+
+        started = time.monotonic()
+        try:
+            await self._handle_message_inner(update, context, started)
+        finally:
+            total = time.monotonic() - started
+            understood = getattr(context, "_gordon_understood", None) or {}
+            logger.info(
+                "MSG backend=%s understand_s=%.1f total_s=%.1f intent=%s",
+                understood.get("backend", "?"), understood.get("seconds", 0.0),
+                total, understood.get("intent", "?"),
+            )
+
+    async def _handle_message_inner(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE, started: float
+    ) -> None:
         """Route a free-text message by what it actually means.
 
         The first version filed every message verbatim as an item, so
@@ -778,7 +804,16 @@ class GroceryBot:
         exchange = convo.format_transcript(self.storage)
         if exchange:
             prior["transcript"] = exchange
+        import time
+
+        understand_started = time.monotonic()
         parsed = await asyncio.to_thread(parse_message, text, self.storage, prior)
+        # Stashed for the timing wrapper; `context` outlives this frame.
+        context._gordon_understood = {  # noqa: SLF001 - private to this handler pair
+            "backend": parsed.backend or "?",
+            "seconds": time.monotonic() - understand_started,
+            "intent": parsed.intent,
+        }
         if parsed.reply:
             convo.remember_turn(self.storage, "bot", parsed.reply)
         requested_by = update.effective_user.first_name if update.effective_user else "unknown"

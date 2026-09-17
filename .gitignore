@@ -31,3 +31,6 @@ data/benefits/
 # corpus: a monthly re-harvest would otherwise churn hundreds of lines on
 # every push. Re-run scripts/harvest_coffeetrail.py to reproduce it.
 data/coffeetrail/
+
+# explicit pre-migration DB copies (see docs/reports/2026-09-17-architecture-round2.md, E)
+data/backups/

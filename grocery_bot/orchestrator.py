@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 
 import logging
+import time
 from typing import Callable
 
 from . import dealfill
@@ -55,6 +56,7 @@ def run_order_cycle(
         except Exception:
             logger.exception("Progress callback failed; continuing the cycle")
 
+    started = time.monotonic()
     base_items = storage.list_active_base_items()
     adhoc_items = storage.list_pending_adhoc()
 
@@ -177,6 +179,7 @@ def run_order_cycle(
     # failed to send on a real order — leaving no way at all to answer
     # "what did it add, and why". A record on disk survives a bad send.
     record_deals(storage, reports)
+    _log_run("cycle", started, reports)
     return reports
 
 
@@ -280,6 +283,35 @@ class CartGuard:
         return ""
 
 
+def _log_run(kind: str, started: float, reports: dict) -> None:
+    """One journal line per cart run, per store.
+
+    Phase 0 instrumentation (2026-09-17). Before this the journal held no
+    run-level record at all: how many items were requested, how many
+    landed, how long it took. The verified/unverified split and the run
+    id arrive with Phases 1–2 and are added here then; this line is the
+    baseline they are measured against.
+    """
+    elapsed = time.monotonic() - started
+    for store, report in (reports or {}).items():
+        requested = (
+            len(report.added) + len(report.ambiguous) + len(report.not_found)
+            + len(report.errors) + len(getattr(report, "skipped", []) or [])
+        )
+        infra = sum(
+            1 for r in list(report.errors) + list(report.not_found)
+            if any(m.lower() in ((getattr(r, "detail", "") or "").lower())
+                   for m in INFRASTRUCTURE_MARKERS)
+        )
+        logger.info(
+            "RUN kind=%s store=%s requested=%d added=%d ambiguous=%d not_found=%d "
+            "errors=%d skipped=%d infra=%d elapsed_s=%.0f",
+            kind, store, requested, len(report.added), len(report.ambiguous),
+            len(report.not_found), len(report.errors),
+            len(getattr(report, "skipped", []) or []), infra, elapsed,
+        )
+
+
 # Failure details that describe the network or the session rather than
 # the product. Matched case-insensitively against the recorded detail.
 INFRASTRUCTURE_MARKERS = (
@@ -353,6 +385,7 @@ def add_terms_to_cart(
     bot that answered "it was removed" would be refusing an instruction
     by citing the instruction it was given earlier.
     """
+    started = time.monotonic()
     reports: dict[str, OrderCycleReport] = {}
     for store, make_adapter in adapter_factories.items():
         report = OrderCycleReport(store=store)
@@ -385,6 +418,7 @@ def add_terms_to_cart(
                         logger.exception("Progress callback failed; continuing")
         _remember_failures(storage, report)
         reports[store] = report
+    _log_run("terms", started, reports)
     return reports
 
 

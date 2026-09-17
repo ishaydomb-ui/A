@@ -175,6 +175,12 @@ class ParsedMessage:
     store: str = ""
     # "once" / "always" / "" — whether a choice should be remembered.
     scope: str = ""
+    # Which understanding path produced this: classifier | planner | loop
+    # | rules. Instrumentation only — added 2026-09-17 because the journal
+    # carried no record of which backend answered or how long it took,
+    # and the conversation-architecture comparison (Phase 11) cannot be
+    # made without that. Never consulted by any handler.
+    backend: str = ""
 
 
 def _claude_cli() -> str:
@@ -405,6 +411,7 @@ def parse_message(message: str, storage=None, context: dict | None = None) -> Pa
             actions=actions,
             store=store if store in ("shufersal", "tivtaam") else "",
             scope=scope if scope in ("once", "always") else "",
+            backend="classifier",
         ),
         text,
         storage,
@@ -421,6 +428,7 @@ def _reconsider_if_unclear(parsed: ParsedMessage, text: str, storage) -> ParsedM
     bot is never worse off than before this existed.
     """
     if parsed.intent != "unclear":
+        parsed.backend = parsed.backend or "rules"
         return parsed
 
     # The planner first, the second classifier behind it. Measured on 25
@@ -440,7 +448,9 @@ def _reconsider_if_unclear(parsed: ParsedMessage, text: str, storage) -> ParsedM
             logger.info(
                 "NLU: %s pass resolved %r -> %s", name, text[:40], second.intent
             )
+            second.backend = name
             return second
+    parsed.backend = parsed.backend or "rules"
     return parsed
 
 
