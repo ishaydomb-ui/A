@@ -36,7 +36,7 @@ from .catalog import (
     format_search_answer,
     refresh_catalog,
 )
-from . import basketview, convo, standingcart
+from . import basketview, convo, execution, standingcart
 from .cartview import (
     MIN_EDIT_INTERVAL_SECONDS,
     render_final_by_store,
@@ -490,8 +490,7 @@ class GroceryBot:
         # only say "a cart was emptied somewhere", which on 2026-09-15
         # meant describing 120 Shufersal items as gone, or one Tiv Taam
         # item as still waiting.
-        standingcart.mark_shopped(self.storage, store=store)
-        return self.storage.advance_adhoc_status("in_cart", "shopped", store)
+        return await asyncio.to_thread(execution.mark_shopped, self.storage, store)
 
     async def on_shopped_store(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Which chain the shop was at, when both were waiting."""
@@ -502,16 +501,7 @@ class GroceryBot:
         from .chains import display_name
 
         chain = query.data.split(":", 1)[1]
-        if chain == "all":
-            from .chains import CART_CAPABLE
-
-            for one in CART_CAPABLE:
-                standingcart.mark_shopped(self.storage, store=one)
-        else:
-            standingcart.mark_shopped(self.storage, store=chain)
-        moved = self.storage.advance_adhoc_status(
-            "in_cart", "shopped", "" if chain == "all" else chain
-        )
+        moved = await asyncio.to_thread(execution.mark_shopped, self.storage, chain)
         where = "בשתי הרשתות" if chain == "all" else f"ב{display_name(chain)}"
         await query.edit_message_text(
             f"✅ רשמתי שסיימת {where}."
@@ -519,111 +509,37 @@ class GroceryBot:
         )
 
     def _log_removals_from_orders(self) -> dict:
-        """Compare each shopped cart against the order that emptied it.
-
-        The reliable half, and it runs nightly rather than at `/done`
-        because that is when the evidence exists: the order surfaces in
-        the chain's own history hours after checkout — Tiv Taam the same
-        day, Shufersal ~36 — long after the cart went empty.
-
-        Blocking; called from the nightly pass through a thread.
-        """
-        from . import tivtaamhistory
-        from .history import fetch_order_history  # noqa: F401 - documented below
-
-        logged = {}
-        for store in standingcart.pending_snapshot_stores(self.storage):
-            try:
-                if store == "tivtaam":
-                    from .adapters.tivtaam_api import TivTaamApi, TivTaamSession
-
-                    api = TivTaamApi(TivTaamSession.from_storage_state())
-                    orders = tivtaamhistory.fetch_orders(api, size=5)
-                    if not orders:
-                        continue
-                    newest = orders[0]
-                    lines = tivtaamhistory.order_lines(
-                        api.order(int(newest["code"]))
-                    )
-                    placed = newest["placed_at"]
-                else:
-                    # Shufersal's line items need a logged-in browser page,
-                    # which this pass does not hold. Left for the caller
-                    # that has one; the snapshot simply waits, and waiting
-                    # is correct — it is not wrong, only not yet answered.
-                    continue
-
-                gone = standingcart.removals_from_order(
-                    self.storage, store, lines, placed
-                )
-                if gone:
-                    standingcart.log_removals(self.storage, store, gone)
-                    logged[store] = len(gone)
-                # Cleared either way: the order for this shop has been
-                # seen, so the snapshot has served its purpose. Keeping it
-                # would compare the next order against a stale cart.
-                standingcart.clear_shopped_snapshot(self.storage, store)
-            except Exception:
-                logger.exception("Could not read %s's order for removals", store)
-        return logged
+        """Blocking; called from the nightly pass through a thread. See execution."""
+        return execution.log_removals_from_orders(self.storage)
 
     async def _log_removals(self, factories) -> None:
-        """Record what the household deleted from each cart this shop.
-
-        Kept for the pre-checkout case, where reading the live cart is
-        still the right observation: `/done` fired but the cart was not
-        actually emptied, which happens when the household changes its
-        mind. After a real shop this finds nothing, by design, and
-        `_log_removals_from_orders` is what answers instead.
-        """
-        def _read(store, factory):
-            try:
-                with factory() as adapter:
-                    if not adapter.ensure_session():
-                        return []
-                    summary = adapter.cart_summary()
-                return summary.get("items") or []
-            except Exception:
-                logger.exception("Could not read %s's cart for removals", store)
-                return []
-
-        for store, factory in factories.items():
-            items = await asyncio.to_thread(_read, store, factory)
-            gone = standingcart.removals(self.storage, store, items)
-            if gone:
-                await asyncio.to_thread(
-                    standingcart.log_removals, self.storage, store, gone
-                )
+        """The pre-checkout case: `/done` fired but the cart was not emptied."""
+        await asyncio.to_thread(execution.log_removals_from_carts, self.storage, factories)
 
     async def _refill_carts(self, chat_id: int, context, factories) -> None:
         """Put the standing list, plus this week's deals, into every cart."""
         from .chains import display_name
 
-        reports = {}
-        for store, factory in factories.items():
-            plan = await asyncio.to_thread(standingcart.plan_refill, self.storage, store)
-            if not plan.terms:
-                continue
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"🛒 ממלא {plan.total} פריטים ב{display_name(store)}…",
-            )
-            store_reports = await asyncio.to_thread(
-                add_terms_to_cart, self.storage, {store: factory}, plan.terms,
-                None, True,
-            )
-            # Tag what went in because of a promotion, so /lastdeals can
-            # answer afterwards instead of the household having to ask.
-            if store in store_reports:
-                standingcart.tag_deal_results(store_reports[store], plan)
-            reports.update(store_reports)
+        loop = asyncio.get_running_loop()
 
-        if reports:
-            await asyncio.to_thread(standingcart.record_manifest, self.storage, reports)
-            await asyncio.to_thread(record_deals, self.storage, reports)
-            await _send_html(
-                context, chat_id, format_report_summary(reports) or "לא היה מה להוסיף."
+        def _announce(store: str, total: int) -> None:
+            asyncio.run_coroutine_threadsafe(
+                context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"🛒 ממלא {total} פריטים ב{display_name(store)}…",
+                ),
+                loop,
             )
+
+        reports = await asyncio.to_thread(
+            execution.refill, self.storage, factories, _announce
+        )
+        if reports:
+            # One consolidated message per run (Phase 11); the full
+            # per-item list stays behind the details button.
+            summary, markup = self._store_cycle_summary(reports)
+            await _send_html(context, chat_id, summary or "לא היה מה להוסיף.",
+                             reply_markup=markup)
 
     async def failures(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/failures — what keeps failing, and what to do differently.
@@ -952,36 +868,20 @@ class GroceryBot:
             return
         factories = _build_adapter_factories(self.config)
         if store and store in factories:
-            removed = await asyncio.to_thread(
-                self._remove_from_cart, factories[store], old
+            # Phase 9: reject Y, add X, remember X, remove Y where the
+            # chain can — and say which of those happened (replace.py).
+            from .replace import format_replace, replace_product
+
+            outcome = await asyncio.to_thread(
+                replace_product, self.storage, factories, store, old, new
             )
-            reports = await asyncio.to_thread(
-                add_terms_to_cart, self.storage, {store: factories[store]}, [(new, 1)]
-            )
-            ok = bool(reports.get(store) and reports[store].added)
-            note = "" if removed else f"\n(את {old} לא הצלחתי להסיר — בדקו בעגלה.)"
-            await update.message.reply_text(
-                (f"🔄 {new} במקום {old}." if ok
-                 else f"לא הצלחתי להוסיף את {new}.") + note
-            )
+            await update.message.reply_text(format_replace(outcome))
         else:
             self.storage.add_adhoc_request(text=new, requested_by=requested_by)
             await update.message.reply_text(f"🔄 {new} במקום {old}, ברשימה.")
         convo.remember(
             self.storage, subject=new, store=store, action=f"הוחלף במקום {old}"
         )
-
-    @staticmethod
-    def _remove_from_cart(factory, term: str) -> bool:
-        try:
-            with factory() as adapter:
-                remover = getattr(adapter, "remove_from_cart", None)
-                if remover is None:
-                    return False
-                return bool(remover(term))
-        except Exception:  # noqa: BLE001
-            logger.exception("Could not remove %r from the cart", term)
-            return False
 
     async def _do_start_order(self, update, context, parsed, requested_by: str) -> None:
         """Let plain Hebrew start a cycle, not just the /start_order command."""
@@ -1940,12 +1840,38 @@ class GroceryBot:
         await self._send_pending_ambiguities(update, context, reports)
 
     async def _run_cycle_with_live_view(self, chat_id: int, context, factories):
-        """Run a cycle while keeping one message updated with its progress.
+        """Run a cycle while keeping one message updated with its progress."""
+        return await self._run_with_live_view(
+            chat_id, context, factories,
+            lambda on_progress: run_order_cycle(
+                self.storage, factories, on_progress, self.config.auto_add_deals,
+            ),
+            failure="🛑 המחזור נכשל עם שגיאה לא צפויה — בדקו את הלוגים בשרת.",
+            log="Order cycle failed",
+            pin=True,
+        )
 
-        The cycle runs in a worker thread, so progress arrives off the
-        event loop and is marshalled back with run_coroutine_threadsafe.
-        Edits are throttled (see cartview): Telegram rate-limits repeated
-        edits to one message, and a twenty-item run would blow through it.
+    async def _run_terms_with_live_view(self, chat_id, context, factories, terms):
+        """Fill the cart with an explicit list, showing the same live view."""
+        return await self._run_with_live_view(
+            chat_id, context, factories,
+            lambda on_progress: add_terms_to_cart(
+                self.storage, factories, terms, on_progress,
+            ),
+            failure="🛑 המילוי נכשל — בדקו את הלוגים בשרת.",
+            log="Filling the cart from a proposal failed",
+        )
+
+    async def _run_with_live_view(self, chat_id, context, factories, runner,
+                                  *, failure: str, log: str, pin: bool = False):
+        """Run `runner(on_progress)` in a thread, keeping one message live.
+
+        Progress arrives off the event loop and is marshalled back with
+        run_coroutine_threadsafe. Edits are throttled (see cartview):
+        Telegram rate-limits repeated edits to one message, and a
+        twenty-item run would blow through it. Phase 10 folded the two
+        copies of this scaffold into one; only the runner, the failure
+        line and pinning differ.
         """
         loop = asyncio.get_running_loop()
         view = await context.bot.send_message(
@@ -1953,14 +1879,15 @@ class GroceryBot:
             text="🍳 *מאתר את כל המוצרים ברשת — כ-40 שניות, ואז מתחיל למלא.*",
             parse_mode="Markdown",
         )
-        # Pinning keeps it reachable during a long run; not every chat
-        # allows it, and failing to pin must not abort the shop.
-        try:
-            await context.bot.pin_chat_message(
-                chat_id=chat_id, message_id=view.message_id, disable_notification=True
-            )
-        except Exception:
-            logger.info("Could not pin the live cart view; continuing without it")
+        if pin:
+            # Pinning keeps it reachable during a long run; not every chat
+            # allows it, and failing to pin must not abort the shop.
+            try:
+                await context.bot.pin_chat_message(
+                    chat_id=chat_id, message_id=view.message_id, disable_notification=True
+                )
+            except Exception:
+                logger.info("Could not pin the live cart view; continuing without it")
 
         collected: list = []
         last_edit = 0.0
@@ -1986,62 +1913,13 @@ class GroceryBot:
             )
 
         try:
-            reports = await asyncio.to_thread(
-                run_order_cycle,
-                self.storage,
-                factories,
-                _on_progress,
-                self.config.auto_add_deals,
-            )
+            reports = await asyncio.to_thread(runner, _on_progress)
         except Exception:
-            logger.exception("Order cycle failed")
-            await _redraw("🛑 המחזור נכשל עם שגיאה לא צפויה — בדקו את הלוגים בשרת.")
+            logger.exception(log)
+            await _redraw(failure)
             return None
 
-        carts = await asyncio.to_thread(self._read_carts, factories)
-        await self._finish_live_view(chat_id, context, view.message_id, reports, carts)
-        return reports
-
-    async def _run_terms_with_live_view(self, chat_id, context, factories, terms):
-        """Fill the cart with an explicit list, showing the same live view."""
-        loop = asyncio.get_running_loop()
-        view = await context.bot.send_message(
-            chat_id=chat_id,
-            text="🍳 *מאתר את כל המוצרים ברשת — כ-40 שניות, ואז מתחיל למלא.*",
-            parse_mode="Markdown",
-        )
-        collected: list = []
-        last_edit = 0.0
-
-        async def _redraw(text: str) -> None:
-            try:
-                await context.bot.edit_message_text(
-                    chat_id=chat_id, message_id=view.message_id, text=text, parse_mode="Markdown"
-                )
-            except Exception:
-                logger.debug("Live cart edit failed", exc_info=True)
-
-        def _on_progress(done: int, total: int, result) -> None:
-            nonlocal last_edit
-            collected.append(result)
-            now = loop.time()
-            if now - last_edit < MIN_EDIT_INTERVAL_SECONDS and done < total:
-                return
-            last_edit = now
-            asyncio.run_coroutine_threadsafe(
-                _redraw(render_progress(list(collected), done, total)), loop
-            )
-
-        try:
-            reports = await asyncio.to_thread(
-                add_terms_to_cart, self.storage, factories, terms, _on_progress
-            )
-        except Exception:
-            logger.exception("Filling the cart from a proposal failed")
-            await _redraw("🛑 המילוי נכשל — בדקו את הלוגים בשרת.")
-            return None
-
-        carts = await asyncio.to_thread(self._read_carts, factories)
+        carts = await asyncio.to_thread(execution.read_carts, factories)
         await self._finish_live_view(chat_id, context, view.message_id, reports, carts)
         return reports
 
@@ -2085,24 +1963,8 @@ class GroceryBot:
         await _send_markdown(context, chat_id, "\n".join(lines))
 
     def _read_carts(self, factories) -> dict:
-        """Read each chain's authoritative cart total, where it can be read.
-
-        One entry per enabled chain, missing where the adapter has no
-        `cart_summary` or the store was unreachable. A chain with no
-        reading falls back to the shelf-price estimate in the renderer,
-        which says so — better than borrowing another chain's total, which
-        is what a single shared reading amounted to.
-        """
-        carts: dict = {}
-        for store, make_adapter in factories.items():
-            try:
-                with make_adapter() as adapter:
-                    reader = getattr(adapter, "cart_summary", None)
-                    if reader is not None:
-                        carts[store] = reader()
-            except Exception:
-                logger.exception("Could not read the %s cart for the final view", store)
-        return carts
+        """Each chain's authoritative cart reading; see execution.read_carts."""
+        return execution.read_carts(factories)
 
     @staticmethod
     def _cart_buttons(reports) -> list[list[InlineKeyboardButton]]:
@@ -2148,7 +2010,14 @@ class GroceryBot:
         is normal. It is also the only surviving record if the message
         itself fails to send — which happened on a real order.
         """
-        headline = format_report_headline(self.storage, reports)
+        # Phase 11: the headline is the run's terminal outcome, read from
+        # its items. Reports without a run id (older paths) keep the
+        # bucket-based headline.
+        from .outcome import format_outcomes
+
+        headline = format_outcomes(self.storage, reports) or format_report_headline(
+            self.storage, reports
+        )
         details = format_report_summary(reports)
         multi = format_multi_buy_note(self.storage, reports)
         if multi:
@@ -2234,6 +2103,13 @@ class GroceryBot:
             return
 
         if action == "undo":
+            # An explicit "not that one": the product just chosen is
+            # rejected for this term, not merely forgotten (Phase 8), so
+            # the resolver cannot hand it straight back next cycle.
+            prior = self.storage.preferred_for(store, term)
+            if prior and prior.get("product_code"):
+                self.storage.reject_product(store, term, prior["product_code"],
+                                            prior.get("product_name", ""), source="human")
             self.storage.forget_choice(store, term)
             removed = await asyncio.to_thread(self._undo_choice, store, term)
             note = ("הוסר מהעגלה. " if removed else
@@ -2633,6 +2509,7 @@ class GroceryBot:
                 term=pending["original_term"],
                 product_code=chosen_code or getattr(result, "product_code", "") or "",
                 product_name=chosen_label,
+                source="human",
             )
 
         # **A tap means one thing: this is the one.** Until 2026-09-11 the
@@ -2680,8 +2557,6 @@ class GroceryBot:
         but never confirmed is presence-checked before any replay
         (orchestrator.resume_run). The run's trigger is not changed.
         """
-        from .orchestrator import resume_run
-
         open_runs = await asyncio.to_thread(self.storage.running_cart_runs)
         if not open_runs:
             return
@@ -2689,26 +2564,16 @@ class GroceryBot:
         if not status.available:
             logger.warning("RESUME: %d open run(s) but no Israeli exit; leaving them interrupted",
                            len(open_runs))
-            for run in open_runs:
-                await asyncio.to_thread(self.storage.mark_cart_run, run["id"], "interrupted")
+            await asyncio.to_thread(execution.interrupt_open_runs, self.storage)
             return
         factories = _build_adapter_factories(self.config)
         if not factories:
             return
         chat_id = self.storage.get_state("digest_chat_id")
-        for run in open_runs:
-            run_id = run["id"]
-            logger.warning("RESUME run=%s trigger=%s left %s by a previous process; resuming",
-                           run_id, run["trigger"], run["status"])
-            await asyncio.to_thread(self.storage.mark_cart_run, run_id, "interrupted")
-            try:
-                reports = await asyncio.to_thread(
-                    resume_run, self.storage, factories, run_id, self.config.playwright_proxy,
-                )
-            except Exception:
-                logger.exception("RESUME run=%s failed", run_id)
-                await asyncio.to_thread(self.storage.mark_cart_run, run_id, "interrupted")
-                continue
+        resumed = await asyncio.to_thread(
+            execution.resume_interrupted, self.storage, factories, self.config.playwright_proxy,
+        )
+        for _run, reports in resumed:
             if chat_id and reports:
                 summary, markup = self._store_cycle_summary(reports)
                 await _send_html(context, int(chat_id),
@@ -2758,53 +2623,27 @@ class GroceryBot:
         # later against a cart that may be half-filled.
         await asyncio.to_thread(listwatch.note_ran, self.storage)
 
-        from .models import PlanTerm
-
-        # Each pending request keeps its own id into the run (Phase 1), so
-        # "was it bought" is read from the run item and never guessed by
-        # comparing the request text to the added product's name — the
-        # compare that left 17 of 21 items pending after they landed.
-        terms = [
-            PlanTerm(item.text, item.quantity or 1, "adhoc", str(item.id))
-            for item in items if item.text
-        ]
+        terms = [item for item in items if item.text]
         if not terms:
             return
         await context.bot.send_message(
             chat_id=int(chat_id),
             text=f"🛒 מכניס לעגלה {len(terms)} פריטים מהרשימה…",
         )
-        run_id = await asyncio.to_thread(self.storage.start_cart_run, "watch_list")
+        # One run for the batch; each request keeps its own id into it,
+        # and only a verified add consumes a request (execution).
         try:
-            reports = await asyncio.to_thread(
-                add_terms_to_cart, self.storage, factories, terms, None, True, run_id,
+            _run_id, reports, _outcomes, _consumed = await asyncio.to_thread(
+                execution.run_list_items, self.storage, factories, items,
             )
         except Exception:
             logger.exception("List watcher cart run failed")
-            await asyncio.to_thread(self.storage.finish_cart_run, run_id, "aborted")
             await context.bot.send_message(
                 chat_id=int(chat_id),
                 text="לא הצלחתי להכניס את הפריטים לעגלה. הם נשארו ברשימה — "
                      "אפשר לנסות שוב עם /start_order.",
             )
             return
-
-        # Consume only what actually landed, for the same reason the full
-        # cycle does: a transient failure must not silently delete a
-        # request nobody will think to re-send.
-        outcomes = await asyncio.to_thread(self.storage.run_outcomes, run_id)
-        for item in items:
-            # Phase 2: only positive evidence consumes a request. An add
-            # that was sent but not confirmed stays on the list and is
-            # presence-checked next time, never blindly re-added.
-            if outcomes.get(("adhoc", str(item.id))) == "verified":
-                await asyncio.to_thread(
-                    self.storage.mark_adhoc_consumed, item.id
-                )
-        await asyncio.to_thread(
-            self.storage.finish_cart_run, run_id,
-            "interrupted" if "pending" in outcomes.values() else "completed",
-        )
 
         summary, markup = self._store_cycle_summary(reports)
         await _send_html(context, int(chat_id), summary or "לא הצלחתי להוסיף כלום.",

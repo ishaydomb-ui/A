@@ -389,6 +389,9 @@ _ADDED_COLUMNS = {
         "evidence_count": "INTEGER NOT NULL DEFAULT 1",
         "last_confirmed_at": "TEXT NOT NULL DEFAULT ''",
     },
+    # Phase 11: the terminal state a run earned from its items
+    # (outcome.classify), beside the lifecycle `status`.
+    "cart_runs": {"outcome": "TEXT NOT NULL DEFAULT ''"},
     # Added 2026-09-01 when Tiv Taam's smart list turned out to publish a
     # measured purchase interval, which beats our 1/share estimate.
     "stock_items": {"interval_days": "REAL", "barcode": "TEXT"},
@@ -900,6 +903,16 @@ class Storage:
                 (status, now, run_id),
             )
             conn.commit()
+
+    def set_run_outcome(self, run_id: int, outcome: str) -> None:
+        with closing(self._connect()) as conn:
+            conn.execute("UPDATE cart_runs SET outcome = ? WHERE id = ?", (outcome, run_id))
+            conn.commit()
+
+    def cart_run_status(self, run_id: int) -> str:
+        with closing(self._connect()) as conn:
+            row = conn.execute("SELECT status FROM cart_runs WHERE id = ?", (run_id,)).fetchone()
+        return row["status"] if row else ""
 
     def mark_cart_run(self, run_id: int, status: str) -> None:
         """Change status without closing the run (e.g. running -> interrupted)."""

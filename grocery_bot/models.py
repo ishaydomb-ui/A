@@ -177,6 +177,10 @@ class OrderCycleReport:
     # cart views render what the run *did*, and a declined add did not
     # happen at the store at all.
     skipped: list[CartAddResult] = field(default_factory=list)
+    # The cart run these results were recorded under (Phase 11). The
+    # terminal outcome message is built from that run's items, not from
+    # the buckets above, which hold what the adapter said at the time.
+    run_id: int | None = None
 
     def record(self, result: CartAddResult) -> None:
         bucket = {

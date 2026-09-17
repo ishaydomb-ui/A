@@ -218,6 +218,7 @@ def run_order_cycle(
     # failed to send on a real order — leaving no way at all to answer
     # "what did it add, and why". A record on disk survives a bad send.
     record_deals(storage, reports)
+    _stamp(reports, run_id)
     _finish_run(storage, run_id)
     _log_run("cycle", started, reports, run_id, breakers)
     return reports
@@ -602,15 +603,27 @@ def resume_run(storage: Storage, adapter_factories: dict, run_id: int, proxy: st
 
 
 def _finish_run(storage: Storage, run_id: int) -> str:
-    """Close the run with the only status Phase 1 can justify.
+    """Close the run: lifecycle status, and the terminal outcome its items earned.
 
     `completed` if every item reached a terminal outcome, `interrupted`
-    if any is still pending. The unverified variant is Phase 2's.
+    if any is still pending (resumable under the same id). Beside it,
+    Phase 11 records the outcome state — completed /
+    completed_with_unverified / completed_with_exceptions / aborted —
+    from the item counts (outcome.classify).
     """
+    from . import outcome as _outcome
+
     counts = storage.run_counts(run_id)
     status = "interrupted" if counts.get("pending") else "completed"
     storage.finish_cart_run(run_id, status)
+    storage.set_run_outcome(run_id, _outcome.classify(counts, status))
     return status
+
+
+def _stamp(reports: dict, run_id: int | None) -> None:
+    """Every report remembers its run, so the outcome message reads run items."""
+    for report in (reports or {}).values():
+        report.run_id = run_id
 
 
 def add_terms_to_cart(
@@ -734,6 +747,7 @@ def add_terms_to_cart(
                     break
         _remember_failures(storage, report)
         reports[store] = report
+    _stamp(reports, run_id)
     if owns_run:
         _finish_run(storage, run_id)
     _log_run("terms", started, reports, run_id, breakers)
