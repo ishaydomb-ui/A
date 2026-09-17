@@ -11,7 +11,7 @@ import logging
 
 from .models import AdHocRequest, BaseListItem
 from .prices import PricedProduct, PromotionItem, fetch_branch_snapshot
-from .mdtext import escape as md
+from .htmltext import bold, escape as md, italic
 from .storage import Storage
 from .unitprice import best_value, describe, for_product
 
@@ -100,7 +100,7 @@ def format_search_answer(
             f"לא נמצא '{query}' בקטלוג הסניף.\n"
             "אפשר לנסות ניסוח אחר (למשל 'קוטג' במקום 'קוטג׳ תנובה')."
         )
-    lines = [f"*{query}*"]
+    lines = [bold(query)]
     # 🏆 marks the best price per kilo/litre, not the lowest sticker price.
     best = best_value(results)
     lines += [
@@ -108,7 +108,7 @@ def format_search_answer(
         for index, (product, deal) in enumerate(results)
     ]
     if best is not None:
-        lines.append("\n_🏆 = המשתלם ביותר ליחידת מידה._")
+        lines.append("\n" + italic("🏆 = המשתלם ביותר ליחידת מידה."))
     return "\n".join(lines)
 
 
@@ -127,7 +127,7 @@ def format_full_list(
 
     lines: list[str] = []
     if base_items:
-        lines.append(f"*רשימת הבסיס* ({len(base_items)})")
+        lines.append(f"{bold('רשימת הבסיס')} ({len(base_items)})")
         lines += [f"• {md(item.describe())}" for item in base_items]
     if adhoc_items:
         if lines:
@@ -137,7 +137,7 @@ def format_full_list(
         # assistant), and the useful distinction at a glance is "someone
         # specifically wants this" versus "this came off the standing list
         # or a promotion".
-        lines.append(f"*בקשות אישיות לפעם הבאה* ({len(adhoc_items)})")
+        lines.append(f"{bold('בקשות אישיות לפעם הבאה')} ({len(adhoc_items)})")
         lines += [
             f"• {md(item.describe())}"
             + (f" — 🙋 {md(item.requested_by)}" if item.requested_by else "")
@@ -208,7 +208,7 @@ def format_deals_report(
 ) -> str:
     if not deals:
         return "אין כרגע מבצעים אמיתיים על פריטי רשימת הבסיס בסניף הזה."
-    lines = ["*מבצעים על פריטי רשימת הבסיס*"]
+    lines = [bold("מבצעים על פריטי רשימת הבסיס")]
     for item, product, deal in deals:
         saving = (1 - deal.discounted_price / product.price) * 100 if product.price else 0
         lines.append(
@@ -269,7 +269,7 @@ def format_cycle_alternatives(
 ) -> str:
     if not suggestions:
         return ""
-    lines = ["*חלופות זולות יותר במבצע*"]
+    lines = [bold("חלופות זולות יותר במבצע")]
     for term, usual, alt, deal in suggestions:
         saving = usual.price - deal.discounted_price
         lines.append(
@@ -277,7 +277,7 @@ def format_cycle_alternatives(
             f"   {md(alt.name)} — {_money(deal.discounted_price)} "
             f"(חיסכון {_money(saving)}) — {md(deal.description)}"
         )
-    lines.append("\n_זו הצעה בלבד — לא שיניתי כלום בסל._")
+    lines.append("\n" + italic("זו הצעה בלבד — לא שיניתי כלום בסל."))
     return "\n".join(lines)
 
 
@@ -359,7 +359,7 @@ def format_cheaper_equivalents(
         return f"לא מצאתי '{query}' בקטלוג הסניף."
     reference_unit = for_product(reference)
     reference_line = (
-        f"*{md(reference.name)}* — {_money(reference.price)}"
+        f"{bold(reference.name)} — {_money(reference.price)}"
         + (f" · {reference_unit.format()}" if reference_unit else "")
     )
     if not cheaper:
@@ -368,7 +368,7 @@ def format_cheaper_equivalents(
             "לא מצאתי חלופה דומה שזולה משמעותית ליחידת מידה. "
             "כלומר מה שאתם קונים הוא כבר בחירה טובה."
         )
-    lines = [reference_line, "", "*חלופות זולות יותר ליחידת מידה:*"]
+    lines = [reference_line, "", bold("חלופות זולות יותר ליחידת מידה:")]
     for product, deal, saving in cheaper[:5]:
         unit = for_product(product, deal)
         price = deal.discounted_price if deal else product.price
@@ -378,5 +378,5 @@ def format_cheaper_equivalents(
             + (f" · {unit.format()}" if unit else "")
             + f"  ↓{saving * 100:.0f}%"
         )
-    lines += ["", "_ההשוואה לפי ₪ לק\"ג/ליטר, לא לפי מחיר המדבקה. לא שיניתי כלום בסל._"]
+    lines += ["", italic("ההשוואה לפי ₪ לק\"ג/ליטר, לא לפי מחיר המדבקה. לא שיניתי כלום בסל.")]
     return "\n".join(lines)

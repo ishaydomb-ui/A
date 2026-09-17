@@ -308,13 +308,13 @@ class GroceryBot:
             )
             await update.message.reply_text(
                 ask.format_verdict(verdict, history_days=self._price_history_days()),
-                parse_mode="Markdown",
+                parse_mode="HTML",
             )
             return
 
         results = await asyncio.to_thread(self.storage.search_with_deals, query, 6)
         await update.message.reply_text(
-            format_search_answer(query, results), parse_mode="Markdown"
+            format_search_answer(query, results), parse_mode="HTML"
         )
 
     @staticmethod
@@ -341,7 +341,7 @@ class GroceryBot:
             await update.message.reply_text("רשימת הבסיס ריקה, אז אין על מה לחפש מבצעים.")
             return
         found = await asyncio.to_thread(find_deals_for_base_list, self.storage, items)
-        await update.message.reply_text(format_deals_report(found), parse_mode="Markdown")
+        await update.message.reply_text(format_deals_report(found), parse_mode="HTML")
 
     async def all_deals(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/alldeals — the long list behind the "more deals" link.
@@ -1176,7 +1176,7 @@ class GroceryBot:
             remembered["product_name"] if remembered else "",
         )
         await update.message.reply_text(
-            format_cheaper_equivalents(reference, cheaper, query), parse_mode="Markdown"
+            format_cheaper_equivalents(reference, cheaper, query), parse_mode="HTML"
         )
 
 
@@ -1651,7 +1651,7 @@ class GroceryBot:
             return
         results = await asyncio.to_thread(self.storage.search_with_deals, query, 6)
         await update.message.reply_text(
-            format_search_answer(query, results), parse_mode="Markdown"
+            format_search_answer(query, results), parse_mode="HTML"
         )
 
     async def _do_deals(self, update, context, parsed, requested_by: str) -> None:
@@ -1660,14 +1660,14 @@ class GroceryBot:
             await update.message.reply_text("רשימת הבסיס ריקה, אז אין על מה לחפש מבצעים.")
             return
         found = await asyncio.to_thread(find_deals_for_base_list, self.storage, items)
-        await update.message.reply_text(format_deals_report(found), parse_mode="Markdown")
+        await update.message.reply_text(format_deals_report(found), parse_mode="HTML")
 
     async def _do_show_list(self, update, context, parsed, requested_by: str) -> None:
         await update.message.reply_text(
             format_full_list(
                 self.storage.list_active_base_items(), self.storage.list_pending_adhoc()
             ),
-            parse_mode="Markdown",
+            parse_mode="HTML",
         )
 
     async def _do_recipe(self, update, context, parsed, requested_by: str) -> None:
@@ -2038,7 +2038,7 @@ class GroceryBot:
         suggestions = await asyncio.to_thread(find_cycle_alternatives, self.storage, added)
         message = format_cycle_alternatives(suggestions)
         if message:
-            await context.bot.send_message(chat_id=chat_id, text=message, parse_mode="Markdown")
+            await context.bot.send_message(chat_id=chat_id, text=message, parse_mode="HTML")
 
     def _store_cycle_summary(self, reports):
         """The short message, and the full one kept for the button.

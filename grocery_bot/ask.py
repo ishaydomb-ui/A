@@ -204,23 +204,23 @@ def _history_range(storage, item_code: str) -> tuple[float | None, float | None]
 
 
 def format_verdict(verdict: PriceVerdict, history_days: int = 0) -> str:
-    """A short Telegram answer to a price question."""
-    from .mdtext import escape
+    """A short Telegram answer to a price question. HTML (see htmltext.py)."""
+    from .htmltext import bold, escape, italic
 
     if not verdict.name:
-        return f"לא מצאתי מוצר בשם *{escape(verdict.query)}* בקטלוג."
+        return f"לא מצאתי מוצר בשם {bold(verdict.query)} בקטלוג."
 
     head = {
-        "good": "✅ *מחיר טוב*",
-        "fair": "🟡 *סביר, יש זול יותר*",
-        "poor": "❌ *מחיר גבוה*",
-        "mismatch": "❓ *כנראה לא אותו מוצר*",
+        "good": f"✅ {bold('מחיר טוב')}",
+        "fair": f"🟡 {bold('סביר, יש זול יותר')}",
+        "poor": f"❌ {bold('מחיר גבוה')}",
+        "mismatch": f"❓ {bold('כנראה לא אותו מוצר')}",
         "unknown": "ℹ️",
     }[verdict.verdict]
 
     lines = [f"{head} — {escape(verdict.name)}", ""]
     if verdict.quoted_price is not None:
-        lines.append(f"שאלת על *₪{verdict.quoted_price:.2f}*")
+        lines.append(f"שאלת על {bold(f'₪{verdict.quoted_price:.2f}')}")
     for price, label in (
         (verdict.shufersal_price, "שופרסל"),
         (verdict.tivtaam_price, "טיב טעם"),
@@ -229,30 +229,30 @@ def format_verdict(verdict: PriceVerdict, history_days: int = 0) -> str:
         if price:
             lines.append(f"• {label}: ₪{price:.2f}")
     if verdict.promo_price:
-        lines.append(f"• 🏷 במבצע: *₪{verdict.promo_price:.2f}* — {escape(verdict.promo_text)}")
+        lines.append(f"• 🏷 במבצע: {bold(f'₪{verdict.promo_price:.2f}')} — {escape(verdict.promo_text)}")
 
     if verdict.verdict == "mismatch":
         lines.append("")
-        lines.append(
-            "_המחיר ששאלת עליו נמוך בהרבה מכל מה שמצאתי — כנראה מדובר "
-            "בגודל או במוצר אחר. תנסו לנסח מדויק יותר (גודל, מותג)._"
-        )
+        lines.append(italic(
+            "המחיר ששאלת עליו נמוך בהרבה מכל מה שמצאתי — כנראה מדובר "
+            "בגודל או במוצר אחר. תנסו לנסח מדויק יותר (גודל, מותג)."
+        ))
     elif verdict.overpay:
         lines.append("")
-        lines.append(
-            f"_יקר ב-₪{verdict.overpay:.2f} מהזול ביותר שמצאתי ({verdict.best_source})._"
-        )
+        lines.append(italic(
+            f"יקר ב-₪{verdict.overpay:.2f} מהזול ביותר שמצאתי ({verdict.best_source})."
+        ))
     elif verdict.verdict == "good" and verdict.quoted_price is not None:
         lines.append("")
-        lines.append("_זה המחיר הטוב ביותר שמצאתי._")
+        lines.append(italic("זה המחיר הטוב ביותר שמצאתי."))
 
     # Two days of history cannot support "the cheapest ever seen", and
     # saying so is better than implying a depth of evidence we lack.
     if history_days >= 14 and verdict.history_low:
-        lines.append(f"_טווח היסטורי: ₪{verdict.history_low:.2f}–₪{verdict.history_high:.2f}_")
+        lines.append(italic(f"טווח היסטורי: ₪{verdict.history_low:.2f}–₪{verdict.history_high:.2f}"))
     elif verdict.history_low:
-        lines.append("_(היסטוריית מחירים עדיין קצרה מכדי להשוות מגמה)_")
+        lines.append(italic("(היסטוריית מחירים עדיין קצרה מכדי להשוות מגמה)"))
 
     for note in verdict.notes:
-        lines.append(f"_{escape(note)}_")
+        lines.append(italic(note))
     return "\n".join(lines)
