@@ -744,6 +744,24 @@
   **שורת RUN** מקבלת `verified= unverified= recoveries= halted=`.
   **Rollback:** דגל סביבה; ה-orchestrator קורא ל-`_attempt` שמחזיר continue תמיד כשכבוי.
 
+- **2026-09-17 — Phase 5: resume אידמפוטנטי. הוספה לא-מאומתת נבדקת, לא משוחזרת בעיוורון.**
+  **`presence_check(adapter, store, code, name)` → present | absent | unknown.** התשובה
+  השלישית אמיתית: עגלה לא-קריאה אינה מוצר נעדר. שורות placeholder של טיב טעם (פאנל
+  סגור, ספירה ידועה, שמות לא) → unknown, כי היעדרות לא ניתנת לביסוס חיובי מהן.
+  **בלולאת המילוי:** פריט שמצבו בריצה הזו `unverified` נבדק לפני כל ניסיון —
+  present → מסומן `verified` עם `verified_at` וראיה "presence check", לא נוסף שוב;
+  absent → נוסף; unknown → **לא נוסף**, נשאר unverified עם ראיה "presence unknown".
+  זה הכלל שמונע את הכפילות של `עגבניות שרי במלח`.
+  **`resume_run(storage, factories, run_id)`:** בונה PlanTerms מחדש מ-run_items שלא הגיעו
+  לתוצאה סופית (pending/unverified/failed_infra/failed_session) ומעביר ל-`add_terms_to_cart`
+  **עם אותו run_id**. ה-trigger לא נוגע — resume הוא אירוע חיים, לא מקור חדש. אין ריצה
+  שנייה בטבלה. פריטים שכבר verified לא נוגעים בהם.
+  **ראיה חיה לשלב 4 שהתקבלה בדרך:** המסלול היה מת באמת (probe נכשל ב-5.2s; Xiaomi offline),
+  `ensure_israeli_exit` עבר ל-Uset-PC ב-**6.2s** והיציאה חזרה (Bezeq). זה בדיוק מה
+  שה-breaker קורא ב-recover, מוכח מול מסלול מת אמיתי ולא מול mock.
+  **Rollback:** `presence_check` ו-`resume_run` הן פונקציות חדשות; הבדיקה בלולאה פועלת
+  רק על פריטים שכבר `unverified` — פריט חדש נוסף כמו קודם בלי קריאת עגלה.
+
 ## למי זה מיועד
 שני משתמשים: אני ולירן. לא מוצר להפצה, כלי אישי.
 

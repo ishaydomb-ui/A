@@ -534,6 +534,68 @@ def _attempt(brk, adapter, fn):
     return result, False
 
 
+def presence_check(adapter, store: str, product_code: str, name: str) -> str:
+    """present | absent | unknown — is this product in the cart right now?
+
+    Phase 5. The question a resume must answer before replaying an
+    unverified add, because "add sent, nothing confirmed it" followed by
+    a blind re-add is exactly how עגבניות שרי במלח went into the cart
+    twice on 2026-09-17. Three answers, and the third is real: an
+    unreadable cart is not an absent product.
+    """
+    reader = getattr(adapter, "cart_summary", None)
+    if reader is None:
+        return "unknown"
+    try:
+        summary = reader() or {}
+    except Exception:  # noqa: BLE001
+        logger.exception("Presence check: %s cart unreadable", store)
+        return "unknown"
+    if not summary.get("ok"):
+        return "unknown"
+    items = summary.get("items") or []
+    code = str(product_code or "").strip()
+    needle = (name or "").strip()[:12]
+    for item in items:
+        if code and str(item.get("code") or "").strip() == code:
+            return "present"
+        if needle and needle in (item.get("name") or ""):
+            return "present"
+    # Placeholder lines (Tiv Taam: panel shut, header count known) carry
+    # no names, so "absent" cannot be positively established from them.
+    if items and all(not (i.get("name") or "").strip() for i in items):
+        return "unknown"
+    return "absent"
+
+
+def resume_run(storage: Storage, adapter_factories: dict, run_id: int, proxy: str | None = None,
+               on_progress=None) -> dict[str, OrderCycleReport]:
+    """Continue an interrupted run under its own id. Phase 5/7.
+
+    Rebuilds PlanTerms from the run's items that never reached a terminal
+    outcome — pending, unverified, failed_infra, failed_session — and
+    hands them to `add_terms_to_cart` with the same run id. The fill
+    loop's presence check (below) is what makes this safe to call twice.
+    The run's trigger is untouched: a resume is a lifecycle event, not a
+    new origin.
+    """
+    from .models import PlanTerm
+
+    open_outcomes = ("pending", "unverified", "failed_infra", "failed_session")
+    rows = [r for r in storage.run_items_for(run_id) if r["outcome"] in open_outcomes]
+    if not rows:
+        storage.finish_cart_run(run_id, "completed")
+        return {}
+    storage.mark_cart_run(run_id, "running")
+    logger.info("RESUME run=%s items=%d (%s)", run_id, len(rows),
+                ", ".join(sorted({r["outcome"] for r in rows})))
+    terms = [PlanTerm(r["term"], int(r["quantity"] or 1), r["source_kind"], r["source_id"]) for r in rows]
+    reports = add_terms_to_cart(storage, adapter_factories, terms, on_progress, True,
+                                run_id=run_id, proxy=proxy)
+    _finish_run(storage, run_id)
+    return reports
+
+
 def _finish_run(storage: Storage, run_id: int) -> str:
     """Close the run with the only status Phase 1 can justify.
 
@@ -610,7 +672,34 @@ def add_terms_to_cart(
             guard = CartGuard.read(storage, adapter, store) if guard_cart else CartGuard.empty()
             brk = breaker.Breaker(store, proxy, run_id)
             breakers[store] = brk
+            # Phase 5: what this run already knows about each item. An add
+            # that was sent but never confirmed is presence-checked here
+            # and only re-attempted when absence is positively established.
+            known = {r["id"]: r for r in storage.run_items_for(run_id)}
             for index, pt in enumerate(plan_terms, start=1):
+                item_id = _item_id(pt)
+                prior = known.get(item_id) or {}
+                if prior.get("outcome") == "unverified" and prior.get("store", store) == store:
+                    state = presence_check(adapter, store, prior.get("product_code", ""), pt.term)
+                    logger.info("PRESENCE run=%s item=%s store=%s -> %s", run_id, item_id, store, state)
+                    if state == "present":
+                        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                        storage.update_run_item(item_id, outcome="verified", verified_at=now,
+                                                evidence="presence check: found in cart")
+                        report.record(CartAddResult(
+                            item_name=pt.term, store=store, status="skipped",
+                            detail="כבר בעגלה (אומת בבדיקת נוכחות)",
+                            product_code=prior.get("product_code", ""), verification="verified",
+                        ))
+                        continue
+                    if state == "unknown":
+                        storage.update_run_item(item_id, evidence="presence unknown; not re-added")
+                        report.record(CartAddResult(
+                            item_name=pt.term, store=store, status="skipped",
+                            detail="לא ניתן לאמת אם בעגלה — לא הוספתי שוב", verification="unverified",
+                        ))
+                        continue
+                    # absent → fall through and add
                 result, alive = _attempt(
                     brk, adapter,
                     lambda pt=pt: _add_one(
