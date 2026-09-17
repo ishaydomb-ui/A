@@ -6,7 +6,7 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-17 ~20:55 (host time, CEST) — reliability build + conversation-backend benchmark
+**Last anchored:** 2026-09-17 ~22:40 (host time, CEST) — reliability build + conversation-backend benchmark + Markdown->HTML migration (WIP, paused on Ishay's call re: usage limit)
 **Session:** https://claude.ai/code/session_01AR7esAYdoXQ71HXtqJPpQV
 **Branch:** `claude/online-grocery-automation-b7pq4g`
 **Status is in `git log`, not hand-typed here.**
@@ -127,6 +127,34 @@ across both chains; that is fine because it runs immediately after
 `/done` and the cart is not needed for ~5 days.
 
 ## 2. In flight
+
+**Markdown->HTML migration (Arthur's 2026-09-09 spec) — paused mid-way, 2026-09-17 ~22:40.**
+Ishay: "זה פשוט יקר וארוך מדי. תשמור את מה שעשית ונמשיך מחר כשישתחרר לי ה-limit"
+(this is just expensive and taking too long; save what you did, continue
+tomorrow once my limit frees up). Two parts done, tested, and live in
+production (commits `de52736`, `9d90eb5`): price/catalog formatting,
+deals formatting. A third part (`8e2897e`) converts every remaining
+formatter file — cartview, checklist, listbuilder, disambiguate, waste,
+threshold, multibuy, shelflife, whereto, standingcart, digest,
+cardreminder, and most of telegram_bot.py's own inline messages — but
+is **committed and pushed, UNTESTED beyond a py_compile syntax check**,
+and the live bot has deliberately NOT been refreshed with it.
+
+**To resume:** 5 `parse_mode="Markdown"` sites remain in telegram_bot.py
+(`_advance_question` ~2113, `on_choice_followup` ~2170,
+`_ask_ambiguities` ~2456, `resolve_ambiguity` ~2582, the chunked sender
+in `_send_markdown` ~2963) — same mechanical pattern as the rest. After
+those: run the full suite, add HTML-safety test classes for the newly
+converted files (matching `HotdealsHtmlTest`/`StockupDealsHtmlTest` in
+`tests/test_markdown_safety.py`), then `scripts/refresh_bot.sh`.
+
+Found and fixed along the way, already live: `_do_add_to_cart` was
+sending `orchestrator.format_report_summary`'s HTML output with
+`parse_mode="Markdown"` — a real bug, not cosmetic; Telegram would show
+literal `<b>` tags. Two latent unescaped-name gaps also fixed
+(`radar.format_stockup_deals`, `waste.question_text`).
+
+
 
 **2026-09-17 evening, after the build:** nothing half-built. The last
 commit is Phase 12 (regression suite, A–F mapping, two canary fixes).
