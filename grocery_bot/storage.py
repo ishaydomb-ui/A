@@ -1501,6 +1501,26 @@ class Storage:
             ).fetchall()
         return {row["barcode"]: dict(row) for row in rows}
 
+    def recent_order_prices(self, store: str, barcode: str, limit: int = 5) -> list[dict]:
+        """Prices actually seen on a real order for this barcode, newest first.
+
+        `store_prices.source` is 'feed' (the vast majority — the public
+        price-transparency scrape) or 'order' (measured 2026-09-18: 743
+        rows, written when a chain's own order history is synced). Only
+        the latter is "what the household actually paid", not a shelf
+        price observed on some other day. Added for the Work planner
+        snapshot (work_planner_snapshot.py); no existing accessor
+        filtered on `source` before this.
+        """
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT observed_at, price FROM store_prices "
+                "WHERE store = ? AND barcode = ? AND source = 'order' "
+                "ORDER BY observed_at DESC LIMIT ?",
+                (store, str(barcode), limit),
+            ).fetchall()
+        return [{"date": row["observed_at"], "price": row["price"]} for row in rows]
+
     def catalog_price_by_suffix(self, sku: str) -> dict | None:
         """Find a catalogue product whose EAN ends with this store sku.
 

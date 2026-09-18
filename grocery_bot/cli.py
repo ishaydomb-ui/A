@@ -13,6 +13,11 @@ Run with: python -m grocery_bot.cli <command>
     deals                 promotions on the standing list
     work-context [store]  pure-read JSON projection for a Work benchmark
                           session (no browser, no live cart, no secrets)
+    work-planner-snapshot [store]  richer pure-read JSON export for
+                          planner benchmarking: per-staple purchase
+                          history, due/replenishment signal, preferences
+                          with source labels, promotions (no browser, no
+                          live cart, no secrets)
     import-base-list <f>  load a YAML base list into the database
     import-history        build the base list from real past orders
                           [--year N] [--min-share F] [--memory-only] [--dry-run]
@@ -605,6 +610,22 @@ def _work_context(storage: Storage, args: list[str]) -> int:
 
     store = next((a for a in args if not a.startswith("--")), "shufersal")
     print(json.dumps(build_projection(storage, store), ensure_ascii=False))
+    return 0
+
+
+def _work_planner_snapshot(storage: Storage, args: list[str]) -> int:
+    """Pure-read PLANNER snapshot -- richer than work-context: per-staple
+    purchase history, replenishment/due signal, preferences with source
+    labels, rejections, and store-specific promotions. See
+    work_planner_snapshot.py. Separate export; does not change how
+    work-context or Gordon's own planner behave.
+    """
+    import json
+
+    from .work_planner_snapshot import build_snapshot
+
+    store = next((a for a in args if not a.startswith("--")), "shufersal")
+    print(json.dumps(build_snapshot(storage, store), ensure_ascii=False))
     return 0
 
 
@@ -1380,6 +1401,7 @@ _DB_ONLY_COMMANDS = {
     # Pure read of Gordon's own preference/intent tables -- no store
     # session, no browser, no secrets. See work_projection.py.
     "work-context": _work_context,
+    "work-planner-snapshot": _work_planner_snapshot,
     # Reads flat CSVs under data/benefits/ (gitignored — household
     # financial data), not the sqlite database at all; `storage` is
     # accepted and ignored to keep one dispatch shape. No token, no store

@@ -389,3 +389,46 @@ class CrossChainPriceTests(unittest.TestCase):
         ])
         rows = self.storage.cross_chain_prices("חלב")
         self.assertNotIn("victory", [r["store"] for r in rows])
+
+
+class RecentOrderPricesTests(unittest.TestCase):
+    """storage.recent_order_prices -- added 2026-09-18 for the Work
+    planner snapshot. Only source='order' rows count as a real price
+    paid; source='feed' (the public price-transparency scrape) is a
+    shelf price observed on some day, not evidence of a purchase.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.storage = Storage(str(Path(self._tmp.name) / "t.sqlite3"))
+
+    def test_only_order_sourced_rows_are_returned(self):
+        self.storage.record_store_prices("tivtaam", [
+            {"barcode": "1", "name": "חלב", "price": 6.9, "observed_at": "2026-09-01", "source": "feed"},
+            {"barcode": "1", "name": "חלב", "price": 7.2, "observed_at": "2026-08-15", "source": "order"},
+        ])
+        rows = self.storage.recent_order_prices("tivtaam", "1")
+        self.assertEqual(rows, [{"date": "2026-08-15", "price": 7.2}])
+
+    def test_newest_first_and_limited(self):
+        self.storage.record_store_prices("tivtaam", [
+            {"barcode": "1", "name": "חלב", "price": p, "observed_at": d, "source": "order"}
+            for d, p in [("2026-07-01", 6.5), ("2026-08-01", 6.7), ("2026-09-01", 6.9)]
+        ])
+        rows = self.storage.recent_order_prices("tivtaam", "1", limit=2)
+        self.assertEqual([r["date"] for r in rows], ["2026-09-01", "2026-08-01"])
+
+    def test_a_different_store_or_barcode_never_leaks_in(self):
+        self.storage.record_store_prices("tivtaam", [
+            {"barcode": "1", "name": "חלב", "price": 6.9, "observed_at": "2026-09-01", "source": "order"},
+        ])
+        self.assertEqual(self.storage.recent_order_prices("shufersal", "1"), [])
+        self.assertEqual(self.storage.recent_order_prices("tivtaam", "2"), [])
+
+    def test_no_data_is_an_empty_list_not_an_error(self):
+        self.assertEqual(self.storage.recent_order_prices("tivtaam", "999"), [])
+
+
+if __name__ == "__main__":
+    unittest.main()
