@@ -13,7 +13,7 @@ import logging
 import time
 from datetime import datetime, timezone
 
-from . import breaker, identity
+from . import breaker, cartpause, identity
 from typing import Callable
 
 from . import dealfill
@@ -815,6 +815,12 @@ def _add_one(
                 item_name=term, store=store, status="skipped",
                 detail=blocked, quantity=quantity,
             )
+        if cartpause.is_paused(storage, store):
+            return CartAddResult(
+                item_name=term, store=store, status="skipped",
+                detail="cart mutations paused for a Work benchmark", quantity=quantity,
+                product_code=preferred["product_code"],
+            )
         result = adapter.add_specific_product(
             preferred["product_name"],
             quantity,
@@ -848,6 +854,12 @@ def _add_one(
                 item_name=term, store=store, status="skipped", detail=blocked,
                 product_code=identity.product_code,
             )
+        if cartpause.is_paused(storage, store):
+            return CartAddResult(
+                item_name=term, store=store, status="skipped",
+                detail="cart mutations paused for a Work benchmark",
+                product_code=identity.product_code,
+            )
         result = adapter.add_specific_product(
             identity.name, quantity, product_code=identity.product_code,
             search_term=identity.name,
@@ -874,6 +886,12 @@ def _add_one(
                 item_name=term, store=store, status="not_found",
                 detail="אזל מהמלאי", quantity=quantity,
             )
+        if cartpause.is_paused(storage, store):
+            return CartAddResult(
+                item_name=term, store=store, status="skipped",
+                detail="cart mutations paused for a Work benchmark",
+                quantity=quantity, product_code=hit["code"],
+            )
         result = adapter.add_specific_product(
             hit.get("name") or term, quantity,
             product_code=hit["code"], search_term=term,
@@ -887,6 +905,11 @@ def _add_one(
             result.auto_resolved = "bulk_match"
             return result
 
+    if cartpause.is_paused(storage, store):
+        return CartAddResult(
+            item_name=term, store=store, status="skipped",
+            detail="cart mutations paused for a Work benchmark", quantity=quantity,
+        )
     result = adapter.search_and_add(term, quantity)
     if result.status == "added":
         # Remember a clean resolution too, not only a bulk-match, an
@@ -945,6 +968,12 @@ def _add_one(
         decision = resolve(term, cards, known["names"], known["codes"])
         if decision.resolved:
             chosen = decision.card
+            if cartpause.is_paused(storage, store):
+                return CartAddResult(
+                    item_name=term, store=store, status="skipped",
+                    detail="cart mutations paused for a Work benchmark",
+                    quantity=quantity, product_code=chosen.get("code", ""),
+                )
             picked = adapter.add_specific_product(
                 chosen.get("name", term),
                 quantity,
@@ -993,6 +1022,18 @@ def _add_one(
             extra = {"search_term": term}
             if decision.code:
                 extra["product_code"] = decision.code
+            if cartpause.is_paused(storage, store):
+                # Covers both call sites below (the primary attempt with
+                # **extra and its TypeError fallback without it): they are
+                # the same logical mutation attempt with no yield point
+                # between them, so one check before the try dominates both
+                # branches rather than repeating an unreachable-in-practice
+                # second check inside the except.
+                return CartAddResult(
+                    item_name=term, store=store, status="skipped",
+                    detail="cart mutations paused for a Work benchmark",
+                    quantity=quantity, product_code=decision.code or "",
+                )
             try:
                 picked = adapter.add_specific_product(
                     decision.name, quantity, **extra
