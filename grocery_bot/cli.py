@@ -11,6 +11,8 @@ Run with: python -m grocery_bot.cli <command>
                           own feed and remember what is unambiguous
                           [--dry-run]
     deals                 promotions on the standing list
+    work-context [store]  pure-read JSON projection for a Work benchmark
+                          session (no browser, no live cart, no secrets)
     import-base-list <f>  load a YAML base list into the database
     import-history        build the base list from real past orders
                           [--year N] [--min-share F] [--memory-only] [--dry-run]
@@ -588,6 +590,21 @@ def _price(storage: Storage, args: list[str]) -> int:
 def _deals(storage: Storage, args: list[str]) -> int:
     items = storage.list_active_base_items()
     print(format_deals_report(find_deals_for_base_list(storage, items)))
+    return 0
+
+
+def _work_context(storage: Storage, args: list[str]) -> int:
+    """Pure-read projection of Gordon's own intelligence, for a Work
+    benchmark session -- no browser, no live cart, no secrets. See
+    work_projection.py. `store` defaults to shufersal (the same default
+    other single-store commands here use) when not given.
+    """
+    import json
+
+    from .work_projection import build_projection
+
+    store = next((a for a in args if not a.startswith("--")), "shufersal")
+    print(json.dumps(build_projection(storage, store), ensure_ascii=False))
     return 0
 
 
@@ -1360,6 +1377,9 @@ _DB_ONLY_COMMANDS = {
     "basket": _basket,
     "seed-memory": _seed_memory,
     "deals": _deals,
+    # Pure read of Gordon's own preference/intent tables -- no store
+    # session, no browser, no secrets. See work_projection.py.
+    "work-context": _work_context,
     # Reads flat CSVs under data/benefits/ (gitignored — household
     # financial data), not the sqlite database at all; `storage` is
     # accepted and ignored to keep one dispatch shape. No token, no store

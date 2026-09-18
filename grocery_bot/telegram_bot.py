@@ -21,7 +21,7 @@ from telegram.ext import (
     filters,
 )
 
-from . import ask, cardreminder, hotdeals, threshold, waste
+from . import ask, cardreminder, cartpause, hotdeals, threshold, waste
 from .adapters.base import StoreAdapter
 from .adapters.shufersal import ShufersalAdapter
 from .adapters.tivtaam import TivTaamAdapter
@@ -667,6 +667,51 @@ class GroceryBot:
             f"הקטלוג עודכן: {meta.get('product_count', '?')} מוצרים בסניף "
             f"{meta.get('branch', '?')}.\nמקור: {meta.get('price_file', '?')}"
         )
+
+    async def pausecart(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/pausecart <store|all> — stop cart mutations, for a Work benchmark window.
+
+        Deliberately narrow: this blocks only the adapter write calls in
+        orchestrator._add_one (cartpause.py). Price refresh, learning,
+        history sync and every read path keep running — this is not a
+        maintenance mode, it is a "don't touch the cart" switch.
+        """
+        if not _authorized(self.config, update):
+            return
+        from .chains import CART_CAPABLE, display_name
+
+        arg = (context.args[0].lower() if context.args else "").strip()
+        if arg not in ({"all"} | set(CART_CAPABLE)):
+            await update.message.reply_text(
+                "איזו רשת? /pausecart all, או /pausecart "
+                + "/".join(sorted(CART_CAPABLE))
+            )
+            return
+        store = None if arg == "all" else arg
+        by = update.effective_user.first_name if update.effective_user else "unknown"
+        cartpause.set_paused(self.storage, store, True, reason="Work benchmark", by=by)
+        where = "כל הרשתות" if store is None else display_name(store)
+        await update.message.reply_text(
+            f"⏸ העגלה מושהית ב{where}. /resumecart {arg} כדי להמשיך."
+        )
+
+    async def resumecart(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/resumecart <store|all> — the undo for /pausecart."""
+        if not _authorized(self.config, update):
+            return
+        from .chains import CART_CAPABLE, display_name
+
+        arg = (context.args[0].lower() if context.args else "").strip()
+        if arg not in ({"all"} | set(CART_CAPABLE)):
+            await update.message.reply_text(
+                "איזו רשת? /resumecart all, או /resumecart "
+                + "/".join(sorted(CART_CAPABLE))
+            )
+            return
+        store = None if arg == "all" else arg
+        cartpause.set_paused(self.storage, store, False)
+        where = "כל הרשתות" if store is None else display_name(store)
+        await update.message.reply_text(f"▶️ העגלה פעילה שוב ב{where}.")
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Time the whole turn, then route it. See `_handle_message_inner`.
@@ -3086,6 +3131,8 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("failures", bot.failures))
     application.add_handler(CommandHandler("done", bot.done_shopping))
     application.add_handler(CommandHandler("refresh_prices", bot.refresh_prices))
+    application.add_handler(CommandHandler("pausecart", bot.pausecart))
+    application.add_handler(CommandHandler("resumecart", bot.resumecart))
     # /propose retired 2026-09-06: used once ever (2026-08-29), abandoned
     # before its own redesign — /start_order supersedes it. The panel
     # machinery (propose_cycle, on_proposal_button, _confirm_proposal) is
