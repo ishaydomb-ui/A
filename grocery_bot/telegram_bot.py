@@ -2712,6 +2712,19 @@ class GroceryBot:
         # later against a cart that may be half-filled.
         await asyncio.to_thread(listwatch.note_ran, self.storage)
 
+        # Every enabled store's cart writer is paused (e.g. a Work-MVP
+        # benchmark): a run here would only ever produce the identical
+        # "0 added, N already there" result, never consume a request, and
+        # so retrigger again next cooldown -- forever, once per pause.
+        # Found 2026-09-19 from the household's own chat: the same
+        # "14 already there" notice landing every ~6h while Tiv Taam sat
+        # paused. Stay quiet instead; the 6h cooldown above still holds so
+        # this does not busy-loop, and a normal run resumes automatically
+        # once the pause lifts.
+        if all(cartpause.is_paused(self.storage, store) for store in factories):
+            logger.info("List watcher waiting: every enabled store's cart writer is paused")
+            return
+
         terms = [item for item in items if item.text]
         if not terms:
             return
