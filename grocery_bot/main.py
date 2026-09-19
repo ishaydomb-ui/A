@@ -21,7 +21,10 @@ def main() -> None:
     config = Config.from_env()
     storage = Storage(config.db_path)
     application = build_application(config, storage)
-    logging.getLogger(__name__).info("Grocery bot starting, enabled stores: %s", config.enabled_stores)
+    logging.getLogger(__name__).info(
+        "Grocery bot starting, enabled stores: %s, shufersal credential source: %s",
+        config.enabled_stores, config.shufersal_credential_source,
+    )
     application.run_polling()
 
 
