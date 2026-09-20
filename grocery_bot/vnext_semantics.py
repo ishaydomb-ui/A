@@ -152,17 +152,21 @@ _TOKEN_SPLIT = re.compile(r"[\s,/\-–]+")
 def _norm(text: str) -> str:
     text = str(text or "").replace("’", "'").replace("`", "'").replace("״", '"').replace("׳", "'")
     text = text.replace("'", "")  # קוטג' -> קוטג
-    # Final-form letters are the same letter for matching: the stem of
-    # מלפפונים is מלפפונ and the singular is מלפפון.
-    text = text.translate(_FINALS)
     return " ".join(text.lower().split())
 
 
+# Final-form letters are the same letter for matching: the stem of
+# מלפפונים is מלפפונ and the singular is מלפפון. Applied only when
+# comparing, so labels keep the household's spelling.
 _FINALS = str.maketrans("ךםןףץ", "כמנפצ")
 
 
+def _m(text: str) -> str:
+    return _norm(text).translate(_FINALS)
+
+
 def _tokens(text: str) -> list[str]:
-    return [t for t in _TOKEN_SPLIT.split(_norm(text)) if t]
+    return [t for t in _TOKEN_SPLIT.split(_m(text)) if t]
 
 
 def _stem(token: str) -> str:
@@ -179,10 +183,11 @@ def _has_any(text: str, words) -> str | None:
     unless listed), substring for multi-word markers."""
     toks = set(_tokens(text))
     stems = {_stem(t) for t in toks}
+    mt = _m(text)
     for w in words:
-        wn = _norm(w)
+        wn = _m(w)
         if " " in wn:
-            if wn in text:
+            if wn in mt:
                 return w
         elif wn in toks or wn in stems or _stem(wn) in stems:
             return w
@@ -226,10 +231,11 @@ def _first_position(text: str, words) -> int | None:
     toks = _tokens(text)
     stems = [_stem(t) for t in toks]
     best = None
+    mt = _m(text)
     for w in words:
-        wn = _norm(w)
+        wn = _m(w)
         if " " in wn:
-            idx = text.find(wn)
+            idx = mt.find(wn)
             if idx >= 0:
                 pos = len(text[:idx].split())
                 best = pos if best is None else min(best, pos)
@@ -243,8 +249,15 @@ def _first_position(text: str, words) -> int | None:
 
 
 def forms_of(name: str) -> set[str]:
-    text = _norm(name)
-    return {form for form, words in _FORMS.items() if _has_any(text, words)}
+    """Form markers are matched as substrings when 4+ letters long: the
+    shelves glue them to sizes ("בחומץ560ג"), and a marker that long is
+    not going to appear by accident inside another word."""
+    text = _m(name)
+    out = set()
+    for form, words in _FORMS.items():
+        if _has_any(text, words) or any(len(_m(w)) >= 4 and " " not in _m(w) and _m(w) in text for w in words):
+            out.add(form)
+    return out
 
 
 # -- parsing the household's words --------------------------------------------------
@@ -316,21 +329,25 @@ def parse_term(raw: str) -> ParsedTerm:
     for phrase in _BRAND_PHRASES:
         pn = _norm(phrase)
         if pn in stripped:
-            brand.append(pn)
+            brand.append(phrase)
             stripped = stripped.replace(pn, " ")
-    toks = [t for t in _tokens(stripped) if t not in _STOPWORDS]
+    # Tokens keep the household's spelling (final letters) for labels;
+    # every comparison goes through `_m`.
+    toks = [t for t in _TOKEN_SPLIT.split(_norm(stripped)) if t and _m(t) not in _STOPWORDS]
     brand += [t for t in toks if re.fullmatch(r"[a-z][a-z0-9]*", t)]   # Latin word = a line/brand name
-    flavor = [w for w in _FLAVORS if _has_any(stripped, (w,)) and _norm(w) not in _head_candidates(toks)]
+    flavor = [w for w in _FLAVORS if _has_any(stripped, (w,)) and (not toks or _m(w) != _m(toks[0]))]
     colors = [w for w in _COLORS if _has_any(stripped, (w,))]
     variety = bool(_has_any(text, _VARIETY))
     size = "small" if _has_any(stripped, _SIZE_SMALL) else ("large" if _has_any(stripped, _SIZE_LARGE) else "")
     forms = forms_of(stripped) - {"packaged", "flavored"}
 
+    size_words = {_stem(_m(w)) for w in _SIZE_SMALL + _SIZE_LARGE}
+    variety_words = {_m(w) for v in _VARIETY for w in v.split()}
+    color_words = {_m(c) for c in colors}
     head = ""
     for t in toks:
-        if t in brand or t in {_norm(c) for c in colors} or _norm(t) in {_norm(v) for v in _VARIETY}:
-            continue
-        if _stem(t) in {_stem(_norm(s)) for s in _SIZE_SMALL + _SIZE_LARGE}:
+        mt = _m(t)
+        if t in brand or mt in color_words or mt in variety_words or _stem(mt) in size_words:
             continue
         head = t
         break
@@ -340,21 +357,17 @@ def parse_term(raw: str) -> ParsedTerm:
         category = category_of(stripped)
     fresh = category in (PRODUCE, MEAT_FISH) and not (forms & set(_PROCESSED_FORMS))
 
-    known = {head} | set(brand) | {_norm(f) for f in flavor} | {_norm(c) for c in colors}
-    positive = [t for t in toks if t not in known and _stem(t) not in {_stem(_norm(s)) for s in _SIZE_SMALL + _SIZE_LARGE}
-                and t not in {w for v in _VARIETY for w in _norm(v).split()}]
+    known = {_m(head)} | {_m(b) for b in brand} | {_m(f) for f in flavor} | color_words
+    positive = [t for t in toks if _m(t) not in known and _stem(_m(t)) not in size_words
+                and _m(t) not in variety_words]
     # Known brand aliases also count as brand even when written in Hebrew.
     for key, aliases in _BRAND_ALIASES.items():
-        if any(a in toks for a in aliases if not re.fullmatch(r"[a-z]+", a)):
+        if any(_m(a) in {_m(t) for t in toks} for a in aliases if not re.fullmatch(r"[a-z]+", a)):
             brand.append(key)
-            positive = [p for p in positive if p not in aliases]
+            positive = [p for p in positive if _m(p) not in {_m(a) for a in aliases}]
     return ParsedTerm(raw=str(raw), head=head, head_stem=_stem(head), category=category, brand=sorted(set(brand)),
                       flavor=flavor, colors=colors, variety=variety, size=size, weight=weight, fresh=fresh,
                       forms=forms, positive=positive, negatives=negatives, free_of=free_of)
-
-
-def _head_candidates(toks: list[str]) -> set[str]:
-    return {toks[0]} if toks else set()
 
 
 def _collect_negation(word: str, what: str, negatives: list[str], free_of: list[str]) -> None:
@@ -390,12 +403,10 @@ def violations(term: ParsedTerm, product_name: str) -> list[Violation]:
     if term.category == PRODUCE and pcat == BEVERAGE and "drink" not in term.forms:
         out.append(Violation("category:beverage_for_produce", "produce requested, product is a drink"))
     if term.category in (PRODUCE, DAIRY, BAKERY, PANTRY, MEAT_FISH) and pcat in FOOD and pcat != term.category \
-            and pcat not in (UNKNOWN,) and not (term.category == PANTRY and pcat == PRODUCE) \
             and not (pcat == FROZEN and "frozen" in term.forms):
         # A different food category is a mismatch unless the request
         # itself named that form (a frozen request may hit FROZEN).
-        if not (term.category == PRODUCE and pcat == PANTRY and _head_in(term, name) and not (pforms & set(_PROCESSED_FORMS))):
-            out.append(Violation("category:mismatch", f"request is {term.category}, product reads as {pcat}"))
+        out.append(Violation("category:mismatch", f"request is {term.category}, product reads as {pcat}"))
     if term.fresh:
         hit = pforms & set(_PROCESSED_FORMS)
         if hit:
@@ -409,7 +420,7 @@ def violations(term: ParsedTerm, product_name: str) -> list[Violation]:
         key = next((k for k in _FREE_OF_DECLARATIONS if k in attr), None)
         if key and any(c in name for c in _FREE_OF_CONFLICTS.get(key, ())):
             out.append(Violation(f"free_of:{key}:conflict", f"request wants no {key}, product says it has it"))
-        elif key and not any(d in name for d in _FREE_OF_DECLARATIONS[key]):
+        elif key and not any(_m(d) in _m(name) for d in _FREE_OF_DECLARATIONS[key]):
             out.append(Violation(f"free_of:{key}:undeclared", f"request requires '{attr}', product does not declare it"))
         elif not key and not _mentions(name, f"ללא {attr}") and not _mentions(name, f"בלי {attr}"):
             out.append(Violation(f"free_of:{attr}:undeclared", f"request requires 'ללא {attr}', product does not declare it"))
@@ -460,7 +471,7 @@ def unverified(term: ParsedTerm, product_name: str) -> list[str]:
         out.append("size:large")
     if term.variety and not _has_any(name, _VARIETY):
         out.append("variety")
-    if term.weight and _norm(term.weight) not in name:
+    if term.weight and _m(term.weight) not in _m(name):
         out.append(f"weight:{term.weight}")
     for c in term.colors:
         if term.variety or not _mentions(name, c):
@@ -484,12 +495,22 @@ def _head_in(term: ParsedTerm, name: str) -> bool:
         return True
     toks = _tokens(name)
     stems = {_stem(t) for t in toks}
-    h, hs = term.head, term.head_stem
+    h, hs = _m(term.head), _stem(_m(term.head))
     if h in toks or hs in stems or h in stems:
         return True
     # two-word heads ("תפוח אדמה", "בצל ירוק") and the singular of a plural request
-    return h in name or (len(hs) >= 3 and any(s.startswith(hs) or hs.startswith(s) for s in stems if len(s) >= 3))
+    return h in _m(name) or (len(hs) >= 3 and any(s.startswith(hs) or hs.startswith(s) for s in stems if len(s) >= 3))
 
 
 def head_matches(term: ParsedTerm, product_name: str) -> bool:
     return _head_in(term, _norm(product_name))
+
+
+def search_key(term: ParsedTerm) -> str:
+    """A LIKE-friendly key for the head: a plural request must still find
+    the singular on the shelf (מלפפונים -> מלפפו matches מלפפון)."""
+    head = term.head or term.raw
+    stem = _stem(head)
+    if stem != head and len(stem) >= 4:
+        return stem[:-1]
+    return head

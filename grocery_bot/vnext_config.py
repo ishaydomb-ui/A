@@ -69,6 +69,54 @@ class VNextConfig:
     promotion_trust_readable: float = 0.8
     promotion_trust_conditional: float = 0.4
 
+    # -- cadence strata (Phase 1.5) -----------------------------------------
+    # How a cadence was obtained caps what depletion alone may claim:
+    #   measured  (>= min_cadence_observations real gaps) -> up to HIGH
+    #   weak      (fewer real gaps than that, but >= 2 dates) -> at most MEDIUM
+    #   fallback  (household gap / share, or the household gap) -> at most LOW+
+    # Another evidence type (explicit need, standing list, meal) can still
+    # lift the item above the cap; cadence by itself cannot.
+    cadence_ceiling_measured: float = 1.0
+    cadence_ceiling_weak: float = 0.70
+    cadence_ceiling_fallback: float = 0.44
+
+    # -- product resolution (Phase 1.5) -------------------------------------
+    resolver_exact_base: float = 0.85
+    resolver_acceptable_base: float = 0.62
+    resolver_unverified_penalty: float = 0.10
+    resolver_evidence_bonus_per_purchase: float = 0.03
+    resolver_evidence_bonus_cap: float = 0.12
+    resolver_catalogue_candidates: int = 12
+    # An unresolved product on an explicit request is a real question only
+    # when there is no acceptable candidate and no substitution to offer.
+    product_confidence_agent_resolvable: float = 0.55
+
+    # -- exceptions (Phase 1.5) ---------------------------------------------
+    # Stock-up above this many units, or this much money, is a commitment
+    # the household should be asked about rather than made for them.
+    exception_stockup_quantity: int = 4
+    exception_stockup_spend: float = 60.0
+    # Weight of an "uncertain" pending request in readiness (an "active"
+    # one counts 1.0, a "likely fulfilled" one 0).
+    readiness_uncertain_request_weight: float = 0.5
+
+    # -- stock-up economics (Phase 1.5) ---------------------------------------
+    # A promotion whose price the item sat at on more than this share of
+    # recorded days is routine, not an opportunity.
+    economics_routine_promo_share: float = 0.50
+    # A reference price this far above the 90-day median is inflated.
+    economics_inflated_reference_factor: float = 1.15
+    economics_lookback_days: int = 90
+    # Units the household will use before spoilage: cadence-derived
+    # consumption over this many days for stockable items.
+    economics_stockable_horizon_days: int = 60
+    economics_perishable_horizon_days: int = 7
+    economics_max_units: int = 6
+    economics_min_absolute_saving: float = 5.0
+    # A price-per-unit history shorter than this cannot call a discount
+    # "unusual" — the reference simply isn't known.
+    economics_min_history_days: int = 14
+
     # -- readiness ----------------------------------------------------------
     readiness_prepare_now: float = 0.60
     readiness_prepare_soon: float = 0.35

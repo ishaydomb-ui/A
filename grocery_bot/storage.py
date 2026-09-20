@@ -435,6 +435,28 @@ CREATE TABLE IF NOT EXISTS vnext_stockup_rules (
     created_at TEXT NOT NULL,
     active INTEGER NOT NULL DEFAULT 1
 );
+
+-- vNext Phase 1.5: human confirmation of a term -> product mapping,
+-- accumulated only from real interactions (an explicit statement, an
+-- accepted substitution, a kept exception choice, a later correction).
+-- Deliberately NOT preferred_products: that table mixes human and
+-- resolver-written rows, and the whole point here is that inference and
+-- human confirmation stay different concepts. Nothing in production
+-- writes here yet (Phase 2 would); the vNext resolver reads it as
+-- HUMAN_DECLARED evidence.
+CREATE TABLE IF NOT EXISTS vnext_product_confirmations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    store TEXT NOT NULL,
+    term TEXT NOT NULL,
+    product_code TEXT NOT NULL,
+    product_name TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL,            -- explicit_statement | accepted_substitution | kept_exception_choice | later_correction
+    confirmed_by TEXT NOT NULL DEFAULT '',
+    confirmed_at TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_vnext_confirmations_term
+    ON vnext_product_confirmations(store, term);
 """
 
 
@@ -2677,3 +2699,104 @@ class Storage:
                 "SELECT * FROM vnext_stockup_rules WHERE active = 1 ORDER BY id"
             ).fetchall()
         return [dict(r) for r in rows]
+
+
+    # -- vNext Phase 1.5 read helpers (additive) ------------------------------
+
+    def add_vnext_product_confirmation(self, store: str, term: str, product_code: str,
+                                       product_name: str, kind: str, confirmed_by: str = "",
+                                       note: str = "") -> int:
+        with closing(self._connect()) as conn:
+            cursor = conn.execute(
+                "INSERT INTO vnext_product_confirmations "
+                "(store, term, product_code, product_name, kind, confirmed_by, confirmed_at, note) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (store, normalize_term(term), str(product_code), product_name or "", kind,
+                 confirmed_by or "", datetime.now(timezone.utc).isoformat(), note or ""),
+            )
+            conn.commit()
+            return int(cursor.lastrowid)
+
+    def list_vnext_product_confirmations(self, store: str | None = None) -> list[dict]:
+        with closing(self._connect()) as conn:
+            if store:
+                rows = conn.execute(
+                    "SELECT * FROM vnext_product_confirmations WHERE store = ? ORDER BY confirmed_at",
+                    (store,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM vnext_product_confirmations ORDER BY confirmed_at"
+                ).fetchall()
+        return [dict(r) for r in rows]
+
+    def search_store_price_names(self, store: str, query: str, limit: int = 12,
+                                 also: list[str] | None = None) -> list[dict]:
+        """Newest-priced products at one portal chain whose name contains
+        `query` and every word in `also` (LIKE, escaped). A shortlist for
+        the vNext resolver's semantic check, not a ranking — ranking
+        happens on meaning there."""
+        term = str(query or "").strip()
+        if not term:
+            return []
+        words = [term] + [w for w in (also or []) if str(w).strip()]
+        clause = " AND ".join("fold(name) LIKE ? ESCAPE '\\'" for _ in words)
+        params = [_like_contains(_fold_apostrophes(w)) for w in words]
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT p.barcode, p.name, p.price, p.observed_at FROM store_prices p "
+                "JOIN (SELECT barcode, MAX(observed_at) AS observed_at FROM store_prices "
+                f"      WHERE store = ? AND {clause} GROUP BY barcode) latest "
+                "  ON p.barcode = latest.barcode AND p.observed_at = latest.observed_at "
+                "WHERE p.store = ? ORDER BY LENGTH(p.name) LIMIT ?",
+                (store, *params, store, int(limit)),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def search_catalog_names(self, query: str, limit: int = 12, also: list[str] | None = None) -> list[dict]:
+        """Shufersal catalogue rows whose name contains `query` and every
+        word in `also`; shortest names first. Companion of
+        `search_store_price_names` for the vNext resolver."""
+        term = str(query or "").strip()
+        if not term:
+            return []
+        words = [term] + [w for w in (also or []) if str(w).strip()]
+        clause = " AND ".join("fold(name) LIKE ? ESCAPE '\\'" for _ in words)
+        params = [_like_contains(_fold_apostrophes(w)) for w in words]
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                f"SELECT item_code, name, price FROM catalog_products WHERE {clause} "
+                "ORDER BY LENGTH(name) LIMIT ?",
+                (*params, int(limit)),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def price_history_series(self, item_code: str, days: int = 90) -> list[dict]:
+        """Shufersal price_history rows for one item over the last `days`, oldest first."""
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT day, price, promo_price FROM price_history "
+                "WHERE item_code = ? AND day >= date('now', ?) ORDER BY day",
+                (str(item_code), f"-{int(days)} days"),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def store_price_series(self, store: str, barcode: str, days: int = 90) -> list[dict]:
+        """Portal-chain price observations for one barcode, oldest first.
+        Note: store_prices holds feed snapshots plus order prices, one row
+        per observed day, so gaps mean 'not observed', not 'unchanged'."""
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT observed_at AS day, price, source FROM store_prices "
+                "WHERE store = ? AND barcode = ? AND observed_at >= date('now', ?) ORDER BY observed_at",
+                (store, str(barcode), f"-{int(days)} days"),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def catalog_item_code_for_name(self, name: str) -> str | None:
+        """The Shufersal catalogue item whose name equals `name` exactly, if any."""
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                "SELECT item_code FROM catalog_products WHERE name = ? LIMIT 1", (name,)
+            ).fetchone()
+        return row["item_code"] if row else None
