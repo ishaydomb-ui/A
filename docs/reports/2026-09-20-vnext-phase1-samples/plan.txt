@@ -1,0 +1,251 @@
+vNext shopping plan — as of 2026-09-20 (shadow mode, mutates_cart=False)
+  73 items: 20 auto-include, 53 suggested, 647 ignored
+  explicit 14 · routine 6 · meal 0 · stock-up 9 · decisions needed 41 (+12 quiet suggestions, not pushed)
+  product choice: human 0 · inferred-only 70 · unresolved 3
+
+  [auto_include] 0.95  x1 (0.8)  גזר !  -> i:גזר ארוז  @shufersal,tivtaam
+      explicitly requested: לירן asked for it
+      ? product choice is inferred, not human-confirmed
+      ? may already be in a cart — cart presence is unknown in shadow mode
+      ? bought at more than one chain — chain choice open
+  [auto_include] 0.95  x1 (0.8)  גרנולה ללא תוספת סוכר !  -> i:עוגיות גרנולה קינמון ללס  @shufersal,tivtaam
+      explicitly requested: לירן asked for it
+      ? product choice is inferred, not human-confirmed
+      ? may already be in a cart — cart presence is unknown in shadow mode
+      ? bought at more than one chain — chain choice open
+  [auto_include] 0.95  x1 (0.8)  דפי אורז !  -> i:דפי אורז 22 ס"מ  @shufersal,tivtaam
+      explicitly requested: לירן asked for it
+      ? product choice is inferred, not human-confirmed
+      ? may already be in a cart — cart presence is unknown in shadow mode
+      ? bought at more than one chain — chain choice open
+  [auto_include] 0.95  x1 (0.8)  חלב עמיד !  -> i:חלב בקרטון 3% שומן  @shufersal,tivtaam
+      explicitly requested: ישי asked for it
+      ? product choice is inferred, not human-confirmed
+      ? may already be in a cart — cart presence is unknown in shadow mode
+      ? bought at more than one chain — chain choice open
+  [auto_include] 0.95  x1 (0.8)  יוגורט Pro וניל !  -> i:תחליב רחצה יוגורט וניל  @shufersal,tivtaam
+      explicitly requested: לירן asked for it
+      ? product choice is inferred, not human-confirmed
+      ? may already be in a cart — cart presence is unknown in shadow mode
+      ? bought at more than one chain — chain choice open
+  [auto_include] 0.95  x1 (0.8)  לחם חיטה מלא דגנית עין בר !  -> i:לחם חיטה מלא  @shufersal,tivtaam
+      explicitly requested: לירן asked for it
+      ? product choice is inferred, not human-confirmed
+      ? may already be in a cart — cart presence is unknown in shadow mode
+      ? bought at more than one chain — chain choice open
+  [auto_include] 0.95  x1 (0.8)  מלח !  -> i:מלח ים דק  @shufersal,tivtaam
+      explicitly requested: לירן asked for it
+      ? product choice is inferred, not human-confirmed
+      ? may already be in a cart — cart presence is unknown in shadow mode
+      ? bought at more than one chain — chain choice open
+  [auto_include] 0.95  x1 (0.8)  מלפפונים מיני !  -> i:מלפפונים קטנים בחומץ  @shufersal,tivtaam
+      explicitly requested: לירן asked for it
+      ? product choice is inferred, not human-confirmed
+      ? may already be in a cart — cart presence is unknown in shadow mode
+      ? bought at more than one chain — chain choice open
+  [auto_include] 0.95  x1 (0.8)  סילאן !  -> i:סילאן אורגני לחיץ  @shufersal,tivtaam
+      explicitly requested: לירן asked for it
+      ? product choice is inferred, not human-confirmed
+      ? may already be in a cart — cart presence is unknown in shadow mode
+      ? bought at more than one chain — chain choice open
+  [auto_include] 0.95  x1 (0.8)  סלק (לא באריזת ואקום) !  -> i:סלק מבושל בואקום -אורגני  @shufersal,tivtaam
+      explicitly requested: לירן asked for it
+      ? product choice is inferred, not human-confirmed
+      ? may already be in a cart — cart presence is unknown in shadow mode
+      ? bought at more than one chain — chain choice open
+  [auto_include] 0.95  x1 (0.8)  עגבניות שרי במגוון צבעים !  -> i:מארז עגבניות שרי תמר  @shufersal,tivtaam
+      explicitly requested: לירן asked for it
+      ? product choice is inferred, not human-confirmed
+      ? may already be in a cart — cart presence is unknown in shadow mode
+      ? bought at more than one chain — chain choice open
+  [auto_include] 0.95  x1 (0.8)  פלפלים בכמה צבעים !  -> i:פלפל אדום  @shufersal,tivtaam
+      explicitly requested: לירן asked for it
+      ? product choice is inferred, not human-confirmed
+      ? may already be in a cart — cart presence is unknown in shadow mode
+      ? bought at more than one chain — chain choice open
+  [auto_include] 0.95  x1 (0.8)  שזיפים !  -> i:שזיפים ללא גלעין  @shufersal,tivtaam
+      explicitly requested: לירן asked for it
+      ? product choice is inferred, not human-confirmed
+      ? may already be in a cart — cart presence is unknown in shadow mode
+      ? bought at more than one chain — chain choice open
+  [auto_include] 0.95  x1 (0.8)  שמן זית !  -> i:שמן זית כתית מעולה  @shufersal,tivtaam
+      explicitly requested: לירן asked for it
+      ? product choice is inferred, not human-confirmed
+      ? may already be in a cart — cart presence is unknown in shadow mode
+      ? bought at more than one chain — chain choice open
+  [auto_include] 0.86  x0.56ק"ג (1.0)  פלפל צהוב   -> i:פלפל צהוב  @shufersal,tivtaam
+      bought regularly (tier A); overdue: 19d since purchase vs ~8d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [auto_include] 0.84  x0.54ק"ג (1.0)  תפוח עץ סמיט   -> i:תפוח עץ סמיט  @shufersal,tivtaam
+      bought regularly (tier B); overdue: 19d since purchase vs ~9d cadence
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [auto_include] 0.82  x0.52ק"ג (1.0)  בצל אדום   -> i:בצל אדום  @tivtaam
+      bought regularly (tier C); overdue: 45d since purchase vs ~16d cadence
+      ? product choice is inferred, not human-confirmed
+  [auto_include] 0.82  x2 (1.0)  נפוליאון גבינת שמנת זיתים ירוקים 24%   -> i:נפוליאון גבינת שמנת זיתים ירוקים 24%  @tivtaam
+      bought regularly (tier C); overdue: 53d since purchase vs ~29d cadence
+      ? product choice is inferred, not human-confirmed
+  [auto_include] 0.82  x1 (1.0)  סלרי אמריקאי   -> i:סלרי אמריקאי  @tivtaam
+      bought regularly (tier C); overdue: 53d since purchase vs ~26d cadence
+      ? product choice is inferred, not human-confirmed
+  [auto_include] 0.78  x1 (1.0)  הפטרוזיליה   -> i:הפטרוזיליה  @tivtaam
+      bought regularly (tier C); overdue: 91d since purchase vs ~31d cadence
+      ? product choice is inferred, not human-confirmed
+  [suggest     ] 0.73  x0.11ק"ג (0.9)  נקניק פפרוני   -> i:נקניק פפרוני  @tivtaam
+      bought regularly (tier C); overdue: 53d since purchase vs ~29d cadence
+      ? product choice is inferred, not human-confirmed
+  [suggest     ] 0.73  x1.04ק"ג (0.9)  רצועות / קוביות עוף   -> i:רצועות / קוביות עוף  @tivtaam
+      bought regularly (tier C); overdue: 76d since purchase vs ~38d cadence
+      ? product choice is inferred, not human-confirmed
+  [suggest     ] 0.72  x4 (0.6)  דנונה דל לקטוז   -> i:דנונה 8 מעודן ללא סוכר מוסף  @shufersal,tivtaam
+      bought regularly (tier A); overdue: 19d since purchase vs ~12d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.72  x2 (0.6)  קוטג' 5% שומן   -> i:קוטג' 5% שומן  @shufersal,tivtaam
+      bought regularly (tier A); overdue: 19d since purchase vs ~10d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.72  x1 (0.6)  קישואים מובחר   -> i:קישואים מובחר  @shufersal,tivtaam
+      bought regularly (tier A); overdue: 19d since purchase vs ~10d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.70  x0.6ק"ג (1.0)  בטטה   -> i:בטטה  @tivtaam
+      bought regularly (tier B); likely due: 8d since purchase vs ~7d cadence
+      ? product choice is inferred, not human-confirmed
+  [suggest     ] 0.70  x1 (0.6)  מלפפון   -> i:מלפפון  @shufersal,tivtaam
+      bought regularly (tier A); likely due: 19d since purchase vs ~13d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.70  x1 (0.9)  זיתים ירוקים ענקיים   -> i:זיתים ירוקים ענקיים  @tivtaam
+      bought regularly (tier C); likely due: 45d since purchase vs ~31d cadence
+      ? product choice is inferred, not human-confirmed
+  [suggest     ] 0.69  x1 (0.9)  זיתים ירוקים טבעות   -> i:זיתים ירוקים טבעות  @tivtaam
+      bought regularly (tier C); likely due: 60d since purchase vs ~42d cadence
+      ? product choice is inferred, not human-confirmed
+  [suggest     ] 0.69  x1 (0.8)  קוטג' 9%   -> i:קוטג' 9%  @tivtaam
+      bought regularly (tier C); overdue: 96d since purchase vs ~60d cadence
+      ? product choice is inferred, not human-confirmed
+  [suggest     ] 0.63  x1 (0.7)  שמנת לבישול 9%   -> i:שמנת לבישול 9%  @shufersal,tivtaam
+      bought regularly (tier B); overdue: 60d since purchase vs ~26d cadence
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x0.57ק"ג (1.0)  אבוקדו   -> i:אבוקדו  @shufersal,tivtaam
+      bought regularly (tier B); approaching due: 8d since purchase vs ~10d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x1 (0.6)  אצבעות גבינה צהובה   -> i:אצבעות גבינה צהובה  @shufersal
+      bought regularly (tier B); likely due: 19d since purchase vs ~17d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+  [suggest     ] 0.60  x1 (0.6)  ביצים   -> i:ביצי משק טריות L  @shufersal,tivtaam
+      on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x1 (0.6)  בננה   -> i:משקה בננה 1 ליטר  @shufersal,tivtaam
+      bought regularly (tier B); likely due: 19d since purchase vs ~14d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x2ק"ג (1.0)  בצל יבש 📦  -> i:בצל יבש  @shufersal,tivtaam
+      bought regularly (tier A); approaching due: 8d since purchase vs ~16d cadence; on the standing list; good promotion (38%, saves 3.00₪): stock-up candidate
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x1 (0.6)  חוט דנטלי   -> i:מקלוני חוט דנטלי  @shufersal,tivtaam
+      on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x1 (0.6)  חומוס עשיר ב40% טחינה   -> i:חומוס טחינה צבר  @shufersal,tivtaam
+      bought regularly (tier C); lapsed (probably no longer bought, or bought elsewhere): 325d since purchase vs ~38d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x2 (0.6)  חלב בקרטון 3% שומן   -> i:חלב בקרטון 3% שומן  @shufersal,tivtaam
+      bought regularly (tier B); likely due: 19d since purchase vs ~15d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x1 (1.0)  חסה לאליק הידרופונית   -> i:חסה לאליק הידרופונית  @shufersal,tivtaam
+      bought regularly (tier B); recently bought: 3d since purchase vs ~8d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x1 (0.6)  טונה בשמן קנולה   -> i:טונה בשמן קנולה  @shufersal,tivtaam
+      bought regularly (tier C); recently bought: 19d since purchase vs ~38d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x1.4ק"ג (1.0)  כרוב לבן   -> i:כרוב לבן  @shufersal,tivtaam
+      bought regularly (tier B); recently bought: 8d since purchase vs ~26d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x1 (0.6)  מגבונים לניקוי כללי   -> i:מגבונים לניקוי כללי  @shufersal,tivtaam
+      bought regularly (tier C); lapsed (probably no longer bought, or bought elsewhere): 511d since purchase vs ~51d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x1 (0.6)  עגבניות שרי יובל ליקופן   -> i:עגבניות שרי צהובות  @shufersal,tivtaam
+      bought regularly (tier B); lapsed (probably no longer bought, or bought elsewhere): 238d since purchase vs ~17d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x2ק"ג (1.0)  פלפל אדום 📦  -> i:פלפל אדום  @shufersal,tivtaam
+      bought regularly (tier A); recently bought: 3d since purchase vs ~8d cadence; on the standing list; good promotion (51%, saves 5.00₪): stock-up candidate
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x1 (0.6)  פסטה פנה   -> i:פסטה פנה ריגטה  @shufersal,tivtaam
+      bought regularly (tier C); recently bought: 19d since purchase vs ~51d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x1 (0.6)  קורנפלקס   -> i:קורנפלקס של אלופים בד"ץ  @shufersal,tivtaam
+      on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x1 (0.6)  קטשופ מופחת סוכר   -> i:קטשופ מופחת סוכר  @shufersal,tivtaam
+      bought regularly (tier C); recently bought: 19d since purchase vs ~38d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x1 (0.6)  קיסמי שיניים פלסטיק   -> i:קיסמי שיניים פלסטיק  @shufersal
+      bought regularly (tier D); overdue: 455d since purchase vs ~153d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+  [suggest     ] 0.60  x1 (0.6)  שימורי עגבניות   -> i:תרכיז עגבניות  @shufersal,tivtaam
+      on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x2 (0.6)  שמן זית כתית מעולה   -> i:שמן זית כתית מעולה  @shufersal,tivtaam
+      bought regularly (tier C); approaching due: 27d since purchase vs ~51d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x1 (0.6)  שניצלונים   -> i:שניצלונים  @shufersal,tivtaam
+      bought regularly (tier C); recently bought: 19d since purchase vs ~51d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x2 (0.6)  שעועית עדינה שלמה קפואה   -> i:שעועית עדינה שלמה קפואה  @shufersal,tivtaam
+      bought regularly (tier C); lapsed (probably no longer bought, or bought elsewhere): 325d since purchase vs ~31d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.60  x1 (0.6)  תפוח אדמה לבן ארוז   -> i:תפוח אדמה לבן  @shufersal,tivtaam
+      bought regularly (tier D); lapsed (probably no longer bought, or bought elsewhere): 554d since purchase vs ~153d cadence; on the standing list
+      ? product choice is inferred, not human-confirmed
+      ? bought at more than one chain — chain choice open
+  [suggest     ] 0.59  x1 (0.8)  דבש טהור מפרחי בר לחיץ   -> i:דבש טהור מפרחי בר לחיץ  @tivtaam
+      bought regularly (tier D); overdue: 114d since purchase vs ~48d cadence
+      ? product choice is inferred, not human-confirmed
+  [suggest     ] 0.59  x1 (0.8)  לקט לסלט בסגנון אסייתי   -> i:לקט לסלט בסגנון אסייתי  @tivtaam
+      bought regularly (tier D); overdue: 60d since purchase vs ~33d cadence
+      ? product choice is inferred, not human-confirmed
+  [suggest     ] 0.59  x1 (0.8)  רוטב סויה   -> i:רוטב סויה  @tivtaam
+      bought regularly (tier D); overdue: 114d since purchase vs ~48d cadence
+      ? product choice is inferred, not human-confirmed
+  [suggest     ] 0.57  x1 (0.6)  גבינת גלבוע פרוסות 22%   -> i:גבינת גלבוע פרוסות 22%  @shufersal
+      bought regularly (tier B); likely due: 27d since purchase vs ~22d cadence
+      ? product choice is inferred, not human-confirmed
+  [suggest     ] 0.57  x1 (0.6)  מלח שולחן דק   -> i:מלח שולחן דק  @shufersal
+      bought regularly (tier C); overdue: 103d since purchase vs ~51d cadence
+      ? product choice is inferred, not human-confirmed
+  [suggest     ] 0.57  x1 (0.6)  נקניקיות פרגיות   -> i:נקניקיות פרגיות  @shufersal
+      bought regularly (tier C); overdue: 103d since purchase vs ~38d cadence
+      ? product choice is inferred, not human-confirmed
+  … 13 more
+
+caveats:
+  - no waste reports on record — waste dampening is inactive
+  - no human-confirmed product preferences — every product choice is inference
+  - no planned meals declared — meal demand is inactive
+  - live cart contents are NOT read in shadow mode; 'already in cart' is unknown for every item
+  - no external spend signal source exists yet
+
+(add --json for the machine-readable plan)
