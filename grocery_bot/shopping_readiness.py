@@ -61,7 +61,12 @@ def assess(storage, config: VNextConfig | None = None, today: date | None = None
     auto = plan.auto_items
     essentials_due = [i for i in auto if not i.mandatory
                       and i.depletion_inference.get("state") in ("likely due", "overdue")]
-    explicit = [i for i in plan.items if i.mandatory]
+    # Phase 1.5: a request a later order already covered is not a reason
+    # to shop; an uncertain one counts at a configurable fraction.
+    active = plan.active_requests
+    uncertain = plan.uncertain_requests
+    explicit = active + uncertain
+    explicit_weight = len(active) + config.readiness_uncertain_request_weight * len(uncertain)
     meal_items = [i for i in plan.items if i.meal_or_event]
     savings = [i for i in plan.items if i.stock_up]
     basket = len(auto)
@@ -78,7 +83,7 @@ def assess(storage, config: VNextConfig | None = None, today: date | None = None
 
     parts = {
         "essentials": config.readiness_weight_essentials * _saturate(len(essentials_due), config.readiness_essentials_saturation),
-        "explicit": config.readiness_weight_explicit * _saturate(len(explicit), config.readiness_explicit_saturation),
+        "explicit": config.readiness_weight_explicit * _saturate(explicit_weight, config.readiness_explicit_saturation),
         "cadence": config.readiness_weight_cadence * cadence_signal,
         "meals": config.readiness_weight_meals * (1.0 if (upcoming_meals or upcoming_events) else 0.0),
         "savings": config.readiness_weight_savings * _saturate(len(savings), config.readiness_savings_saturation),
@@ -90,8 +95,13 @@ def assess(storage, config: VNextConfig | None = None, today: date | None = None
     reasons = []
     if essentials_due:
         reasons.append(f"{len(essentials_due)} recurring items look due by cadence (inference, inventory unknown)")
+    fulfilled = plan.summary.get("pending_requests", {}).get("likely_fulfilled", 0)
     if explicit:
-        reasons.append(f"{len(explicit)} explicit requests pending — cart presence not verified in shadow mode")
+        reasons.append(f"{len(active)} explicit requests active" + (f", {len(uncertain)} possibly already bought" if uncertain else "")
+                       + (f"; {fulfilled} older ones look already bought and are not counted" if fulfilled else "")
+                       + " — cart presence not verified in shadow mode")
+    elif fulfilled:
+        reasons.append(f"{fulfilled} pending requests look already bought by a later order — none counted")
     if since is not None:
         reasons.append(f"{since:.0f} days since the last recorded order; household rhythm ~{gap:.0f} days")
     else:
@@ -102,6 +112,7 @@ def assess(storage, config: VNextConfig | None = None, today: date | None = None
         reasons.append(f"{len(savings)} stock-up opportunities on things the household buys")
     reasons.append(f"estimated basket: {basket} auto-include items, {len(plan.suggested_items)} to review")
     reasons.append("a shop nobody reported yet would not be visible here until the nightly order sync")
+    reasons.append("cart_state=unknown — one cycle-level caveat, not a question per item")
 
     if score >= config.readiness_prepare_now:
         action = PREPARE_NOW
@@ -127,6 +138,10 @@ def assess(storage, config: VNextConfig | None = None, today: date | None = None
         signals={
             "essentials_due": len(essentials_due),
             "explicit_pending": len(explicit),
+            "explicit_active": len(active),
+            "explicit_uncertain": len(uncertain),
+            "explicit_likely_fulfilled": fulfilled,
+            "true_user_decisions": len(plan.exceptions),
             "days_since_last_order": None if since is None else round(since, 1),
             "household_gap_days": gap,
             "cadence_signal": round(cadence_signal, 3),

@@ -32,6 +32,12 @@ Run with: python -m grocery_bot.cli <command>
     vnext-readiness [--json] [--as-of YYYY-MM-DD]  vNext SHADOW readiness:
                           is a cycle worth preparing now, and why. Sends
                           nothing
+    vnext-evaluate [--json] [--as-of YYYY-MM-DD]  vNext SHADOW evaluation
+                          (Phase 1.5): counts of needs, auto-includes,
+                          true decisions, resolver outcomes, old-request
+                          reconciliation, semantic rejections, stock-ups,
+                          low-trust cadence exclusions + a Telegram mock.
+                          Reads only
     vnext-add-meal "<dish>" --on YYYY-MM-DD --ingredients a,b,c
                           [--servings N] [--by NAME]  declare a planned
                           meal for the vNext plan (additive table)
@@ -712,6 +718,77 @@ def _vnext_readiness(storage: Storage, args: list[str]) -> int:
         print(format_readiness(result))
         print()
         print("(add --json for the machine-readable result)")
+    return 0
+
+
+def _vnext_evaluate(storage: Storage, args: list[str]) -> int:
+    """vNext Phase 1.5 shadow evaluation: the plan + readiness reduced to
+    the numbers that say whether the planner is trustworthy yet, plus a
+    Telegram mock. Pure read."""
+    import json
+
+    from .shopping_plan import build_plan
+    from .shopping_readiness import assess
+    from .telegram_vnext_view import evaluate_message
+    from .vnext_config import VNextConfig
+    from .vnext_economics import price_source_freshness
+
+    config = VNextConfig.from_env()
+    as_of = _vnext_as_of(args)
+    plan = build_plan(storage, config, as_of)
+    readiness = assess(storage, config, as_of, plan)
+    s = plan.summary
+    report = {
+        "schema": "gordon-vnext-evaluate/v1",
+        "as_of": plan.as_of,
+        "generated_at": plan.generated_at,
+        "mutates_cart": False,
+        "cart_state": plan.cart_state,
+        "total_candidate_needs": s["total_items"] + s["ignored"],
+        "plan_items": s["total_items"],
+        "auto_includes": s["auto_include"],
+        "suggestions": s["suggest"],
+        "quiet_suggestions": s["quiet_suggestions"],
+        "true_user_decisions": s["decisions_needed"],
+        "agent_resolvable": s.get("agent_resolvable", 0),
+        "product_resolver": s.get("resolver", {}),
+        "old_pending_requests": s.get("pending_requests", {}),
+        "semantic_constraint_violations_detected": s.get("semantic_violations_detected", 0),
+        "stock_up_candidates": s["stock_up"],
+        "low_trust_cadence_excluded_from_auto_include": s.get("low_trust_cadence_excluded", 0),
+        "cadence_strata_among_auto_includes": s.get("cadence_strata_auto", {}),
+        "readiness": {"score": round(readiness.score, 3), "action": readiness.suggested_action,
+                      "confidence": round(readiness.confidence, 3)},
+        "decisions": [{"term": i.display_name, "reason": i.exception_reason} for i in plan.exceptions],
+        "reconciliation": plan.reconciliation,
+        "price_source_freshness": price_source_freshness(storage),
+        "caveats": plan.caveats,
+        "telegram_mock": evaluate_message(plan, readiness),
+    }
+    if "--json" in args:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0
+    print(f"vNext evaluate — as of {report['as_of']} (shadow mode, mutates_cart=False, cart_state={plan.cart_state})")
+    for key in ("total_candidate_needs", "plan_items", "auto_includes", "suggestions", "quiet_suggestions",
+                "true_user_decisions", "agent_resolvable", "product_resolver", "old_pending_requests",
+                "semantic_constraint_violations_detected", "stock_up_candidates",
+                "low_trust_cadence_excluded_from_auto_include", "cadence_strata_among_auto_includes", "readiness"):
+        print(f"  {key}: {report[key]}")
+    if report["decisions"]:
+        print("  decisions:")
+        for d in report["decisions"]:
+            print(f"    - {d['term']}: {d['reason']}")
+    print("  old requests:")
+    for r in report["reconciliation"]:
+        ev = next((e for e in r["fulfillment_evidence"] if e.get("line")), None)
+        print(f"    - #{r['request_id']} {r['text']}: {r['request_status_estimate']}"
+              + (f" ← {ev['line']} ({ev['date']}, {ev['resolver_status']})" if ev else ""))
+    print("  price sources:", json.dumps(report["price_source_freshness"], ensure_ascii=False))
+    print()
+    print("--- Telegram mock (not sent) ---")
+    print(report["telegram_mock"])
+    print()
+    print("(add --json for the machine-readable result)")
     return 0
 
 
@@ -1532,6 +1609,7 @@ _DB_ONLY_COMMANDS = {
     # reads; add-meal/stockup-rule write only to their own additive tables.
     "vnext-plan": _vnext_plan,
     "vnext-readiness": _vnext_readiness,
+    "vnext-evaluate": _vnext_evaluate,
     "vnext-add-meal": _vnext_add_meal,
     "vnext-stockup-rule": _vnext_stockup_rule,
     # Reads flat CSVs under data/benefits/ (gitignored — household

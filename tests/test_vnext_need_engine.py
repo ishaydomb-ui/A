@@ -213,7 +213,10 @@ class InferredProductStaysInference(Base):
         a = self._assess("גזר")
         self.assertEqual(len(a.candidate_products), 1)
         self.assertEqual(a.candidate_products[0].origin, he.Origin.INFERENCE)
-        self.assertTrue(any("inferred" in u for u in a.unresolved))
+        # Phase 1.5: an inferred-but-clean product is Gordon's to resolve,
+        # not a question for the household (spec §5B).
+        self.assertEqual(a.exception_class, "agent_resolvable")
+        self.assertIn("inferred", a.exception_reason)
         self.assertEqual(a.display_name, "גזר")
 
     def test_human_preference_is_human(self):

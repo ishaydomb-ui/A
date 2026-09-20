@@ -78,6 +78,8 @@ def plan_message(plan: ShoppingPlan) -> str:
 
 
 def exception_message(plan: ShoppingPlan, limit: int = 8) -> str:
+    """Only true user decisions (Phase 1.5). An inferred product Gordon
+    resolved on evidence is not a question; nor is 'cart unknown'."""
     decisions = plan.exceptions
     n = len(decisions)
     if n == 0:
@@ -85,24 +87,45 @@ def exception_message(plan: ShoppingPlan, limit: int = 8) -> str:
     head = "צריך ממך החלטה אחת בלבד" if n == 1 else f"צריך ממך {n} החלטות בלבד"
     lines = [head, ""]
     for item in decisions[:limit]:
-        why = item.unresolved_decisions[0] if item.unresolved_decisions else item.reason
-        lines.append(f"• {item.display_name} — {_short_reason(item, why)}")
+        lines.append(f"• {item.display_name} — {_short_reason(item)}")
     if n > limit:
         lines.append(f"ועוד {n - limit}.")
     return "\n".join(lines)
 
 
-def _short_reason(item, why: str) -> str:
-    if "no known product" in why:
-        return "לא יודע איזה מוצר בדיוק"
-    if "inferred" in why:
-        return "ניחוש של מוצר, לא אישור שלך"
-    if "already in a cart" in why:
-        return "אולי כבר בעגלה"
-    if "more than one chain" in why:
-        return "באיזו רשת?"
-    if item.stock_up:
-        return "מבצע טוב — לאגור?"
-    if item.meal_or_event:
-        return f"ל{item.meal_or_event} — יש בבית?"
-    return "לא בטוח שצריך"
+def _short_reason(item) -> str:
+    why = item.exception_reason or ""
+    product = (item.inferred_product or item.human_product or {}).get("product_name", "")
+    if "brand not found" in why:
+        return f"המותג לא נמצא — לקחת {product}?" if product else "המותג לא נמצא — מה במקום?"
+    if "substitutes differ" in why:
+        subs = [c.get("product_name", "") for c in (item.product_resolution.get("substitution_candidates") or [])[:2]]
+        return "לא נמצא בדיוק — " + (" / ".join(s for s in subs if s) or "מה במקום?")
+    if "cannot be matched safely" in why or "no product found" in why:
+        return "לא מצאתי מוצר שמתאים — מה בדיוק?"
+    if "stock-up commitment" in why:
+        return f"מבצע טוב — לאגור {item.quantity:g}?"
+    if "chain split" in why:
+        return "לפצל בין רשתות?"
+    return "צריך החלטה שלך"
+
+
+def evaluate_message(plan: ShoppingPlan, r: Readiness | None = None) -> str:
+    """A concise mock of what Phase 2 would say — readiness, the plan and
+    the (few) decisions, in one screen. Not sent anywhere."""
+    parts = []
+    if r is not None:
+        parts.append(readiness_message(r, plan))
+    parts.append(plan_message(plan))
+    parts.append(exception_message(plan))
+    s = plan.summary
+    fulfilled = s.get("pending_requests", {}).get("likely_fulfilled", 0)
+    quiet = []
+    if fulfilled:
+        quiet.append(count(fulfilled, "בקשה ישנה אחת כנראה כבר נקנתה", "בקשות ישנות כנראה כבר נקנו"))
+    if s.get("agent_resolvable"):
+        quiet.append(count(s["agent_resolvable"], "מוצר אחד בחרתי לפי ההיסטוריה — אפשר לתקן",
+                           "מוצרים בחרתי לפי ההיסטוריה — אפשר לתקן"))
+    if quiet:
+        parts.append("\n".join(q for q in quiet if q))
+    return "\n\n".join(parts)
