@@ -6,9 +6,9 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-17 ~22:40 (host time, CEST) — reliability build + conversation-backend benchmark + Markdown->HTML migration (WIP, paused on Ishay's call re: usage limit)
+**Last anchored:** 2026-09-20 (host time, CEST) — Family Runtime MVP round 2 (Bitwarden, watch_list pause-notification fix, the Work-safe export + real Tiv Taam order-line backfill, Google Drive wiring blocked on access, exit-node priority) — see §2h
 **Session:** https://claude.ai/code/session_01AR7esAYdoXQ71HXtqJPpQV
-**Branch:** `claude/online-grocery-automation-b7pq4g`
+**Branch:** `claude/gordon-work-mvp-cartpause`
 **Status is in `git log`, not hand-typed here.**
 
 **Since the last anchor (`c178749`):** the **FINAL RELIABILITY + AGENT UX
@@ -528,8 +528,81 @@ tool reached from the guessing path, and no code path completes a
 purchase. Pinned by tests in `tests/test_untrusted.py` so a later change
 cannot come to rely on the flattening alone.
 
+## 2h. Family Runtime MVP, Bitwarden, and the Work-safe export (2026-09-18/20)
+
+**Branch for all of this: `claude/gordon-work-mvp-cartpause`** — a
+separate deploy branch (`claude/gordon-work-mvp-deploy`) exists from
+the first round of this work and may be behind; the live
+`grocery-bot.service` `WorkingDirectory` *is* this checkout, so whatever
+branch is checked out here is what a `refresh_bot.sh` deploys next.
+
+- **Cart-writer pause** (`cartpause.py`) + `/pausecart` `/resumecart` —
+  guards 6 orchestrator call sites. **Tiv Taam is currently paused** for
+  the Work-MVP benchmark; verify with
+  `python -m grocery_bot.cli work-context tivtaam` or check
+  `app_state` keys `cart_paused:tivtaam`/`cart_paused:global` before
+  assuming otherwise.
+- **`work_projection.py`** (`work-context`) and **`work_planner_snapshot.py`**
+  (`work-planner-snapshot`) — two earlier, still-live pure-read exports
+  for benchmarking Gordon's own planner. Not the Work pilot's actual
+  input (see below) — kept for benchmarking only.
+- **Fixed 2026-09-19**: the list watcher (`listwatch.py`/`watch_list`)
+  was re-sending an identical "14 already there" notification every 6h
+  while Tiv Taam sat paused, forever, because a paused store's cart
+  writer never actually consumes a pending request so the cooldown kept
+  expiring onto the same 14 items. Now stays quiet (still holding the
+  cooldown) when every enabled store is paused.
+- **Bitwarden as primary Shufersal credential channel** (`bitwarden.py`,
+  `config.py::_shufersal_credentials`) — per Ishay 2026-09-18 (relayed
+  via Miri), tries the shared household vault first, falls back to
+  `SHUFERSAL_USERNAME`/`PASSWORD` unchanged when unavailable. Requires
+  `~/.config/familyos/secrets.env` as an additional
+  `EnvironmentFile=-...` line in `grocery-bot.service` to actually take
+  effect live — **ask Ishay whether that systemd edit has been applied**;
+  it was handed to him as a one-liner rather than applied automatically
+  (systemd unit edits from inside this session were blocked by the
+  Claude Code classifier both times tried).
+- **The Work-safe export, `grocery_bot/work_safe_export.py` +
+  `python -m grocery_bot.cli work-context-safe tivtaam`** — THIS is the
+  actual intended input for ChatGPT Work's pilot (see
+  `docs/gordon_work_context_schema.md`). Deliberately excludes
+  `gordon_due`/department/promotions/planner output; `product_hints`
+  includes a mapping **only when `source='human'`** — currently **zero**
+  such rows exist for this household, so the section is honestly empty.
+  New table `tivtaam_order_lines` persists real ordered-vs-delivered
+  quantity/weightable/price per order line (previously parsed and
+  discarded); `tivtaamhistory.sync()` now backfills up to 20
+  not-yet-detailed orders per nightly run. **A real backfill was run
+  2026-09-20** (608 lines, 20 orders back to 02-17) — this session
+  turned out to have genuine network access to the live Tiv Taam API via
+  the Tailscale proxy (see the updated note in `CLAUDE.md`'s Known open
+  issue #3 — **do not assume this by default for a future session**,
+  verify with `curl -sS https://ipinfo.io/json` first).
+- **Google Drive wiring for `CURRENT.json` — blocked on access, not
+  code.** Ishay wants Gordon to update a specific existing Drive file
+  (`1GInH1NnyWZ_uI_bGSPqr61ul2I7fPdHE`) in place after every Tiv Taam
+  sync, plus a manual refresh command. The household's shared
+  `familyos-sa@familyos-ishaydomb.iam.gserviceaccount.com` service
+  account (`~/.config/familyos/google-service-account.json`, already
+  used by Miri's project) authenticates fine but gets **404 on that
+  specific file** — not shared with it yet. **Nothing built yet** on the
+  upload side; waiting on Ishay to share that file with the service
+  account as Editor, then re-probe before writing `files.update` code.
+- **Exit-node priority, `exitnode.py`** — per Ishay 2026-09-20 (relayed
+  by Arthur): `liran-aba-pc` (100.64.121.81, aka **"בוב"** informally —
+  see memory) now sorts before `uset-pc` among online Tailscale exit
+  nodes. Verified live against real `tailscale status`.
+
 ## 3. Blocked, and on what
 
+- ~~Two uncommitted `.docx` files sitting in `docs/reports/`~~ — not an
+  oversight, checked deliberately at this anchor: they're rendered
+  delivery copies of `2026-09-17-reliability-build-report.md` and
+  `2026-09-17-conversation-backend-benchmark.md`, both already committed
+  as their `.md` source. Every other report in that directory (including
+  a `.pdf`) follows the same pattern — only the `.md` is ever tracked,
+  the rendered copy is regenerated on demand via `scripts/md2docx.py`
+  for `SendUserFile`. Left untracked on purpose, nothing at risk.
 - ~~The running bot is older than the code~~ — closed: every anchor runs
   `scripts/refresh_bot.sh`, which restarts only when loaded code is newer
   than the process and refuses mid-fill (exit 3).
@@ -764,6 +837,18 @@ the same result whether or not the thing is true is not evidence.**
 
 ## 5. Open questions for the user
 
+- **Share the Work `CURRENT.json` Drive file with the service account.**
+  `1GInH1NnyWZ_uI_bGSPqr61ul2I7fPdHE` needs to be shared as **Editor**
+  with `familyos-sa@familyos-ishaydomb.iam.gserviceaccount.com` before
+  Gordon can write to it in place (confirmed 404, not shared yet — see
+  §2h). Nothing built on the upload side until this is done.
+- **Has the Bitwarden `EnvironmentFile` line actually been added to
+  `grocery-bot.service`?** Handed over 2026-09-18 as a one-line
+  `sed`+`daemon-reload`+`refresh_bot.sh` command for Ishay to run
+  himself (systemd unit edits from inside this session were blocked).
+  Until it is, `bitwarden.available()` is always False in production and
+  Shufersal login stays on plain env-var credentials — harmless, but
+  worth confirming rather than assuming either way.
 - **Want to try the persistent Agent SDK conversation yourself?**
   `GORDON_CONVO_BACKEND=agent` in the environment + `systemctl --user
   restart grocery-bot.service` turns it on for every chat; removing the
