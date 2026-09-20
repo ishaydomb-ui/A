@@ -283,7 +283,27 @@ Don't re-derive these from scratch — they're already known:
    France. `grocery_bot/prices.py` + `catalog.py` build a searchable
    per-branch catalog from it, powering `/price`, `/deals` and
    `/refresh_prices` — all live today without any store account.
-3. **This Claude Code cloud session cannot reach the internet needed to
+3. **UPDATED 2026-09-20 — this no longer holds for a session running on
+   the real deployed host.** Verified live during the Work-safe-export
+   backfill: `curl https://ipinfo.io/json` from this session resolved to
+   `vmi3516183.contaboserver.net` (Contabo, Lauterbourg — the real
+   production box, not an ephemeral container), the
+   `127.0.0.1:45145/__agentproxy/status` endpoint referenced below no
+   longer answers at all (connection refused), and `PLAYWRIGHT_PROXY`
+   (`socks5://localhost:1055`) is up and resolves to a real Israeli
+   residential IP. On that basis a real `TivTaamApi().orders()`/`.order()`
+   backfill was run successfully from inside this session — 20 real
+   orders' line detail fetched and written to `tivtaam_order_lines`. **Do
+   not assume this by default** — the distinction below (a throwaway
+   cloud sandbox vs. this real host) still matters and a *different*
+   session/invocation could still be the blocked kind; check
+   `curl -sS --max-time 8 https://ipinfo.io/json` and whether
+   `PLAYWRIGHT_PROXY`'s SOCKS port answers before relying on live
+   network access, rather than trusting either this note or the original
+   diagnosis below blindly.
+   Kept for reference — the original diagnosis (still accurate for
+   whatever kind of session it was describing):
+   **This Claude Code cloud session cannot reach the internet needed to
    run or test this bot at all — confirmed, not a guess.** Its outbound
    proxy returns a 403 policy denial for both `shufersal.co.il` and
    `api.telegram.org` (checked via
