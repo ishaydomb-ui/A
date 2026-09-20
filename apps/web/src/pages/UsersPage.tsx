@@ -1,0 +1,532 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ROLES } from '@med/shared';
+import { useI18n } from '../i18n.ts';
+import { ApiError, api } from '../lib/api.ts';
+import type { AdminSetting, PublicUser } from '../lib/types.ts';
+
+type Delivery = 'sent' | 'not_configured' | 'failed';
+import { Notice } from '../components/Notice.tsx';
+import { Spinner } from '../components/Spinner.tsx';
+
+export function UsersPage() {
+  const { t } = useI18n();
+  const [users, setUsers] = useState<PublicUser[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const [invitationLink, setInvitationLink] = useState<string | null>(null);
+  // What became of the invitation email. The link below is what actually
+  // matters, but whether it also went out by email decides whether the
+  // administrator still has to pass it on by hand.
+  const [delivery, setDelivery] = useState<Delivery | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const [email, setEmail] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [role, setRole] = useState<string>('physician');
+
+  // The row currently being renamed, and the name typed into it. Only one row
+  // is editable at a time, so a half-finished edit cannot be left behind on a
+  // row that has scrolled out of sight.
+  const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
+  // A role change saves the moment it is picked, with no button to press, so
+  // without a mark in the row there is nothing to tell a success from a
+  // selection that never reached the server. The page-level success notice
+  // sits above the table and is out of sight on a phone, so this one belongs
+  // beside the control that changed.
+  const [roleSaved, setRoleSaved] = useState<string | null>(null);
+  const [handedOver, setHandedOver] = useState<string | null>(null);
+  const [invitedAddress, setInvitedAddress] = useState<string | null>(null);
+  // True when the invitation on screen is an open link, which names nobody
+  // and so has no address to have been emailed to.
+  const [openLink, setOpenLink] = useState(false);
+  // Sharing is a phone capability; on a desktop browser the button would
+  // simply not work, so it is only offered where it exists.
+  const [canShare, setCanShare] = useState(false);
+
+  // Re-inviting is done from a row that can be well below the fold, while the
+  // link it produces is shown with the invitation form at the top. Screen
+  // readers hear it announced; bring it into view for everyone else.
+  const invitationRef = useRef<HTMLDivElement>(null);
+
+  // null while the current value hasn't loaded yet, so the toggle doesn't
+  // flash a wrong state before the setting is known.
+  const [mfaRequired, setMfaRequired] = useState<boolean | null>(null);
+  const [mfaBusy, setMfaBusy] = useState(false);
+
+  const load = useCallback(() => {
+    api
+      .get<{ users: PublicUser[] }>('/api/users')
+      .then((res) => setUsers(res.users))
+      .catch((err: unknown) => setError(err instanceof ApiError ? err.message : t.errorGeneric));
+  }, [t]);
+
+  useEffect(load, [load]);
+
+  useEffect(() => {
+    api
+      .get<{ settings: AdminSetting[] }>('/api/settings')
+      .then((res) => {
+        const setting = res.settings.find((s) => s.key === 'security.mfa_required_for_admin');
+        setMfaRequired(setting ? Boolean(setting.value) : true);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  async function toggleMfaRequired() {
+    if (mfaRequired === null) return;
+    const next = !mfaRequired;
+    setMfaBusy(true);
+    setError(null);
+    try {
+      await api.put('/api/settings/security.mfa_required_for_admin', { value: next });
+      setMfaRequired(next);
+      setDone(
+        next
+          ? 'Administrators will be asked to set up two-factor authentication again from their next sign-in.'
+          : 'Two-factor authentication is no longer required for administrators. Anyone already enrolled is still asked for a code — remove theirs below if you want to stop that too.',
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.errorGeneric);
+    } finally {
+      setMfaBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (invitationLink) invitationRef.current?.scrollIntoView({ block: 'center' });
+  }, [invitationLink]);
+
+  useEffect(() => {
+    setCanShare(typeof navigator !== 'undefined' && typeof navigator.share === 'function');
+  }, []);
+
+  async function invite(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    setInvitationLink(null);
+    try {
+      const result = await api.post<{ invitationLink: string; delivery: Delivery }>(
+        '/api/users/invitations',
+        { email: email.trim(), displayName: displayName.trim(), role },
+      );
+      setInvitationLink(result.invitationLink);
+      setDelivery(result.delivery);
+      setInvitedAddress(email.trim());
+      setOpenLink(false);
+      setHandedOver(null);
+      setEmail('');
+      setDisplayName('');
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.errorGeneric);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Creates an invitation that names nobody, for sending by hand.
+   *
+   * Deliberately a button rather than a second form: the address and name
+   * fields above are required, and the whole point here is not having to fill
+   * them in.
+   */
+  async function createLink() {
+    setBusy(true);
+    setError(null);
+    setInvitationLink(null);
+    try {
+      const result = await api.post<{ invitationLink: string }>('/api/users/invitations/link', {
+        role,
+      });
+      setInvitationLink(result.invitationLink);
+      setOpenLink(true);
+      setDelivery(null);
+      setInvitedAddress(null);
+      setHandedOver(null);
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.errorGeneric);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Issues a fresh invitation. An invitation link carries the address the API
+   * is configured with, so one created before the site had a reachable address
+   * points somewhere the recipient cannot open; re-inviting revokes it and
+   * builds a new one.
+   */
+  async function resendInvitation(id: string) {
+    setError(null);
+    setInvitationLink(null);
+    try {
+      const user = users?.find((u) => u.id === id);
+      const result = await api.post<{ invitationLink: string; delivery: Delivery }>(
+        `/api/users/${id}/invitations/resend`,
+        {},
+      );
+      setInvitationLink(result.invitationLink);
+      setDelivery(result.delivery);
+      setInvitedAddress(user?.email ?? null);
+      setOpenLink(false);
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.errorGeneric);
+    }
+  }
+
+  /**
+   * Clears an enrolled authenticator. Two-factor authentication is demanded of
+   * an account once it is enrolled, whatever the role, so an account that no
+   * longer needs it — or whose phone is gone — can only be let back in from
+   * here. Roles that require it by policy simply enrol again at their next
+   * sign-in.
+   */
+  async function resetMfa(user: PublicUser) {
+    setError(null);
+    setDone(null);
+    try {
+      await api.post(`/api/users/${user.id}/mfa/reset`, {});
+      setDone(
+        `Two-factor authentication removed for ${user.displayName}. They have been signed out of ` +
+          'every device, and will set it up again at their next sign-in if their role requires it.',
+      );
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.errorGeneric);
+    }
+  }
+
+  /**
+   * The text that goes with the link when it is shared. It has to stand on its
+   * own: the recipient sees it in a messaging app with no other context.
+   */
+  function invitationMessage(): string {
+    return (
+      'You have been given access to the Medication Catalogue. ' +
+      'Open this link to choose a password. It works once, and expires in 72 hours.'
+    );
+  }
+
+  async function shareInvitation() {
+    if (!invitationLink) return;
+    try {
+      await navigator.share({
+        title: 'Medication Catalogue',
+        text: invitationMessage(),
+        url: invitationLink,
+      });
+      setHandedOver('Shared.');
+    } catch {
+      // Dismissing the share sheet rejects, which is not a failure worth
+      // reporting; the link is still on screen either way.
+    }
+  }
+
+  async function copyInvitation() {
+    if (!invitationLink) return;
+    try {
+      await navigator.clipboard.writeText(`${invitationMessage()}\n\n${invitationLink}`);
+      setHandedOver('Copied. Paste it into a message to them.');
+    } catch {
+      setHandedOver('Could not copy automatically — select the link above and copy it by hand.');
+    }
+  }
+
+  async function update(id: string, patch: Record<string, string>) {
+    setError(null);
+    try {
+      await api.patch(`/api/users/${id}`, patch);
+      setRenaming(null);
+      if (patch.role) setRoleSaved(id);
+      load();
+    } catch (err) {
+      setRoleSaved(null);
+      setError(err instanceof ApiError ? err.message : t.errorGeneric);
+    }
+  }
+
+  return (
+    <>
+      <h1>{t.navUsers}</h1>
+
+      <Notice tone="info">
+        There is no public registration. An account exists only because it was created here, and it
+        becomes usable only when the person accepts their invitation.
+      </Notice>
+
+      {error && <Notice tone="error">{error}</Notice>}
+      {done && <Notice tone="success">{done}</Notice>}
+
+      <section className="card" aria-labelledby="invite-heading" style={{ marginBlockEnd: 24 }}>
+        <h2 id="invite-heading">Invite a clinician</h2>
+        <form onSubmit={invite}>
+          <div className="field">
+            <label htmlFor="invite-email">{t.email}</label>
+            <input
+              id="invite-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="invite-name">Full name</label>
+            <input
+              id="invite-name"
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              required
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="invite-role">Role</label>
+            <select id="invite-role" value={role} onChange={(e) => setRole(e.target.value)}>
+              {ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {r.replace(/_/g, ' ')}
+                </option>
+              ))}
+            </select>
+            {mfaRequired !== false && (
+              <p className="hint">Administrators must set up two-factor authentication before they can sign in.</p>
+            )}
+            <p className="hint">
+              If the person is already listed and has not accepted yet, sending again simply
+              replaces their invitation and updates the name and role you enter here.
+            </p>
+          </div>
+          <button type="submit" className="btn btn-primary" disabled={busy}>
+            {busy ? t.loading : 'Send invitation'}
+          </button>
+        </form>
+
+        <div className="invite-alt">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={busy}
+            onClick={() => void createLink()}
+          >
+            {t.inviteByLink}
+          </button>
+          <p className="hint">{t.inviteByLinkHelp}</p>
+        </div>
+
+        <div ref={invitationRef}>
+          {invitationLink && (
+            <Notice
+              tone={delivery === 'failed' ? 'warning' : 'success'}
+              title={openLink ? t.inviteLinkCreated : 'Invitation created'}
+            >
+              <p>
+                {openLink
+                  ? t.inviteLinkNote
+                  : delivery === 'sent'
+                  ? `Emailed to ${invitedAddress ?? 'them'}. If it does not arrive — a wrong address, a spam folder — this is the same single-use link:`
+                    : delivery === 'failed'
+                      ? 'The account is ready, but the email could not be sent. The server log says why. Deliver this single-use link yourself in the meantime:'
+                      : 'No mail server is configured, so nothing was sent. Deliver this single-use link to the person yourself:'}
+              </p>
+              <p className="mono" style={{ wordBreak: 'break-all' }}>
+                {invitationLink}
+              </p>
+              <div className="row">
+                {canShare && (
+                  <button type="button" className="btn btn-primary" onClick={() => void shareInvitation()}>
+                    Share
+                  </button>
+                )}
+                <button type="button" className="btn btn-secondary" onClick={() => void copyInvitation()}>
+                  Copy link
+                </button>
+              </div>
+              {handedOver && (
+                <p className="hint" role="status">
+                  {handedOver}
+                </p>
+              )}
+            </Notice>
+          )}
+        </div>
+      </section>
+
+      <section className="card" aria-labelledby="security-heading" style={{ marginBlockEnd: 24 }}>
+        <h2 id="security-heading">Security</h2>
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={mfaRequired ?? true}
+            disabled={mfaRequired === null || mfaBusy}
+            onChange={toggleMfaRequired}
+          />
+          <span>Require two-factor authentication for administrators</span>
+        </label>
+        <p className="hint">
+          Turning this off does not remove two-factor authentication from an account that already
+          set it up — it only stops requiring it from an administrator who has not enrolled yet.
+          To stop asking an already-enrolled administrator for a code, remove their authenticator
+          in the table below.
+        </p>
+      </section>
+
+      <section aria-labelledby="users-heading">
+        <h2 id="users-heading">Accounts</h2>
+        {!users ? (
+          <Spinner />
+        ) : (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">{t.email}</th>
+                  <th scope="col">Role</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">MFA</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((user) => (
+                  <tr key={user.id}>
+                    <th scope="row">
+                      {renaming?.id === user.id ? (
+                        <form
+                          className="row name-edit"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            const value = renaming.value.trim();
+                            if (value) void update(user.id, { displayName: value });
+                          }}
+                        >
+                          <label htmlFor={`name-${user.id}`} className="sr-only">
+                            Full name for {user.email}
+                          </label>
+                          <input
+                            id={`name-${user.id}`}
+                            type="text"
+                            value={renaming.value}
+                            autoFocus
+                            required
+                            maxLength={200}
+                            onChange={(e) => setRenaming({ id: user.id, value: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') setRenaming(null);
+                            }}
+                          />
+                          <button type="submit" className="btn btn-sm btn-primary">
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => setRenaming(null)}
+                          >
+                            {t.cancel}
+                          </button>
+                        </form>
+                      ) : (
+                        <span className="row">
+                          {user.displayName}
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-secondary"
+                            aria-label={`Rename ${user.displayName}`}
+                            onClick={() => setRenaming({ id: user.id, value: user.displayName })}
+                          >
+                            Rename
+                          </button>
+                        </span>
+                      )}
+                    </th>
+                    <td className="small">{user.email}</td>
+                    <td>
+                      <label htmlFor={`role-${user.id}`} className="sr-only">
+                        Role for {user.displayName}
+                      </label>
+                      <select
+                        id={`role-${user.id}`}
+                        value={user.role}
+                        onChange={(e) => void update(user.id, { role: e.target.value })}
+                      >
+                        {ROLES.map((r) => (
+                          <option key={r} value={r}>
+                            {r.replace(/_/g, ' ')}
+                          </option>
+                        ))}
+                      </select>
+                      {roleSaved === user.id && (
+                        <span className="saved-mark" role="status">
+                          Saved
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <span
+                        className={`badge ${user.status === 'active' ? 'badge-success' : user.status === 'invited' ? 'badge-medium' : 'badge-high'}`}
+                      >
+                        {user.status}
+                      </span>
+                    </td>
+                    <td>
+                      {user.mfaEnabled ? (
+                        <div className="row">
+                          <span className="badge badge-success">on</span>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-secondary"
+                            aria-label={`Remove two-factor authentication for ${user.displayName}`}
+                            onClick={() => void resetMfa(user)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="badge">off</span>
+                      )}
+                    </td>
+                    <td>
+                      <div className="row">
+                        {user.status === 'active' ? (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-danger"
+                            onClick={() => void update(user.id, { status: 'suspended' })}
+                          >
+                            Suspend
+                          </button>
+                        ) : user.status === 'suspended' ? (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => void update(user.id, { status: 'active' })}
+                          >
+                            Reinstate
+                          </button>
+                        ) : user.status === 'invited' ? (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => void resendInvitation(user.id)}
+                          >
+                            Re-invite
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
