@@ -6,7 +6,7 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-20 (host time, CEST) — Tiv Taam Work pilot ended, both chains' cart writers live again (§2h); "cart ready" pings go quiet when there's nothing to report (§2i, DONE)
+**Last anchored:** 2026-09-20 (host time, CEST) — vNext Phase 1 shadow layer built, not wired (§2j, awaiting approval); Tiv Taam Work pilot ended (§2h); uneventful "cart ready" pings muted (§2i)
 **Session:** https://claude.ai/code/session_01AR7esAYdoXQ71HXtqJPpQV
 **Branch:** `claude/gordon-work-mvp-cartpause`
 **Status is in `git log`, not hand-typed here.**
@@ -625,6 +625,37 @@ behave exactly as before; only the Telegram message is suppressed.
 4 new tests (`tests/test_outcome.py::IsUneventfulTests`); full suite
 1439 passed / 4 pre-existing failures (paused Markdown→HTML migration,
 confirmed via `git stash` to predate this change, see §2).
+
+## 2j. vNext Phase 1 — shadow decision layer, built 2026-09-20, NOT wired (awaiting Ishay's Phase 2 approval)
+
+Ishay's spec ("GORDON vNEXT — CLEAN MIGRATION PHASE 1"): a new planning
+layer *above* the existing execution layer, read-only, no production
+behaviour change. Delivered in commits `2daa6e4`..`90fa0ba`; full
+deliverables in
+[`docs/reports/2026-09-20-vnext-phase1.md`](docs/reports/2026-09-20-vnext-phase1.md)
++ real-data samples beside it.
+
+- New modules: `vnext_config.py`, `household_evidence.py`, `need_engine.py`,
+  `shopping_plan.py`, `shopping_readiness.py`, `basket_optimizer.py`
+  (seam only), `telegram_vnext_view.py`. Imported by nothing but each
+  other and `cli.py` — `telegram_bot.py`/`orchestrator.py`/`execution.py`
+  untouched (verified by grep and `git diff --stat e5ff122`).
+- Shadow CLI: `python -m grocery_bot.cli vnext-plan [--json]` and
+  `vnext-readiness [--json]` — pure reads; DB md5 identical before/after
+  (verified). `vnext-add-meal` / `vnext-stockup-rule` write only to the
+  three new additive tables `vnext_planned_meals` /
+  `vnext_household_events` / `vnext_stockup_rules` (0 rows today).
+- 28 new tests; full suite 1467 passed + the same 4 pre-existing failures.
+- Real-data sample: 73 items (20 auto-include = 14 explicit pending + 6
+  routine overdue, 53 suggest), readiness 0.56 → `prepare_soon`.
+- **Why it can't be trusted for real decisions yet** (report §8): 0
+  human-confirmed `preferred_products` rows, so *every* product choice is
+  inference — and the sample shows exactly why that must never be
+  persisted: "יוגורט Pro וניל" → a shower gel, "גרנולה ללא תוספת סוכר" →
+  cookies. Cadence measured for only 70/390 Tiv Taam products, 0 Shufersal.
+- **Do not wire into Telegram or carts without Ishay's explicit Phase 2
+  approval** (his instruction, verbatim: "Do not proceed to Phase 2 or wire
+  vNext into production without approval").
 
 ## 3. Blocked, and on what
 
