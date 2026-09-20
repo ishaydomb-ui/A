@@ -555,13 +555,13 @@ branch is checked out here is what a `refresh_bot.sh` deploys next.
 - **Bitwarden as primary Shufersal credential channel** (`bitwarden.py`,
   `config.py::_shufersal_credentials`) — per Ishay 2026-09-18 (relayed
   via Miri), tries the shared household vault first, falls back to
-  `SHUFERSAL_USERNAME`/`PASSWORD` unchanged when unavailable. Requires
+  `SHUFERSAL_USERNAME`/`PASSWORD` unchanged when unavailable. Required
   `~/.config/familyos/secrets.env` as an additional
-  `EnvironmentFile=-...` line in `grocery-bot.service` to actually take
-  effect live — **ask Ishay whether that systemd edit has been applied**;
-  it was handed to him as a one-liner rather than applied automatically
+  `EnvironmentFile=-...` line in `grocery-bot.service` to take effect —
+  handed to Ishay as a one-liner rather than applied automatically
   (systemd unit edits from inside this session were blocked by the
-  Claude Code classifier both times tried).
+  Claude Code classifier). **Confirmed live at this anchor's restart**:
+  `journalctl` shows `shufersal credential source: bitwarden`.
 - **The Work-safe export, `grocery_bot/work_safe_export.py` +
   `python -m grocery_bot.cli work-context-safe tivtaam`** — THIS is the
   actual intended input for ChatGPT Work's pilot (see
@@ -842,13 +842,11 @@ the same result whether or not the thing is true is not evidence.**
   with `familyos-sa@familyos-ishaydomb.iam.gserviceaccount.com` before
   Gordon can write to it in place (confirmed 404, not shared yet — see
   §2h). Nothing built on the upload side until this is done.
-- **Has the Bitwarden `EnvironmentFile` line actually been added to
-  `grocery-bot.service`?** Handed over 2026-09-18 as a one-line
-  `sed`+`daemon-reload`+`refresh_bot.sh` command for Ishay to run
-  himself (systemd unit edits from inside this session were blocked).
-  Until it is, `bitwarden.available()` is always False in production and
-  Shufersal login stays on plain env-var credentials — harmless, but
-  worth confirming rather than assuming either way.
+- ~~Has the Bitwarden `EnvironmentFile` line actually been added?~~ —
+  **closed, confirmed live 2026-09-20 at this anchor's restart**:
+  `journalctl` shows `shufersal credential source: bitwarden` on the
+  fresh process (PID 944117, started 16:55:17 CEST) — the vault lookup
+  is genuinely succeeding in production now, not just falling back.
 - **Want to try the persistent Agent SDK conversation yourself?**
   `GORDON_CONVO_BACKEND=agent` in the environment + `systemctl --user
   restart grocery-bot.service` turns it on for every chat; removing the
