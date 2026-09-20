@@ -430,5 +430,118 @@ class RecentOrderPricesTests(unittest.TestCase):
         self.assertEqual(self.storage.recent_order_prices("tivtaam", "999"), [])
 
 
+class TivtaamOrderLinesTests(unittest.TestCase):
+    """storage.record_tivtaam_order_lines / tivtaam_purchase_lines* --
+    added 2026-09-20 so real ordered-vs-delivered quantity, weightable and
+    line price survive past the moment tivtaamhistory.order_lines() parses
+    them, instead of being discarded before any INSERT (the audit's
+    finding: nothing in this schema used to store this)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.storage = Storage(str(Path(self._tmp.name) / "t.sqlite3"))
+
+    def _line(self, **kw):
+        base = {
+            "code": "16323094", "barcode": "693493231749", "name": "חסה לאליק הידרופונית",
+            "quantity": 1, "actual_quantity": 1, "weighable": False,
+            "price": 14.9, "total": 14.9, "substituted": False,
+        }
+        base.update(kw)
+        return base
+
+    def test_ordered_and_actual_quantity_are_preserved_separately(self):
+        self.storage.record_tivtaam_order_lines("O1", "2026-09-12", [
+            self._line(code="2", name="בננות", quantity=0.5, actual_quantity=0.332, weighable=True),
+        ])
+        lines = self.storage.tivtaam_purchase_lines_for("2")
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0]["ordered_quantity"], 0.5)
+        self.assertEqual(lines[0]["actual_quantity"], 0.332)
+        self.assertNotEqual(lines[0]["ordered_quantity"], lines[0]["actual_quantity"])
+
+    def test_weightable_flag_and_kg_unit_survive_for_a_weighed_product(self):
+        self.storage.record_tivtaam_order_lines("O1", "2026-09-12", [
+            self._line(code="2", name="בננות", quantity=0.5, actual_quantity=0.332, weighable=True),
+        ])
+        row = self.storage.tivtaam_purchase_lines_for("2")[0]
+        self.assertEqual(row["weightable"], 1)
+        self.assertEqual(row["unit"], 'ק"ג')
+
+    def test_non_weighed_product_has_no_kg_unit(self):
+        self.storage.record_tivtaam_order_lines("O1", "2026-09-12", [self._line()])
+        row = self.storage.tivtaam_purchase_lines_for("16323094")[0]
+        self.assertEqual(row["weightable"], 0)
+        self.assertEqual(row["unit"], "")
+
+    def test_price_and_barcode_are_kept(self):
+        self.storage.record_tivtaam_order_lines("O1", "2026-09-12", [self._line()])
+        row = self.storage.tivtaam_purchase_lines_for("16323094")[0]
+        self.assertEqual(row["price"], 14.9)
+        self.assertEqual(row["barcode"], "693493231749")
+        self.assertEqual(row["order_date"], "2026-09-12")
+
+    def test_lines_without_a_product_code_are_skipped(self):
+        n = self.storage.record_tivtaam_order_lines("O1", "2026-09-12", [self._line(code="")])
+        self.assertEqual(n, 0)
+        self.assertEqual(self.storage.tivtaam_purchase_lines(), [])
+
+    def test_recording_the_same_order_twice_does_not_duplicate(self):
+        for _ in range(2):
+            self.storage.record_tivtaam_order_lines("O1", "2026-09-12", [self._line()])
+        self.assertEqual(len(self.storage.tivtaam_purchase_lines_for("16323094")), 1)
+
+    def test_order_lines_recorded_flag(self):
+        self.assertFalse(self.storage.tivtaam_order_lines_recorded("O1"))
+        self.storage.record_tivtaam_order_lines("O1", "2026-09-12", [self._line()])
+        self.assertTrue(self.storage.tivtaam_order_lines_recorded("O1"))
+        self.assertFalse(self.storage.tivtaam_order_lines_recorded("O2"))
+
+    def test_lines_for_order_scoped_to_that_order(self):
+        self.storage.record_tivtaam_order_lines("O1", "2026-09-12", [self._line(code="1"), self._line(code="2")])
+        self.storage.record_tivtaam_order_lines("O2", "2026-09-13", [self._line(code="3")])
+        self.assertEqual(
+            sorted(r["product_code"] for r in self.storage.tivtaam_lines_for_order("O1")),
+            ["1", "2"],
+        )
+        self.assertEqual([r["product_code"] for r in self.storage.tivtaam_lines_for_order("O2")], ["3"])
+        self.assertEqual(self.storage.tivtaam_lines_for_order("MISSING"), [])
+
+    def test_since_days_filters_by_order_date(self):
+        self.storage.record_tivtaam_order_lines("OLD", "2020-01-01", [self._line(code="1")])
+        self.storage.record_tivtaam_order_lines("NEW", "2026-09-19", [self._line(code="2")])
+        recent = self.storage.tivtaam_purchase_lines(since_days=30)
+        self.assertEqual([r["product_code"] for r in recent], ["2"])
+        everything = self.storage.tivtaam_purchase_lines()
+        self.assertEqual(len(everything), 2)
+
+
+class ListOrdersTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.storage = Storage(str(Path(self._tmp.name) / "t.sqlite3"))
+        self.storage.log_orders([
+            {"code": "A", "placed_at": "2026-08-01T10:00:00", "total": 100.0, "item_count": 10},
+            {"code": "B", "placed_at": "2026-09-01T10:00:00", "total": 200.0, "item_count": 20},
+        ], store="tivtaam")
+        self.storage.log_orders([
+            {"code": "C", "placed_at": "2026-09-05T10:00:00", "total": 50.0, "item_count": 5},
+        ], store="shufersal")
+
+    def test_newest_first_and_store_scoped(self):
+        orders = self.storage.list_orders("tivtaam")
+        self.assertEqual([o["order_code"] for o in orders], ["B", "A"])
+
+    def test_limit(self):
+        orders = self.storage.list_orders("tivtaam", limit=1)
+        self.assertEqual([o["order_code"] for o in orders], ["B"])
+
+    def test_other_store_not_included(self):
+        orders = self.storage.list_orders("tivtaam")
+        self.assertNotIn("C", [o["order_code"] for o in orders])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -188,6 +188,100 @@ class SyncTests(unittest.TestCase):
         self.assertNotIn("5", dates)
 
 
+class RecordPurchasesLineDetailTests(unittest.TestCase):
+    """record_purchases (2026-09-20): the raw order-detail API already
+    carries real ordered-vs-delivered quantity, weightable and price --
+    this is what stops it being thrown away before it reaches storage."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.storage = Storage(str(Path(self.tmp.name) / "t.sqlite3"))
+
+    def test_real_order_lines_are_persisted(self):
+        api = _FakeApi([ORDER], detail=ORDER)
+        th.record_purchases(self.storage, api, "17655403")
+        lines = self.storage.tivtaam_purchase_lines_for("16323094")
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0]["order_code"], "17655403")
+        self.assertEqual(lines[0]["order_date"], "2026-09-12")
+
+    def test_weighed_product_keeps_ordered_and_actual_quantity_separately(self):
+        # "בננות" in the real fixture: 0.5 kg ordered, 0.332 kg delivered.
+        api = _FakeApi([ORDER], detail=ORDER)
+        th.record_purchases(self.storage, api, "17655403")
+        row = self.storage.tivtaam_purchase_lines_for("2")[0]
+        self.assertEqual(row["ordered_quantity"], 0.5)
+        self.assertEqual(row["actual_quantity"], 0.332)
+        self.assertEqual(row["weightable"], 1)
+        self.assertEqual(row["unit"], 'ק"ג')
+
+    def test_delivery_fee_and_not_delivered_substitution_half_are_excluded(self):
+        api = _FakeApi([ORDER], detail=ORDER)
+        th.record_purchases(self.storage, api, "17655403")
+        all_lines = self.storage.tivtaam_purchase_lines()
+        codes = {r["product_code"] for r in all_lines}
+        self.assertNotIn("5", codes)  # משלוח אינטרנט
+        # productId=4 is status:5, the un-delivered half of the substitution.
+        self.assertNotIn("4", codes)
+
+    def test_order_derived_price_and_last_purchase_are_both_updated_from_one_call(self):
+        api = _FakeApi([ORDER], detail=ORDER)
+        th.record_purchases(self.storage, api, "17655403")
+        self.assertTrue(self.storage.last_purchase_dates("tivtaam"))
+        prices = self.storage.recent_order_prices("tivtaam", "693493231749")
+        self.assertEqual(prices, [{"date": "2026-09-12", "price": 14.9}])
+
+
+class SyncBackfillsLineDetailTests(unittest.TestCase):
+    """sync() (2026-09-20): backfills real per-line evidence for whichever
+    orders don't have it yet, capped so a large backlog doesn't hammer the
+    API in one run."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.storage = Storage(str(Path(self.tmp.name) / "t.sqlite3"))
+
+    def test_a_fresh_sync_fetches_line_detail_for_the_new_order(self):
+        api = _FakeApi([ORDER], detail=ORDER)
+        result = th.sync(self.storage, api)
+        self.assertEqual(result["line_detail_fetched"], 1)
+        self.assertTrue(self.storage.tivtaam_order_lines_recorded("17655403"))
+
+    def test_an_already_detailed_order_is_not_re_fetched(self):
+        api = _FakeApi([ORDER], detail=ORDER)
+        th.sync(self.storage, api)
+        api2 = _FakeApi([ORDER], detail=ORDER)
+        result = th.sync(self.storage, api2)
+        self.assertEqual(result["line_detail_fetched"], 0)
+        self.assertEqual([c for c in api2.calls if c[0] == "order"], [])
+
+    def test_backfill_is_capped_per_sync(self):
+        many_orders = [
+            {**ORDER, "id": 1000 + i, "timePlaced": f"2026-01-{(i % 27) + 1:02d}T10:00:00Z"}
+            for i in range(th.MAX_LINE_DETAIL_FETCHES_PER_SYNC + 5)
+        ]
+        api = _FakeApi(many_orders, detail=ORDER)
+        result = th.sync(self.storage, api)
+        self.assertEqual(result["line_detail_fetched"], th.MAX_LINE_DETAIL_FETCHES_PER_SYNC)
+
+    def test_a_broken_order_detail_does_not_stop_the_rest_of_the_sync(self):
+        class _FlakyApi(_FakeApi):
+            def order(self, order_id):
+                if order_id == ORDER["id"]:
+                    raise RuntimeError("boom")
+                return super().order(order_id)
+
+        second = {**ORDER, "id": 999, "timePlaced": "2026-01-01T10:00:00Z"}
+        api = _FlakyApi([ORDER, second], detail=second)
+        result = th.sync(self.storage, api)
+        self.assertEqual(result["added"], 2)
+        self.assertEqual(result["line_detail_fetched"], 1)
+        self.assertTrue(self.storage.tivtaam_order_lines_recorded("999"))
+        self.assertFalse(self.storage.tivtaam_order_lines_recorded("17655403"))
+
+
 if __name__ == "__main__":
     unittest.main()
 

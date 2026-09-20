@@ -18,6 +18,13 @@ Run with: python -m grocery_bot.cli <command>
                           history, due/replenishment signal, preferences
                           with source labels, promotions (no browser, no
                           live cart, no secrets)
+    work-context-safe [store]  minimum-safe Gordon -> Work export
+                          (default tivtaam): pending needs, real observed
+                          purchase history/quantities, product hints
+                          (never presented as ground truth), explicit
+                          rejections, repeat cart failures. No due/buy
+                          conclusion, no department, no promotions -- see
+                          docs/gordon_work_context_schema.md
     import-base-list <f>  load a YAML base list into the database
     import-history        build the base list from real past orders
                           [--year N] [--min-share F] [--memory-only] [--dry-run]
@@ -626,6 +633,23 @@ def _work_planner_snapshot(storage: Storage, args: list[str]) -> int:
 
     store = next((a for a in args if not a.startswith("--")), "shufersal")
     print(json.dumps(build_snapshot(storage, store), ensure_ascii=False))
+    return 0
+
+
+def _work_context_safe(storage: Storage, args: list[str]) -> int:
+    """The minimum-safe Gordon -> Work export (2026-09-20): pending needs,
+    real purchase history/quantities, product hints (never presented as
+    ground truth), explicit rejections and repeat cart failures. No
+    due/buy-don't-buy conclusion, no department, no promotions -- see
+    work_safe_export.py and docs/gordon_work_context_schema.md. `store`
+    defaults to tivtaam (the store this export was built for).
+    """
+    import json
+
+    from .work_safe_export import build_export
+
+    store = next((a for a in args if not a.startswith("--")), "tivtaam")
+    print(json.dumps(build_export(storage, store), ensure_ascii=False))
     return 0
 
 
@@ -1402,6 +1426,7 @@ _DB_ONLY_COMMANDS = {
     # session, no browser, no secrets. See work_projection.py.
     "work-context": _work_context,
     "work-planner-snapshot": _work_planner_snapshot,
+    "work-context-safe": _work_context_safe,
     # Reads flat CSVs under data/benefits/ (gitignored — household
     # financial data), not the sqlite database at all; `storage` is
     # accepted and ignored to keep one dispatch shape. No token, no store

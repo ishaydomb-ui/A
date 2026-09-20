@@ -150,8 +150,18 @@ def fetch_orders(api, size: int = 100) -> list[dict]:
     return [summarise_order(order) for order in orders if order.get("id")]
 
 
+# A line-detail fetch costs one request per order (record_purchases).
+# Capped per sync rather than unbounded so a large historical backlog (a
+# fresh install facing 40+ old orders) backfills gradually over a few
+# nights instead of hammering the API in one run; the common case -- zero
+# or one new order since yesterday -- always finishes in one pass.
+MAX_LINE_DETAIL_FETCHES_PER_SYNC = 20
+
+
 def sync(storage, api, size: int = 100) -> dict:
-    """Write any new Tiv Taam orders into `order_log`.
+    """Write any new Tiv Taam orders into `order_log`, then backfill real
+    per-line purchase evidence (quantities, weightable, price) for
+    whichever of those orders don't have it yet.
 
     Returns what happened rather than logging it, so the caller decides
     whether it is worth telling anyone. `log_orders` is idempotent and
@@ -161,22 +171,49 @@ def sync(storage, api, size: int = 100) -> dict:
     orders = fetch_orders(api, size=size)
     added = storage.log_orders(orders, store=STORE)
     newest = max((o["placed_at"] for o in orders if o["placed_at"]), default="")
-    return {"seen": len(orders), "added": added, "newest": newest}
+
+    detailed = 0
+    for order in orders:
+        if detailed >= MAX_LINE_DETAIL_FETCHES_PER_SYNC:
+            break
+        code = order.get("code")
+        if not code or storage.tivtaam_order_lines_recorded(code):
+            continue
+        try:
+            record_purchases(storage, api, code)
+        except Exception:
+            logger.exception("Could not fetch line detail for Tiv Taam order %s", code)
+            continue
+        detailed += 1
+
+    return {"seen": len(orders), "added": added, "newest": newest, "line_detail_fetched": detailed}
 
 
 def record_purchases(storage, api, order_code: str) -> int:
-    """Remember when each product in one order was last bought.
+    """Learn everything this one order can teach: last-purchase dates,
+    per-line purchase evidence (ordered vs. actually delivered quantity,
+    weightable, price), and order-derived prices.
 
     Separate from `sync` because it costs a request per order, and the
     cadence counter only needs the summaries. Worth calling for a fresh
     order: it is what lets the second chain answer "when did we last buy
-    this" at all.
+    this" at all -- and, since 2026-09-20, "how much did we actually get"
+    too, which the raw API already carried and nothing used to keep.
     """
+    from . import compare
+
     detail = api.order(int(order_code))
     day = _placed_at(detail.get("timePlaced"))[:10]
     if not day:
         return 0
-    entries = [(line["code"], day) for line in order_lines(detail) if line["code"]]
+    lines = order_lines(detail)
+    entries = [(line["code"], day) for line in lines if line["code"]]
     if not entries:
         return 0
-    return storage.record_last_purchase(STORE, entries)
+    written = storage.record_last_purchase(STORE, entries)
+    storage.record_tivtaam_order_lines(str(order_code), day, lines)
+    try:
+        compare.ingest_tivtaam_order(storage, detail)
+    except Exception:
+        logger.exception("Could not record order-derived prices for %s", order_code)
+    return written

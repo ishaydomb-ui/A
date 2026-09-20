@@ -363,6 +363,39 @@ CREATE TABLE IF NOT EXISTS app_state (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- Per-order-line Tiv Taam purchase evidence. Added 2026-09-20: the audit
+-- found that tivtaamhistory.order_lines() already parses real ordered vs.
+-- delivered quantity, weightable flag and line price straight from the
+-- chain's own order-detail API, and every caller threw it away before it
+-- reached storage (record_purchases kept only (code, day); compare.py's
+-- ingest kept only (barcode, price, day)). Nothing else in this schema
+-- can answer "how much did we actually get" for a single order line, only
+-- "on what day" or "at what price" — this table exists to stop discarding
+-- data Gordon already has in hand. Tiv-Taam-only and named as such on
+-- purpose: Shufersal's own order-history reader (history.py) already
+-- feeds stock_items.default_quantity from a real per-line median, and is
+-- untouched by this table.
+CREATE TABLE IF NOT EXISTS tivtaam_order_lines (
+    order_code TEXT NOT NULL,
+    order_date TEXT NOT NULL,      -- YYYY-MM-DD, from the order's own placed date
+    product_code TEXT NOT NULL,    -- Tiv Taam's own productId
+    barcode TEXT NOT NULL DEFAULT '',
+    raw_name TEXT NOT NULL DEFAULT '',
+    ordered_quantity REAL,         -- what was ordered (kg for a weighed line)
+    actual_quantity REAL,          -- what was actually delivered/picked
+    weightable INTEGER NOT NULL DEFAULT 0,
+    unit TEXT NOT NULL DEFAULT '', -- 'ק"ג' when weightable, '' otherwise (Gordon has no other unit signal here)
+    price REAL,
+    line_total REAL,
+    substituted INTEGER NOT NULL DEFAULT 0,
+    recorded_at TEXT NOT NULL,
+    PRIMARY KEY (order_code, product_code)
+);
+CREATE INDEX IF NOT EXISTS idx_tivtaam_order_lines_product
+    ON tivtaam_order_lines(product_code);
+CREATE INDEX IF NOT EXISTS idx_tivtaam_order_lines_barcode
+    ON tivtaam_order_lines(barcode);
 """
 
 
@@ -1229,6 +1262,89 @@ class Storage:
                 continue
         return out
 
+    # -- Tiv Taam purchase-line evidence (2026-09-20) -----------------------
+
+    def tivtaam_order_lines_recorded(self, order_code: str) -> bool:
+        """Whether this order's line detail was already fetched and stored.
+
+        The line-level detail costs a request per order (see
+        tivtaamhistory.record_purchases), so the nightly sync uses this to
+        fetch each real order's detail exactly once, ever — not to notice
+        that a household's decade-old order still has the same 25 lines it
+        always had.
+        """
+        with closing(self._connect()) as conn:
+            return conn.execute(
+                "SELECT 1 FROM tivtaam_order_lines WHERE order_code = ? LIMIT 1",
+                (str(order_code),),
+            ).fetchone() is not None
+
+    def record_tivtaam_order_lines(self, order_code: str, order_date: str, lines: list[dict]) -> int:
+        """Store real per-line purchase evidence for one Tiv Taam order.
+
+        `lines` is the shape `tivtaamhistory.order_lines()` returns —
+        already stripped of the delivery fee and the non-delivered half of
+        a substitution. Idempotent per (order_code, product_code): a
+        re-sync of the same order overwrites with the same values rather
+        than duplicating rows.
+        """
+        if not lines:
+            return 0
+        now = datetime.now(timezone.utc).isoformat()
+        day = str(order_date)[:10]
+        with closing(self._connect()) as conn:
+            cur = conn.executemany(
+                "INSERT OR REPLACE INTO tivtaam_order_lines "
+                "(order_code, order_date, product_code, barcode, raw_name, "
+                " ordered_quantity, actual_quantity, weightable, unit, price, "
+                " line_total, substituted, recorded_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                [
+                    (
+                        str(order_code), day, line["code"], line.get("barcode", ""),
+                        line.get("name", ""), line.get("quantity"), line.get("actual_quantity"),
+                        1 if line.get("weighable") else 0,
+                        'ק"ג' if line.get("weighable") else "",
+                        line.get("price"), line.get("total"),
+                        1 if line.get("substituted") else 0, now,
+                    )
+                    for line in lines
+                    if line.get("code")
+                ],
+            )
+            conn.commit()
+            return cur.rowcount
+
+    def tivtaam_purchase_lines(self, store: str = "tivtaam", since_days: int | None = None) -> list[dict]:
+        """Real order lines, newest first. `since_days=None` returns everything."""
+        query = "SELECT * FROM tivtaam_order_lines"
+        params: tuple = ()
+        if since_days is not None:
+            query += " WHERE order_date >= date('now', ?)"
+            params = (f"-{int(since_days)} days",)
+        query += " ORDER BY order_date DESC, product_code"
+        with closing(self._connect()) as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+    def tivtaam_purchase_lines_for(self, product_code: str) -> list[dict]:
+        """Every real observed line for one Tiv Taam product, oldest first."""
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT * FROM tivtaam_order_lines WHERE product_code = ? ORDER BY order_date",
+                (str(product_code),),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def tivtaam_lines_for_order(self, order_code: str) -> list[dict]:
+        """Every real line recorded for one specific order."""
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT * FROM tivtaam_order_lines WHERE order_code = ? ORDER BY product_code",
+                (str(order_code),),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
     def suppress_stock_item_by_name(self, name: str, store: str = "shufersal") -> str | None:
         """Stop proposing a learned recurring product, by (fuzzy) name.
 
@@ -1752,6 +1868,17 @@ class Storage:
                     "SELECT placed_at FROM order_log ORDER BY placed_at"
                 ).fetchall()
         return [row["placed_at"] for row in rows]
+
+    def list_orders(self, store: str, limit: int | None = None) -> list[dict]:
+        """Real placed orders for one chain, newest first."""
+        query = "SELECT order_code, store, placed_at, total, item_count FROM order_log WHERE store = ? ORDER BY placed_at DESC"
+        params: tuple = (store,)
+        if limit is not None:
+            query += " LIMIT ?"
+            params = (store, limit)
+        with closing(self._connect()) as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
 
     def get_state(self, key: str, default: str = "") -> str:
         with closing(self._connect()) as conn:
