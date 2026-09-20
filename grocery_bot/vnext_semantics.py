@@ -171,7 +171,8 @@ def _tokens(text: str) -> list[str]:
 
 def _stem(token: str) -> str:
     """Crude Hebrew plural/feminine stripping, enough for head-noun matching."""
-    for suffix in ("יות", "ות", "ים", "ין"):
+    token = token.translate(_FINALS)
+    for suffix in ("ות", "ימ", "ינ"):
         if len(token) > 3 and token.endswith(suffix):
             return token[: -len(suffix)]
     return token
@@ -491,15 +492,28 @@ def _mentions(name: str, word: str) -> bool:
 
 
 def _head_in(term: ParsedTerm, name: str) -> bool:
+    """The request's head noun is a word of the product name. Whole tokens
+    and stems only — 'חלב' is not in 'חלבון', 'מלח' is not in 'במלח',
+    'שמן' is not in 'שמנת'. A two-word head may match as a phrase; a
+    feminine singular matches its own plural stem (בננה / בננות)."""
     if not term.head:
         return True
     toks = _tokens(name)
     stems = {_stem(t) for t in toks}
-    h, hs = _m(term.head), _stem(_m(term.head))
+    h = _m(term.head)
+    hs = _stem(h)
     if h in toks or hs in stems or h in stems:
         return True
-    # two-word heads ("תפוח אדמה", "בצל ירוק") and the singular of a plural request
-    return h in _m(name) or (len(hs) >= 3 and any(s.startswith(hs) or hs.startswith(s) for s in stems if len(s) >= 3))
+    if " " in h and h in _m(name):
+        return True
+    for s in stems | set(toks):
+        if len(s) >= 3 and (s == hs + "ה" or hs == s + "ה" or (h.endswith("ה") and s == h[:-1]) or s == h + "י"):
+            return True
+    if " " in h:
+        # a two-word head: every word present, allowing the construct form (תפוח / תפוחי)
+        words = h.split()
+        return all(w in toks or _stem(w) in stems or (w + "י") in toks or (_stem(w) + "י") in toks for w in words)
+    return False
 
 
 def head_matches(term: ParsedTerm, product_name: str) -> bool:
