@@ -396,6 +396,45 @@ CREATE INDEX IF NOT EXISTS idx_tivtaam_order_lines_product
     ON tivtaam_order_lines(product_code);
 CREATE INDEX IF NOT EXISTS idx_tivtaam_order_lines_barcode
     ON tivtaam_order_lines(barcode);
+
+-- vNext Phase 1 (2026-09-20): three concepts the schema could not carry
+-- without changing the meaning of an existing column. All additive, all
+-- household-declared inputs; the vNext engines only ever read them.
+-- A planned meal or event: "בשישי עושים טאקו". Ingredients are stored
+-- as declared (JSON list of names) -- the demand derived from them is an
+-- inference made at plan time and is never written back here.
+CREATE TABLE IF NOT EXISTS vnext_planned_meals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    meal TEXT NOT NULL,
+    on_date TEXT NOT NULL,         -- YYYY-MM-DD
+    servings INTEGER NOT NULL DEFAULT 0,   -- 0 = not stated
+    ingredients TEXT NOT NULL DEFAULT '[]',
+    declared_by TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS vnext_household_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    on_date TEXT NOT NULL,         -- YYYY-MM-DD
+    extra_people INTEGER NOT NULL DEFAULT 0,
+    note TEXT NOT NULL DEFAULT '',
+    declared_by TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1
+);
+
+-- "אם יש מבצע טוב על X תקנה": a standing conditional stock-up request.
+CREATE TABLE IF NOT EXISTS vnext_stockup_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    term TEXT NOT NULL,
+    min_discount REAL NOT NULL DEFAULT 0.25,
+    max_quantity INTEGER NOT NULL DEFAULT 2,
+    declared_by TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1
+);
 """
 
 
@@ -2550,3 +2589,91 @@ class Storage:
             quantity=row["quantity"],
             is_weighted=bool(row["is_weighted"]),
         )
+
+    # -- vNext Phase 1 additive inputs (2026-09-20) -------------------------
+    # Household-declared meals, events and conditional stock-up rules. Read
+    # by the vNext shadow engines; written only by an explicit household
+    # action (CLI today). Nothing in plan/readiness generation writes here.
+
+    def add_vnext_planned_meal(
+        self, meal: str, on_date: str, ingredients: list[str],
+        servings: int = 0, declared_by: str = "",
+    ) -> int:
+        with closing(self._connect()) as conn:
+            cur = conn.execute(
+                "INSERT INTO vnext_planned_meals (meal, on_date, servings, ingredients, "
+                "declared_by, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (meal.strip(), on_date, int(servings or 0),
+                 json.dumps([str(i).strip() for i in ingredients if str(i).strip()], ensure_ascii=False),
+                 declared_by, datetime.now(timezone.utc).isoformat()),
+            )
+            conn.commit()
+            return int(cur.lastrowid)
+
+    def list_vnext_planned_meals(self, from_date: str = "", to_date: str = "") -> list[dict]:
+        """Active planned meals, oldest date first; bounds are inclusive YYYY-MM-DD."""
+        query = "SELECT * FROM vnext_planned_meals WHERE active = 1"
+        params: list = []
+        if from_date:
+            query += " AND on_date >= ?"
+            params.append(from_date)
+        if to_date:
+            query += " AND on_date <= ?"
+            params.append(to_date)
+        with closing(self._connect()) as conn:
+            rows = conn.execute(query + " ORDER BY on_date, id", params).fetchall()
+        out = []
+        for row in rows:
+            item = dict(row)
+            try:
+                item["ingredients"] = json.loads(item.get("ingredients") or "[]")
+            except ValueError:
+                item["ingredients"] = []
+            out.append(item)
+        return out
+
+    def add_vnext_household_event(
+        self, name: str, on_date: str, extra_people: int = 0, note: str = "", declared_by: str = "",
+    ) -> int:
+        with closing(self._connect()) as conn:
+            cur = conn.execute(
+                "INSERT INTO vnext_household_events (name, on_date, extra_people, note, "
+                "declared_by, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (name.strip(), on_date, int(extra_people or 0), note, declared_by,
+                 datetime.now(timezone.utc).isoformat()),
+            )
+            conn.commit()
+            return int(cur.lastrowid)
+
+    def list_vnext_household_events(self, from_date: str = "", to_date: str = "") -> list[dict]:
+        query = "SELECT * FROM vnext_household_events WHERE active = 1"
+        params: list = []
+        if from_date:
+            query += " AND on_date >= ?"
+            params.append(from_date)
+        if to_date:
+            query += " AND on_date <= ?"
+            params.append(to_date)
+        with closing(self._connect()) as conn:
+            rows = conn.execute(query + " ORDER BY on_date, id", params).fetchall()
+        return [dict(r) for r in rows]
+
+    def add_vnext_stockup_rule(
+        self, term: str, min_discount: float = 0.25, max_quantity: int = 2, declared_by: str = "",
+    ) -> int:
+        with closing(self._connect()) as conn:
+            cur = conn.execute(
+                "INSERT INTO vnext_stockup_rules (term, min_discount, max_quantity, declared_by, "
+                "created_at) VALUES (?, ?, ?, ?, ?)",
+                (normalize_term(term), float(min_discount), int(max_quantity), declared_by,
+                 datetime.now(timezone.utc).isoformat()),
+            )
+            conn.commit()
+            return int(cur.lastrowid)
+
+    def list_vnext_stockup_rules(self) -> list[dict]:
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT * FROM vnext_stockup_rules WHERE active = 1 ORDER BY id"
+            ).fetchall()
+        return [dict(r) for r in rows]
