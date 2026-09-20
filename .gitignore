@@ -34,3 +34,12 @@ data/coffeetrail/
 
 # explicit pre-migration DB copies (see docs/reports/2026-09-17-architecture-round2.md, E)
 data/backups/
+
+# Rendered delivery copies of a report (SendUserFile, scripts/md2docx.py).
+# The .md source is what's committed; a .docx/.pdf next to it is
+# regenerable on demand and would just churn the repo with binary diffs
+# every time a report goes out again. Noticed 2026-09-20 at an anchor:
+# two had been sitting untracked for three days, which is the anchor gate
+# working as intended, not a leak -- this just stops it recurring.
+docs/reports/*.docx
+docs/reports/*.pdf
