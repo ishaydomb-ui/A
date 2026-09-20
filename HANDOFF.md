@@ -6,7 +6,7 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-20 (host time, CEST) — Family Runtime MVP round 2 (§2h) + IN PROGRESS: muting proactive cart-ready pings per Ishay's 2026-09-20 request, not yet built (§2i)
+**Last anchored:** 2026-09-20 (host time, CEST) — Tiv Taam Work pilot ended, both chains' cart writers live again (§2h); "cart ready" pings go quiet when there's nothing to report (§2i, DONE)
 **Session:** https://claude.ai/code/session_01AR7esAYdoXQ71HXtqJPpQV
 **Branch:** `claude/gordon-work-mvp-cartpause`
 **Status is in `git log`, not hand-typed here.**
@@ -537,11 +537,14 @@ the first round of this work and may be behind; the live
 branch is checked out here is what a `refresh_bot.sh` deploys next.
 
 - **Cart-writer pause** (`cartpause.py`) + `/pausecart` `/resumecart` —
-  guards 6 orchestrator call sites. **Tiv Taam is currently paused** for
-  the Work-MVP benchmark; verify with
-  `python -m grocery_bot.cli work-context tivtaam` or check
-  `app_state` keys `cart_paused:tivtaam`/`cart_paused:global` before
-  assuming otherwise.
+  guards 6 orchestrator call sites. **RESUMED 2026-09-20**, per Ishay
+  ("End the Tiv Taam WORK PILOT and restore Gordon as the production
+  grocery executor"): `cart_paused:tivtaam` flipped back to `false`
+  (was `true` since 09-18, reason "Work benchmark"). Shufersal was
+  never paused. Both chains' cart writers are live; verify any time
+  with `app_state` keys `cart_paused:tivtaam`/`cart_paused:shufersal`/
+  `cart_paused:global` (all `false` as of this anchor) — takes effect
+  immediately, no restart needed, since `is_paused` reads storage live.
 - **`work_projection.py`** (`work-context`) and **`work_planner_snapshot.py`**
   (`work-planner-snapshot`) — two earlier, still-live pure-read exports
   for benchmarking Gordon's own planner. Not the Work pilot's actual
@@ -593,32 +596,35 @@ branch is checked out here is what a `refresh_bot.sh` deploys next.
   see memory) now sorts before `uset-pc` among online Tailscale exit
   nodes. Verified live against real `tailscale status`.
 
-## 2i. IN PROGRESS — stop proactive "cart ready" pings (2026-09-20, not yet implemented)
+## 2i. DONE 2026-09-20 — proactive "cart ready" pings go quiet when there's nothing to say
 
-Per Ishay, 2026-09-20 (relayed by Miri's session, direct quote): *"אני
-רוצה להפסיק לקבל הודעות על הסופר"* — referring specifically to the
-`watch_list` job's cart-ready pings (Tiv Taam, cited example: 03:13,
-09:16, 15:19 the same day). This is a valid, dated, quoted decision —
-no need to ask again — but **nothing has been built yet**, only
-verified:
+Per Ishay, 2026-09-20 (first relayed by Miri's session: *"אני רוצה
+להפסיק לקבל הודעות על הסופר"*; then directly, narrowing the scope:
+*"רק צריך לא לקבל הודעות על העגלה ממולאת כי זה שולח כמה פעמים ביום
+ואין משמעות"*). Scope is exactly the `watch_list` cart-ready ping when
+it has nothing to report — not `/start_order`, not the nightly
+digest/nudge, both untouched.
 
-- `watch_list` genuinely polls every 3 minutes and is currently firing
-  real, successful runs (not the 2026-09-19 paused-store duplicate bug,
-  which is already fixed) — confirmed live via
-  `journalctl --user -u grocery-bot.service`.
-- 14 items are currently pending (`adhoc_requests`); Tiv Taam's cart
-  writer is still paused (`cart_paused:tivtaam=true`) for the Work-MVP
-  benchmark, Shufersal is not.
+**Root cause, confirmed against the real DB before fixing:** a `skipped`
+(already-in-cart) outcome never consumes its `adhoc_requests` row
+(`execution.run_list_items` — only `verified` does, by design, so an
+unconfirmed add gets presence-checked rather than silently dropped).
+So a store where the pending items are genuinely already in the cart
+re-earns the identical "0/N בעגלה · N כבר היו" run every
+`listwatch.COOLDOWN_HOURS` (6h) forever — matches the screenshot's
+03:13/09:16/15:19 cadence exactly.
 
-**Not yet decided:** exact scope. Ishay's quote is general ("stop
-getting messages about the supermarket") but the only cited example is
-`watch_list`'s proactive cart-ready message specifically — not
-`/start_order`'s own response, not the nightly digest/nudge. Planned
-approach (not yet built): a reversible mute toggle in the same spirit
-as `cartpause.py` — silence the proactive `watch_list` notification
-specifically, keep the underlying cart-add logic running, keep
-explicit-command responses working. **Pick this up here** rather than
-re-deriving the verification above.
+**Fix, commit `6ebf408`:** `outcome.is_uneventful(storage, reports)` —
+true only when every run behind a cycle reached `completed` with zero
+verified adds (i.e. everything settled as already-there; a single
+not-found/unverified/pending item anywhere keeps it False).
+`telegram_bot.watch_list` checks it right after the cart run and
+returns without sending anything when true. Nothing else changed —
+the cart run itself, presence-checking and request consumption all
+behave exactly as before; only the Telegram message is suppressed.
+4 new tests (`tests/test_outcome.py::IsUneventfulTests`); full suite
+1439 passed / 4 pre-existing failures (paused Markdown→HTML migration,
+confirmed via `git stash` to predate this change, see §2).
 
 ## 3. Blocked, and on what
 
