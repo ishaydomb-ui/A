@@ -6,7 +6,7 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-20 (host time, CEST) — Family Runtime MVP round 2 (Bitwarden, watch_list pause-notification fix, the Work-safe export + real Tiv Taam order-line backfill, Google Drive wiring blocked on access, exit-node priority) — see §2h
+**Last anchored:** 2026-09-20 (host time, CEST) — Family Runtime MVP round 2 (§2h) + IN PROGRESS: muting proactive cart-ready pings per Ishay's 2026-09-20 request, not yet built (§2i)
 **Session:** https://claude.ai/code/session_01AR7esAYdoXQ71HXtqJPpQV
 **Branch:** `claude/gordon-work-mvp-cartpause`
 **Status is in `git log`, not hand-typed here.**
@@ -592,6 +592,33 @@ branch is checked out here is what a `refresh_bot.sh` deploys next.
   by Arthur): `liran-aba-pc` (100.64.121.81, aka **"בוב"** informally —
   see memory) now sorts before `uset-pc` among online Tailscale exit
   nodes. Verified live against real `tailscale status`.
+
+## 2i. IN PROGRESS — stop proactive "cart ready" pings (2026-09-20, not yet implemented)
+
+Per Ishay, 2026-09-20 (relayed by Miri's session, direct quote): *"אני
+רוצה להפסיק לקבל הודעות על הסופר"* — referring specifically to the
+`watch_list` job's cart-ready pings (Tiv Taam, cited example: 03:13,
+09:16, 15:19 the same day). This is a valid, dated, quoted decision —
+no need to ask again — but **nothing has been built yet**, only
+verified:
+
+- `watch_list` genuinely polls every 3 minutes and is currently firing
+  real, successful runs (not the 2026-09-19 paused-store duplicate bug,
+  which is already fixed) — confirmed live via
+  `journalctl --user -u grocery-bot.service`.
+- 14 items are currently pending (`adhoc_requests`); Tiv Taam's cart
+  writer is still paused (`cart_paused:tivtaam=true`) for the Work-MVP
+  benchmark, Shufersal is not.
+
+**Not yet decided:** exact scope. Ishay's quote is general ("stop
+getting messages about the supermarket") but the only cited example is
+`watch_list`'s proactive cart-ready message specifically — not
+`/start_order`'s own response, not the nightly digest/nudge. Planned
+approach (not yet built): a reversible mute toggle in the same spirit
+as `cartpause.py` — silence the proactive `watch_list` notification
+specifically, keep the underlying cart-add logic running, keep
+explicit-command responses working. **Pick this up here** rather than
+re-deriving the verification above.
 
 ## 3. Blocked, and on what
 
