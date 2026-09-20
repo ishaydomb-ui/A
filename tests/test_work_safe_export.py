@@ -145,25 +145,67 @@ class RealOrderLineEvidenceTests(_Base):
         self.assertIn("DERIVED_FROM_OBSERVED_HISTORY", summary["observed_typical_quantity"]["basis"])
 
 
-class MachineResolvableFlagTests(_Base):
-    """The audit's core finding: product_code == product_name is not a
-    real Tiv Taam id, no matter how trusted the provenance label is."""
+class OnlyHumanConfirmedHintsTests(_Base):
+    """Round 2 (2026-09-20): the audit found wrong mappings even at
+    source='purchase', Gordon's second-highest confidence tier -- so
+    provenance alone is no longer trusted to decide inclusion. Only an
+    explicit human confirmation earns a hint; everything else is
+    omitted, not included-and-flagged."""
 
-    def test_code_equals_name_is_flagged_unresolvable_even_at_purchase_tier(self):
-        self.storage.remember_choice(STORE, "בייקון", "בייקון", "בייקון", source="purchase")
+    def test_purchase_sourced_hint_is_excluded_even_when_it_looks_resolvable(self):
+        self.storage.remember_choice(STORE, "חלב", "P_998877", "חלב 3% עמק", source="purchase")
+        export = work_safe_export.build_export(self.storage, STORE)
+        self.assertFalse(any(h["household_term"] == "חלב" for h in export["product_hints"]))
+
+    def test_inferred_sourced_hint_is_excluded(self):
+        self.storage.remember_choice(STORE, "גרנולה ללא תוספת סוכר", "עוגיות גרנולה ללא תוספת סוכר",
+                                      "עוגיות גרנולה ללא תוספת סוכר", source="inferred")
+        export = work_safe_export.build_export(self.storage, STORE)
+        self.assertFalse(any(h["household_term"] == "גרנולה ללא תוספת סוכר" for h in export["product_hints"]))
+
+    def test_search_sourced_hint_is_excluded(self):
+        self.storage.remember_choice(STORE, "משהו", "", "משהו לא ידוע", source="search")
+        export = work_safe_export.build_export(self.storage, STORE)
+        self.assertFalse(any(h["household_term"] == "משהו" for h in export["product_hints"]))
+
+    def test_human_confirmed_hint_is_included(self):
+        self.storage.remember_choice(STORE, "חלב", "P_998877", "חלב 3% עמק", source="human")
+        export = work_safe_export.build_export(self.storage, STORE)
+        hint = next(h for h in export["product_hints"] if h["household_term"] == "חלב")
+        self.assertEqual(hint["provenance"], "human")
+
+    def test_a_pending_need_with_no_human_confirmation_carries_no_hint_anywhere_in_the_export(self):
+        # Mirrors the real production case: an inferred (wrong) mapping
+        # for a term that is also currently a pending need.
+        self.storage.add_adhoc_request("גרנולה ללא תוספת סוכר", "ליראן")
+        self.storage.remember_choice(STORE, "גרנולה ללא תוספת סוכר", "עוגיות גרנולה ללא תוספת סוכר",
+                                      "עוגיות גרנולה ללא תוספת סוכר", source="inferred")
+        export = work_safe_export.build_export(self.storage, STORE)
+        need = next(n for n in export["pending_needs"] if n["text"] == "גרנולה ללא תוספת סוכר")
+        self.assertNotIn("preferred_product", need)
+        self.assertNotIn("product_hint", need)
+        self.assertFalse(any(h["household_term"] == "גרנולה ללא תוספת סוכר" for h in export["product_hints"]))
+
+
+class MachineResolvableFlagTests(_Base):
+    """machine_resolvable stays a defensive, transparent flag even on the
+    human-confirmed set -- it is not what decides inclusion."""
+
+    def test_code_equals_name_is_flagged_unresolvable_even_when_human_confirmed(self):
+        self.storage.remember_choice(STORE, "בייקון", "בייקון", "בייקון", source="human")
         export = work_safe_export.build_export(self.storage, STORE)
         hint = next(h for h in export["product_hints"] if h["household_term"] == "בייקון")
         self.assertFalse(hint["machine_resolvable"])
-        self.assertEqual(hint["provenance"], "purchase")
+        self.assertEqual(hint["provenance"], "human")
 
     def test_a_real_distinct_code_is_flagged_resolvable(self):
-        self.storage.remember_choice(STORE, "חלב", "P_998877", "חלב 3% עמק", source="purchase")
+        self.storage.remember_choice(STORE, "חלב", "P_998877", "חלב 3% עמק", source="human")
         export = work_safe_export.build_export(self.storage, STORE)
         hint = next(h for h in export["product_hints"] if h["household_term"] == "חלב")
         self.assertTrue(hint["machine_resolvable"])
 
     def test_empty_code_is_flagged_unresolvable(self):
-        self.storage.remember_choice(STORE, "משהו", "", "משהו לא ידוע", source="search")
+        self.storage.remember_choice(STORE, "משהו", "", "משהו לא ידוע", source="human")
         export = work_safe_export.build_export(self.storage, STORE)
         hint = next(h for h in export["product_hints"] if h["household_term"] == "משהו")
         self.assertFalse(hint["machine_resolvable"])

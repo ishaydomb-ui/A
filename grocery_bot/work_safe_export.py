@@ -15,9 +15,13 @@ memory, so nothing here is a planning conclusion:
   leaks Shufersal promotions into a Tiv Taam-scoped query (the audit's
   finding #3); Work is expected to check live Tiv Taam promotions
   itself instead.
-- Product preferences appear only as `product_hints`, each carrying its
-  own `machine_resolvable` flag -- a `source='purchase'` mapping is not
-  presented as more likely to be a real product id than any other.
+- Product preferences appear only as `product_hints`, and only when
+  `source='human'` (an explicit tap/correction) -- 2026-09-20 (round 2):
+  even `source='purchase'` rows were found to include demonstrably wrong
+  mappings (a Hebrew description written into the code column), so
+  provenance alone is not treated as evidence of correctness. A term
+  with no human-confirmed mapping carries no hint at all here; Work
+  resolves it against the live catalogue instead of inheriting a guess.
 
 Same hard boundary as work_projection.py/work_planner_snapshot.py:
 never import plancontext, never touch an adapter/browser/session file,
@@ -105,6 +109,10 @@ def _metadata(storage, store: str) -> dict:
             "gordon_due", "due_signal", "due_reason", "department",
             "stock_items.default_quantity (presented as observed)",
             "standing-list / planner buy-don't-buy output", "promotions",
+            "preferred_products rows where source != 'human' (purchase/"
+            "inferred/search -- excluded from product_hints since "
+            "2026-09-20 round 2, after finding wrong mappings even at "
+            "source='purchase')",
         ],
     }
 
@@ -221,17 +229,31 @@ def _day_gaps(sorted_dates: list[str]) -> list[float]:
     return [(b - a).days for a, b in zip(parsed, parsed[1:])]
 
 
+HUMAN_CONFIRMED_SOURCE = "human"
+
+
 def _product_hints(storage, store: str) -> list[dict]:
     """Gordon's product preferences, as hints only -- never as ground
-    truth. `machine_resolvable` is the one thing this export adds beyond
-    what preferred_products itself stores: False whenever product_code
-    is empty or textually identical to product_name (the audit's
-    found defect -- a Hebrew description written into the code column
-    instead of a real Tiv Taam product id), regardless of `source`.
+    truth, and only when a human explicitly confirmed the mapping.
+
+    2026-09-20 (round 2): restricted to source='human' after the audit
+    found demonstrably wrong mappings even at source='purchase' --
+    Gordon's second-highest confidence tier, and one this export
+    previously still included. Provenance is Gordon's confidence in the
+    *choice*; it says nothing about whether the code is machine-
+    resolvable, and this export no longer asks Work to make that
+    inference itself. `machine_resolvable` stays on each hint as a
+    defensive check even on the human-confirmed set: False whenever
+    product_code is empty or textually identical to product_name (a
+    Hebrew description written into the code column instead of a real
+    Tiv Taam product id) -- included for transparency, not used to
+    decide inclusion.
     """
     barcode_by_code = {row["product_code"]: row.get("barcode") for row in storage.list_stock_items(store)}
     out = []
     for row in storage.list_preferences(store):
+        if row.get("source") != HUMAN_CONFIRMED_SOURCE:
+            continue
         code = (row.get("product_code") or "").strip()
         name = (row.get("product_name") or "").strip()
         resolvable = bool(code) and code != name
