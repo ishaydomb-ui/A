@@ -25,6 +25,18 @@ Run with: python -m grocery_bot.cli <command>
                           rejections, repeat cart failures. No due/buy
                           conclusion, no department, no promotions -- see
                           docs/gordon_work_context_schema.md
+    vnext-plan [--json] [--as-of YYYY-MM-DD]  vNext SHADOW plan: what
+                          Gordon would put in the carts, with evidence,
+                          confidence and open decisions. Reads only;
+                          touches no cart, consumes no request
+    vnext-readiness [--json] [--as-of YYYY-MM-DD]  vNext SHADOW readiness:
+                          is a cycle worth preparing now, and why. Sends
+                          nothing
+    vnext-add-meal "<dish>" --on YYYY-MM-DD --ingredients a,b,c
+                          [--servings N] [--by NAME]  declare a planned
+                          meal for the vNext plan (additive table)
+    vnext-stockup-rule "<term>" [--min-discount F] [--max-qty N] [--by NAME]
+                          "אם יש מבצע טוב על X תקנה" (additive table)
     import-base-list <f>  load a YAML base list into the database
     import-history        build the base list from real past orders
                           [--year N] [--min-share F] [--memory-only] [--dry-run]
@@ -650,6 +662,95 @@ def _work_context_safe(storage: Storage, args: list[str]) -> int:
 
     store = next((a for a in args if not a.startswith("--")), "tivtaam")
     print(json.dumps(build_export(storage, store), ensure_ascii=False))
+    return 0
+
+
+def _vnext_arg(args: list[str], flag: str, default=None):
+    if flag in args:
+        idx = args.index(flag)
+        if idx + 1 < len(args):
+            return args[idx + 1]
+    return default
+
+
+def _vnext_as_of(args: list[str]):
+    from datetime import date
+
+    raw = _vnext_arg(args, "--as-of")
+    return date.fromisoformat(raw) if raw else None
+
+
+def _vnext_plan(storage: Storage, args: list[str]) -> int:
+    """vNext Phase 1 shadow plan (2026-09-20). Pure read of Gordon's own
+    tables: no adapter, no browser, no cart write, no request consumed,
+    no preference written. See shopping_plan.py."""
+    from .shopping_plan import build_plan, format_plan
+    from .vnext_config import VNextConfig
+
+    plan = build_plan(storage, VNextConfig.from_env(), _vnext_as_of(args))
+    if "--json" in args:
+        print(plan.to_json())
+    else:
+        print(format_plan(plan))
+        print()
+        print("(add --json for the machine-readable plan)")
+    return 0
+
+
+def _vnext_readiness(storage: Storage, args: list[str]) -> int:
+    """vNext Phase 1 shadow readiness. Sends no message; see
+    shopping_readiness.py."""
+    import json
+
+    from .shopping_readiness import assess, format_readiness
+    from .vnext_config import VNextConfig
+
+    result = assess(storage, VNextConfig.from_env(), _vnext_as_of(args))
+    if "--json" in args:
+        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+    else:
+        print(format_readiness(result))
+        print()
+        print("(add --json for the machine-readable result)")
+    return 0
+
+
+def _vnext_add_meal(storage: Storage, args: list[str]) -> int:
+    """Declare a planned meal (vnext_planned_meals, additive). The plan
+    derives ingredient demand from it as an inference at read time."""
+    positional = [a for i, a in enumerate(args) if not a.startswith("--")
+                  and (i == 0 or not args[i - 1].startswith("--"))]
+    if not positional:
+        print("usage: vnext-add-meal \"<dish>\" --on YYYY-MM-DD --ingredients a,b,c [--servings N] [--by NAME]")
+        return 2
+    on = _vnext_arg(args, "--on")
+    if not on:
+        print("--on YYYY-MM-DD is required")
+        return 2
+    ingredients = [x.strip() for x in (_vnext_arg(args, "--ingredients", "") or "").split(",") if x.strip()]
+    row_id = storage.add_vnext_planned_meal(
+        positional[0], on, ingredients,
+        servings=int(_vnext_arg(args, "--servings", 0) or 0),
+        declared_by=_vnext_arg(args, "--by", "") or "",
+    )
+    print(f"planned meal #{row_id}: {positional[0]} on {on}, {len(ingredients)} ingredient(s)")
+    return 0
+
+
+def _vnext_stockup_rule(storage: Storage, args: list[str]) -> int:
+    """Declare a conditional stock-up rule (vnext_stockup_rules, additive)."""
+    positional = [a for i, a in enumerate(args) if not a.startswith("--")
+                  and (i == 0 or not args[i - 1].startswith("--"))]
+    if not positional:
+        print("usage: vnext-stockup-rule \"<term>\" [--min-discount F] [--max-qty N] [--by NAME]")
+        return 2
+    row_id = storage.add_vnext_stockup_rule(
+        positional[0],
+        min_discount=float(_vnext_arg(args, "--min-discount", 0.25) or 0.25),
+        max_quantity=int(_vnext_arg(args, "--max-qty", 2) or 2),
+        declared_by=_vnext_arg(args, "--by", "") or "",
+    )
+    print(f"stock-up rule #{row_id}: {positional[0]}")
     return 0
 
 
@@ -1427,6 +1528,12 @@ _DB_ONLY_COMMANDS = {
     "work-context": _work_context,
     "work-planner-snapshot": _work_planner_snapshot,
     "work-context-safe": _work_context_safe,
+    # vNext Phase 1 shadow layer (2026-09-20): plan/readiness are pure
+    # reads; add-meal/stockup-rule write only to their own additive tables.
+    "vnext-plan": _vnext_plan,
+    "vnext-readiness": _vnext_readiness,
+    "vnext-add-meal": _vnext_add_meal,
+    "vnext-stockup-rule": _vnext_stockup_rule,
     # Reads flat CSVs under data/benefits/ (gitignored — household
     # financial data), not the sqlite database at all; `storage` is
     # accepted and ignored to keep one dispatch shape. No token, no store
