@@ -134,6 +134,39 @@ class EndToEndTests(Base):
         self.assertIn("אמשיך בהפעלה הבאה: ביצים", text)
 
 
+class IsUneventfulTests(Base):
+    """Ishay, 2026-09-20: no message when a run finds everything already
+    in the cart -- the exact "0/14 בעגלה · 14 כבר היו" shape that was
+    recurring every listwatch.COOLDOWN_HOURS."""
+
+    def test_everything_already_there_is_uneventful(self):
+        reports = self._run({"חלב": ("skipped", "n/a", ""), "לחם": ("skipped", "n/a", "")},
+                            ["חלב", "לחם"])
+        self.assertTrue(outcome.is_uneventful(self.storage, reports))
+
+    def test_a_genuine_add_is_not_uneventful(self):
+        reports = self._run({}, ["חלב"])
+        self.assertFalse(outcome.is_uneventful(self.storage, reports))
+
+    def test_a_not_found_item_is_not_uneventful_even_if_others_are_skipped(self):
+        reports = self._run(
+            {"חלב": ("skipped", "n/a", ""), "לחם": ("not_found", "n/a", "product")},
+            ["חלב", "לחם"],
+        )
+        self.assertFalse(outcome.is_uneventful(self.storage, reports))
+
+    def test_an_unverified_add_is_not_uneventful(self):
+        reports = self._run({"לחם": ("added", "unverified", "")}, ["לחם"])
+        self.assertFalse(outcome.is_uneventful(self.storage, reports))
+
+    def test_no_run_id_at_all_is_not_uneventful(self):
+        from grocery_bot.models import OrderCycleReport
+        self.assertFalse(outcome.is_uneventful(self.storage, {"tivtaam": OrderCycleReport("tivtaam")}))
+
+    def test_empty_reports_is_not_uneventful(self):
+        self.assertFalse(outcome.is_uneventful(self.storage, {}))
+
+
 class EveryClosingPathRecordsAnOutcome(unittest.TestCase):
     """Whichever path closes a run, cart_runs.outcome is set — no silent run."""
 

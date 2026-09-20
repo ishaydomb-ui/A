@@ -140,6 +140,36 @@ def format_outcome(out: RunOutcome) -> str:
     return "\n".join(lines)
 
 
+def is_uneventful(storage, reports: dict) -> bool:
+    """True when a run genuinely has nothing worth telling the household.
+
+    Every requested item was already in the cart before the run started
+    -- nothing new landed, nothing failed, nothing needs a choice. Set by
+    Ishay 2026-09-20: *"רק צריך לא לקבל הודעות על העגלה ממולאת כי זה
+    שולח כמה פעמים ביום ואין משמעות"* -- referring to exactly this shape
+    ("0/14 בעגלה · 14 כבר היו") recurring every `listwatch.COOLDOWN_HOURS`
+    because a `skipped` outcome never consumes its request (by design --
+    see `execution.run_list_items`), so the same pending items earn the
+    same no-op run again and again.
+
+    Deliberately narrow: only suppresses when every run behind `reports`
+    reached `completed` with zero verified adds -- i.e. every item
+    settled as already-there. A single not-found, unverified or pending
+    item anywhere makes this False, so a caller wired to only the list
+    watcher's proactive ping (not to `/start_order` or any explicit
+    command) still reports anything that actually needs attention.
+    """
+    run_ids: list = []
+    for report in (reports or {}).values():
+        rid = getattr(report, "run_id", None)
+        if rid is not None and rid not in run_ids:
+            run_ids.append(rid)
+    if not run_ids:
+        return False
+    outs = [summarise(storage, rid) for rid in run_ids]
+    return all(out.state == "completed" and out.counts.get("verified", 0) == 0 for out in outs)
+
+
 def format_outcomes(storage, reports: dict) -> str:
     """The consolidated message for whatever runs these reports belong to.
 

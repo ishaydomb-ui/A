@@ -2678,7 +2678,7 @@ class GroceryBot:
         Set by Ishay 2026-09-16 21:40; see `listwatch.py` for why this
         debounces instead of adding each item as it arrives.
         """
-        from . import listwatch
+        from . import listwatch, outcome
 
         chat_id = self.storage.get_state("digest_chat_id")
         if not chat_id:
@@ -2745,6 +2745,16 @@ class GroceryBot:
                 text="לא הצלחתי להכניס את הפריטים לעגלה. הם נשארו ברשימה — "
                      "אפשר לנסות שוב עם /start_order.",
             )
+            return
+
+        # Everything requested was already in the cart -- nothing added,
+        # nothing wrong, nothing to choose. Per Ishay 2026-09-20: he does
+        # not want a Telegram message for this shape, which was recurring
+        # every listwatch.COOLDOWN_HOURS for the same stuck-pending items
+        # (see outcome.is_uneventful). Explicit commands (/start_order
+        # etc.) are unaffected -- only this proactive ping goes quiet.
+        if outcome.is_uneventful(self.storage, reports):
+            logger.info("List watcher: everything already in the cart, nothing to report")
             return
 
         summary, markup = self._store_cycle_summary(reports)
