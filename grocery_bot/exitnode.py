@@ -51,6 +51,27 @@ class ExitNode:
     os_name: str = ""
 
 
+# Ishay, 2026-09-20 (relayed by Arthur, usage-audit, with the quote and
+# date; exitnode.py:101 confirmed at the time to have no explicit
+# tiebreak between online nodes -- only Tailscale's own status-JSON
+# order): "אני רוצה שהמחשב החדש יהיה בעדיפות ביצוע לפני המחשב הישן" --
+# the new computer before the old one, liran-aba-pc before uset-pc.
+# Matched on hostname first (case-insensitive, domain suffix stripped --
+# Tailscale's own HostName field varies in exactly that way across
+# clients) and IP as a fallback, so a hostname change alone doesn't
+# silently drop the priority.
+_PRIORITY_HOSTS = {"liran-aba-pc": 0, "uset-pc": 1}
+_PRIORITY_IPS = {"100.64.121.81": 0, "100.98.50.71": 1}
+_DEFAULT_PRIORITY = 2
+
+
+def _priority(node: "ExitNode") -> int:
+    host = (node.hostname or "").split(".")[0].lower()
+    if host in _PRIORITY_HOSTS:
+        return _PRIORITY_HOSTS[host]
+    return _PRIORITY_IPS.get(node.ip, _DEFAULT_PRIORITY)
+
+
 def _cli() -> list[str]:
     binary = os.environ.get("TAILSCALE_CLI_PATH", DEFAULT_CLI)
     socket = os.environ.get("TAILSCALE_SOCKET_PATH", DEFAULT_SOCKET)
@@ -98,7 +119,10 @@ def list_exit_nodes() -> list[ExitNode]:
         )
     # Online candidates first; an offline one is only worth trying if
     # nothing else is left, since Tailscale's view can lag reality.
-    return sorted(nodes, key=lambda n: not n.online)
+    # Among online candidates, liran-aba-pc before uset-pc (see
+    # _PRIORITY_HOSTS above); everything else keeps Tailscale's own
+    # order (stable sort).
+    return sorted(nodes, key=lambda n: (not n.online, _priority(n)))
 
 
 def select_exit_node(node: ExitNode) -> bool:

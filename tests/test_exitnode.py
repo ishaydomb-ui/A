@@ -46,6 +46,46 @@ class ListExitNodesTests(unittest.TestCase):
         with mock.patch("subprocess.run", return_value=_ok("not json")):
             self.assertEqual(list_exit_nodes(), [])
 
+    def test_liran_aba_pc_is_preferred_over_uset_pc_when_both_online(self) -> None:
+        """Ishay, 2026-09-20 (relayed by Arthur): the new computer before
+        the old one, among nodes Tailscale already sees as online."""
+        payload = _status_json([
+            _peer("uset-pc", ip="100.98.50.71"),
+            _peer("liran-aba-pc", ip="100.64.121.81"),
+        ])
+        with mock.patch("subprocess.run", return_value=_ok(payload)):
+            self.assertEqual(
+                [n.hostname for n in list_exit_nodes()], ["liran-aba-pc", "uset-pc"]
+            )
+
+    def test_priority_matches_by_ip_when_hostname_differs(self) -> None:
+        payload = _status_json([
+            _peer("uset-pc.tailnet.ts.net", ip="100.98.50.71"),
+            _peer("some-other-name", ip="100.64.121.81"),
+        ])
+        with mock.patch("subprocess.run", return_value=_ok(payload)):
+            self.assertEqual(
+                [n.ip for n in list_exit_nodes()], ["100.64.121.81", "100.98.50.71"]
+            )
+
+    def test_online_still_beats_priority(self) -> None:
+        """An offline liran-aba-pc must still sort behind an online uset-pc."""
+        payload = _status_json([
+            _peer("liran-aba-pc", ip="100.64.121.81", online=False),
+            _peer("uset-pc", ip="100.98.50.71", online=True),
+        ])
+        with mock.patch("subprocess.run", return_value=_ok(payload)):
+            self.assertEqual(
+                [n.hostname for n in list_exit_nodes()], ["uset-pc", "liran-aba-pc"]
+            )
+
+    def test_unranked_nodes_keep_their_relative_order(self) -> None:
+        payload = _status_json([_peer("phone"), _peer("tv-box")])
+        with mock.patch("subprocess.run", return_value=_ok(payload)):
+            self.assertEqual(
+                [n.hostname for n in list_exit_nodes()], ["phone", "tv-box"]
+            )
+
 
 class SelectTests(unittest.TestCase):
     def test_switch_uses_the_node_ip(self) -> None:
