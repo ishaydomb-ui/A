@@ -64,6 +64,7 @@ class ZeroMutation(Seeded):
         telegram_vnext_view.readiness_message(readiness, plan)
         telegram_vnext_view.plan_message(plan)
         telegram_vnext_view.exception_message(plan)
+        telegram_vnext_view.evaluate_message(plan, readiness)
         plan.to_json()
         json.dumps(readiness.to_dict())
         after = _dump(self.db)
@@ -184,7 +185,8 @@ class CliCommands(Seeded):
 
         before = _dump(self.db)
         for command, args in (("vnext-plan", []), ("vnext-plan", ["--json"]),
-                              ("vnext-readiness", []), ("vnext-readiness", ["--json"])):
+                              ("vnext-readiness", []), ("vnext-readiness", ["--json"]),
+                              ("vnext-evaluate", []), ("vnext-evaluate", ["--json"])):
             buf = io.StringIO()
             with redirect_stdout(buf):
                 code = cli._DB_ONLY_COMMANDS[command](self.storage, args + ["--as-of", TODAY.isoformat()])
