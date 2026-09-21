@@ -10,7 +10,10 @@ cart itself; the household runs this.
 from __future__ import annotations
 
 import logging
+import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from grocery_bot.config import Config
 from grocery_bot.telegram_bot import _build_adapter_factories
