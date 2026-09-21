@@ -140,6 +140,34 @@ class VNextConfig:
     # reads unreliable anyway), so readiness confidence cannot exceed this.
     readiness_confidence_cap_cart_unknown: float = 0.75
 
+    # -- Phase 2b: the Telegram flow ---------------------------------------
+    # The proactive nudge fires from cadence_check only when readiness says
+    # prepare_now / prepare_soon, at most once per this many days, never
+    # while a draft is open, never outside the quiet-hours window (Israel).
+    nudge_min_days: float = 3.0
+    nudge_snooze_days: float = 2.0
+    nudge_hour_from: int = 9
+    nudge_hour_to: int = 21
+    nudge_on_prepare_soon: bool = True
+    # An open draft is abandoned after this long; a button on it then says so.
+    draft_ttl_hours: float = 36.0
+    # Review screen pagination.
+    review_page_size: int = 10
+    # Multi-store: delivery fee / minimum per chain (₪). Defaults are what
+    # whereto.DELIVERY_FEES / threshold.py already know; overridable here.
+    delivery_fee_shufersal: float = 35.90
+    delivery_fee_tivtaam: float = 29.90
+    minimum_order_shufersal: float = 0.0
+    minimum_order_tivtaam: float = 0.0
+    # Recommend splitting across two chains only when it saves at least
+    # this much after BOTH delivery fees (two deliveries, two reviews).
+    split_min_saving: float = 25.0
+    # Waste card: a discard reported within this window keeps the item out
+    # of the proposal unless the household says otherwise.
+    waste_window_days: int = 14
+    # Stock-up cards shown per proposal (the rest stay in the full list).
+    stockup_cards: int = 2
+
     @classmethod
     def from_env(cls, env: dict | None = None) -> "VNextConfig":
         source = os.environ if env is None else env

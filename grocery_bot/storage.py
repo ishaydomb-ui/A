@@ -458,6 +458,27 @@ CREATE TABLE IF NOT EXISTS vnext_product_confirmations (
 );
 CREATE INDEX IF NOT EXISTS idx_vnext_confirmations_term
     ON vnext_product_confirmations(store, term);
+
+-- vNext Phase 2b: the household's open shopping draft (proposal ->
+-- review -> compare -> execute). One open draft per chat; the plan
+-- lives here as JSON so every inline button survives a bot restart.
+-- A draft is a proposal until the household taps "אשר והכן עגלה";
+-- nothing about it touches a cart, and it never reaches checkout.
+CREATE TABLE IF NOT EXISTS vnext_drafts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft',   -- draft | confirmed | executing | done | cancelled
+    plan_json TEXT NOT NULL,
+    chains_json TEXT NOT NULL DEFAULT '{}',  -- store -> enabled (household toggles)
+    page INTEGER NOT NULL DEFAULT 0,
+    message_id INTEGER,
+    screen TEXT NOT NULL DEFAULT 'proposal',
+    awaiting TEXT NOT NULL DEFAULT '',        -- e.g. add_item: the next free text is an item
+    result_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_vnext_drafts_chat ON vnext_drafts(chat_id, status);
 """
 
 
@@ -2737,6 +2758,52 @@ class Storage:
                     "SELECT * FROM vnext_product_confirmations ORDER BY confirmed_at"
                 ).fetchall()
         return [dict(r) for r in rows]
+
+    # -- vNext Phase 2b: shopping drafts ------------------------------------
+
+    def create_vnext_draft(self, chat_id: int, plan_json: str, chains_json: str = "{}") -> int:
+        """Open a draft for this chat; any older open one is cancelled first
+        (one open draft per chat, so a button can never act on the wrong plan)."""
+        now = datetime.now(timezone.utc).isoformat()
+        with closing(self._connect()) as conn:
+            conn.execute(
+                "UPDATE vnext_drafts SET status = 'cancelled', updated_at = ? "
+                "WHERE chat_id = ? AND status IN ('draft', 'confirmed')",
+                (now, int(chat_id)),
+            )
+            cursor = conn.execute(
+                "INSERT INTO vnext_drafts (chat_id, status, plan_json, chains_json, created_at, updated_at) "
+                "VALUES (?, 'draft', ?, ?, ?, ?)",
+                (int(chat_id), plan_json, chains_json, now, now),
+            )
+            conn.commit()
+            return int(cursor.lastrowid)
+
+    def open_vnext_draft(self, chat_id: int) -> dict | None:
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                "SELECT * FROM vnext_drafts WHERE chat_id = ? AND status IN ('draft', 'confirmed', 'executing') "
+                "ORDER BY id DESC LIMIT 1",
+                (int(chat_id),),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_vnext_draft(self, draft_id: int) -> dict | None:
+        with closing(self._connect()) as conn:
+            row = conn.execute("SELECT * FROM vnext_drafts WHERE id = ?", (int(draft_id),)).fetchone()
+        return dict(row) if row else None
+
+    def update_vnext_draft(self, draft_id: int, **fields) -> None:
+        allowed = {"status", "plan_json", "chains_json", "page", "message_id", "screen", "awaiting", "result_json"}
+        cols = {k: v for k, v in fields.items() if k in allowed}
+        if not cols:
+            return
+        cols["updated_at"] = datetime.now(timezone.utc).isoformat()
+        assignments = ", ".join(f"{k} = ?" for k in cols)
+        with closing(self._connect()) as conn:
+            conn.execute(f"UPDATE vnext_drafts SET {assignments} WHERE id = ?",
+                         (*cols.values(), int(draft_id)))
+            conn.commit()
 
     def search_store_price_names(self, store: str, query: str, limit: int = 12,
                                  also: list[str] | None = None) -> list[dict]:

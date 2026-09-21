@@ -635,8 +635,15 @@ def add_terms_to_cart(
     run_id: int | None = None,
     trigger: str = "terms",
     proxy: str | None = None,
+    identities: dict | None = None,
 ) -> dict[str, OrderCycleReport]:
     """Put specific items straight into the real cart.
+
+    `identities` (vNext Phase 2b, additive): {(store, term): Identity}
+    — a product the semantic resolver already chose for this need at
+    this chain. When present it replaces `identity.resolve` for that
+    term, so the add goes straight to `add_specific_product`; when
+    absent, nothing changes. A household rejection still wins below.
 
     Distinct from a full cycle on purpose. "תעדכן את העגלה עם קוטג
     וגבינה" names the things to add; running the whole standing list
@@ -718,7 +725,7 @@ def add_terms_to_cart(
                         ))
                         continue
                     # absent → fall through and add
-                ident = identity.resolve(storage, store, pt)
+                ident = (identities or {}).get((store, pt.term)) or identity.resolve(storage, store, pt)
                 if ident and storage.is_rejected(store, pt.term, ident.product_code):
                     # The household said "not that one" for this term;
                     # the barcode does not override them (Phase 8).
