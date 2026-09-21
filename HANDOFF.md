@@ -6,7 +6,7 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-21 06:10 CEST — ROOT CAUSE: Gordon on Miri's Telegram token since 09-19 (fix needs Ishay, §2j end); Tiv Taam cart parser fixed; vNext 1.5 done (§2j)
+**Last anchored:** 2026-09-21 06:10 CEST — token override FIXED by Ishay 06:00, Gordon back on its own bot (§2j end); Tiv Taam cart parser fixed; vNext 1.5 done (§2j)
 **Session:** https://claude.ai/code/session_01AR7esAYdoXQ71HXtqJPpQV
 **Branch:** `claude/gordon-work-mvp-cartpause`
 **Status is in `git log`, not hand-typed here.**
@@ -708,10 +708,13 @@ restart's "Grocery bot starting" line. Effects for ~40 h: Gordon and
 Miri both polled Miri's bot (updates split between two code bases),
 Gordon's proactive messages went out through Miri's bot (why Miri "saw"
 them), Gordon's own bot had no poller. Bob checked liran-aba-pc: clean.
-**Fix = swap the two `EnvironmentFile` lines + restart; systemd edits are
-classifier-blocked here, so Ishay was handed the one-liner (06:05).
-Verify after: token md5 prefix `17d15a51`, `BW_*` still present, no new
-`Conflict` lines.** Miri's session informed (fact only).
+**FIXED by Ishay 2026-09-21 06:00 CEST** (ran the one-liner: swapped the
+two `EnvironmentFile` lines, restart). Verified: PID 1374430 holds
+Gordon's token (`17d15a51`), `BW_*` still loaded, **0 Conflict lines in
+the first 3 minutes** (was one every ~30 s for 40 h). Unit backup at
+`grocery-bot.service.bak`. Lesson for `docs/ADDING_A_STORE.md`-class
+memory: a later `EnvironmentFile=` overrides an earlier one — never
+append a shared secrets file after the project's own `.env`. Miri's session informed (fact only).
 
 Also found the same morning: **Tiv Taam "click did not change the cart"
 was the cart parser, not the site** — fixed in `1de12d9`, and the
