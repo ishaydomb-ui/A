@@ -24,6 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .household_evidence import Evidence, EvidenceType, Origin
+from . import vnext_catalogue
 from .vnext_config import DEFAULT, VNextConfig
 from .vnext_semantics import ParsedTerm, checked, parse_term, unverified, violations
 
@@ -149,11 +150,12 @@ def _catalogue_candidates(storage, parsed: ParsedTerm, config: VNextConfig, purc
     seen: set[tuple[str, str]] = set()
     for also in extra_sets:
         try:
-            rows = storage.search_catalog_names(query, limit=config.resolver_catalogue_candidates, also=also)
+            rows = vnext_catalogue.search(storage, "shufersal", query, config.resolver_catalogue_candidates,
+                                          also, config.catalogue_cache_ttl_seconds)
         except Exception:  # noqa: BLE001 - a catalogue hiccup must not sink resolution
             rows = []
         for row in rows:
-            key = ("shufersal", str(row["item_code"]))
+            key = ("shufersal", str(row["code"]))
             if key in seen:
                 continue
             seen.add(key)
@@ -161,11 +163,12 @@ def _catalogue_candidates(storage, parsed: ParsedTerm, config: VNextConfig, purc
                                  source="catalogue", origin=Origin.INFERENCE,
                                  purchases=int(purchases_by_code.get(key, 0))))
         try:
-            rows = storage.search_store_price_names("tivtaam", query, limit=config.resolver_catalogue_candidates, also=also)
+            rows = vnext_catalogue.search(storage, "tivtaam", query, config.resolver_catalogue_candidates,
+                                          also, config.catalogue_cache_ttl_seconds)
         except Exception:  # noqa: BLE001
             rows = []
         for row in rows:
-            key = ("tivtaam", str(row["barcode"]))
+            key = ("tivtaam", str(row["code"]))
             if key in seen:
                 continue
             seen.add(key)

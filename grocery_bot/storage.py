@@ -2766,6 +2766,27 @@ class Storage:
             ).fetchall()
         return [dict(r) for r in rows]
 
+    def store_price_names_latest(self, store: str) -> list[dict]:
+        """One row per product at a portal chain: its newest name/price.
+        Feeds the vNext in-memory shortlist (one read per plan instead of
+        one LIKE per term)."""
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT p.barcode, p.name, p.price FROM store_prices p "
+                "JOIN (SELECT barcode, MAX(observed_at) AS observed_at FROM store_prices "
+                "      WHERE store = ? GROUP BY barcode) latest "
+                "  ON p.barcode = latest.barcode AND p.observed_at = latest.observed_at "
+                "WHERE p.store = ?",
+                (store, store),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def catalog_names_all(self) -> list[dict]:
+        """Every Shufersal catalogue row's identity, name and price."""
+        with closing(self._connect()) as conn:
+            rows = conn.execute("SELECT item_code, name, price FROM catalog_products").fetchall()
+        return [dict(r) for r in rows]
+
     def search_catalog_names(self, query: str, limit: int = 12, also: list[str] | None = None) -> list[dict]:
         """Shufersal catalogue rows whose name contains `query` and every
         word in `also`; shortest names first. Companion of

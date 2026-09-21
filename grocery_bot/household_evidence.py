@@ -325,6 +325,9 @@ def waste(storage) -> list[Evidence]:
     return out
 
 
+_PROMO_CACHE: dict = {}
+
+
 def promotions(storage, config: VNextConfig = DEFAULT) -> list[Evidence]:
     """Promotions on things the household buys, from the existing pickers.
 
@@ -332,7 +335,24 @@ def promotions(storage, config: VNextConfig = DEFAULT) -> list[Evidence]:
     multi-buy-arithmetic guard (2026-09-11 incident). `hotdeals.find` is
     also used, filtered by `store` here because `_promotion_deals()`
     ignores its `chains` argument (known bug, hotdeals.py).
+
+    Phase 2a: cached per process for `config.promotions_cache_ttl_seconds`.
+    The pickers cost ~13 s (283 `fold()`-UDF searches) and the feeds they
+    read change once a day, so a `/plan` right after a `/readiness`
+    should not pay for them twice. Keyed by DB path so tests never share.
     """
+    import time
+
+    key = (getattr(storage, "_db_path", "") or repr(storage), config.promotions_cache_ttl_seconds)
+    hit = _PROMO_CACHE.get(key)
+    if hit is not None and time.monotonic() - hit[0] <= config.promotions_cache_ttl_seconds:
+        return list(hit[1])
+    out = _promotions_uncached(storage, config)
+    _PROMO_CACHE[key] = (time.monotonic(), list(out))
+    return out
+
+
+def _promotions_uncached(storage, config: VNextConfig) -> list[Evidence]:
     from . import dealfill, hotdeals
 
     out: list[Evidence] = []

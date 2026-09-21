@@ -19,6 +19,7 @@ category match.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from dataclasses import dataclass, field
 
 # -- categories ----------------------------------------------------------------
@@ -151,6 +152,9 @@ _PAREN = re.compile(r"[()\[\]]")
 _TOKEN_SPLIT = re.compile(r"[\s,/\-–]+")
 
 
+# Memoised: a plan build normalises the same few thousand product names
+# once per keyword check -- ~7M translate() calls before Phase 2a.
+@lru_cache(maxsize=131072)
 def _norm(text: str) -> str:
     text = str(text or "").replace("’", "'").replace("`", "'").replace("״", '"').replace("׳", "'")
     text = text.replace("'", "")  # קוטג' -> קוטג
@@ -163,14 +167,17 @@ def _norm(text: str) -> str:
 _FINALS = str.maketrans("ךםןףץ", "כמנפצ")
 
 
+@lru_cache(maxsize=131072)
 def _m(text: str) -> str:
     return _norm(text).translate(_FINALS)
 
 
-def _tokens(text: str) -> list[str]:
-    return [t for t in _TOKEN_SPLIT.split(_m(text)) if t]
+@lru_cache(maxsize=131072)
+def _tokens(text: str) -> tuple[str, ...]:
+    return tuple(t for t in _TOKEN_SPLIT.split(_m(text)) if t)
 
 
+@lru_cache(maxsize=131072)
 def _stem(token: str) -> str:
     """Crude Hebrew plural/feminine stripping, enough for head-noun matching."""
     token = token.translate(_FINALS)

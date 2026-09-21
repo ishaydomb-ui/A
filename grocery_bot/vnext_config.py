@@ -87,6 +87,11 @@ class VNextConfig:
     resolver_evidence_bonus_per_purchase: float = 0.03
     resolver_evidence_bonus_cap: float = 0.12
     resolver_catalogue_candidates: int = 12
+    # Phase 2a: how long the in-memory catalogue shortlist (vnext_catalogue)
+    # is reused before re-reading names from the DB.
+    catalogue_cache_ttl_seconds: float = 900.0
+    # ... and the promotion pickers' output (feeds refresh daily).
+    promotions_cache_ttl_seconds: float = 600.0
     # An unresolved product on an explicit request is a real question only
     # when there is no acceptable candidate and no substitution to offer.
     product_confidence_agent_resolvable: float = 0.55
