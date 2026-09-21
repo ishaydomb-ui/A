@@ -65,7 +65,9 @@ class WatchListPauseGateTests(unittest.TestCase):
 
         context.bot.send_message.assert_not_called()
 
-    def test_run_proceeds_normally_when_not_paused(self) -> None:
+    def test_run_proceeds_quietly_when_not_paused(self) -> None:
+        """Ishay 2026-09-20/21: the automatic run does its cart work but
+        never messages -- not at the start, not with the summary."""
         config = _config(["tivtaam"])
         bot = GroceryBot(config, self.storage)
 
@@ -75,12 +77,29 @@ class WatchListPauseGateTests(unittest.TestCase):
              mock.patch("grocery_bot.telegram_bot._build_adapter_factories",
                         return_value={"tivtaam": lambda: None}), \
              mock.patch("grocery_bot.telegram_bot.execution.run_list_items",
-                        return_value=(1, {}, {}, [])), \
+                        return_value=(1, {}, {}, [])) as run, \
              mock.patch.object(GroceryBot, "_store_cycle_summary", return_value=("done", None)), \
-             mock.patch.object(GroceryBot, "_ask_ambiguities", new=mock.AsyncMock()):
+             mock.patch("grocery_bot.telegram_bot._send_html", new=mock.AsyncMock()) as send_html:
             context = self._run(bot)
 
-        self.assertGreaterEqual(context.bot.send_message.call_count, 1)
+        run.assert_called_once()
+        context.bot.send_message.assert_not_called()
+        send_html.assert_not_called()
+
+    def test_a_failed_run_is_also_quiet(self) -> None:
+        config = _config(["tivtaam"])
+        bot = GroceryBot(config, self.storage)
+
+        with mock.patch("grocery_bot.listwatch.assess", return_value=("run", [_item()])), \
+             mock.patch("grocery_bot.telegram_bot.ensure_israeli_exit",
+                        return_value=mock.Mock(available=True)), \
+             mock.patch("grocery_bot.telegram_bot._build_adapter_factories",
+                        return_value={"tivtaam": lambda: None}), \
+             mock.patch("grocery_bot.telegram_bot.execution.run_list_items",
+                        side_effect=RuntimeError("browser died")):
+            context = self._run(bot)
+
+        context.bot.send_message.assert_not_called()
 
     def test_still_gated_when_multiple_enabled_stores_are_all_paused(self) -> None:
         config = _config(["tivtaam", "shufersal"])
@@ -111,12 +130,12 @@ class WatchListPauseGateTests(unittest.TestCase):
              mock.patch("grocery_bot.telegram_bot._build_adapter_factories",
                         return_value={"tivtaam": lambda: None, "shufersal": lambda: None}), \
              mock.patch("grocery_bot.telegram_bot.execution.run_list_items",
-                        return_value=(1, {}, {}, [])), \
-             mock.patch.object(GroceryBot, "_store_cycle_summary", return_value=("done", None)), \
-             mock.patch.object(GroceryBot, "_ask_ambiguities", new=mock.AsyncMock()):
+                        return_value=(1, {}, {}, [])) as run, \
+             mock.patch.object(GroceryBot, "_store_cycle_summary", return_value=("done", None)):
             context = self._run(bot)
 
-        self.assertGreaterEqual(context.bot.send_message.call_count, 1)
+        run.assert_called_once()
+        context.bot.send_message.assert_not_called()
 
 
 if __name__ == "__main__":

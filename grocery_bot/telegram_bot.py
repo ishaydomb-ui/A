@@ -2728,39 +2728,30 @@ class GroceryBot:
         terms = [item for item in items if item.text]
         if not terms:
             return
-        await context.bot.send_message(
-            chat_id=int(chat_id),
-            text=f"🛒 מכניס לעגלה {len(terms)} פריטים מהרשימה…",
-        )
-        # One run for the batch; each request keeps its own id into it,
-        # and only a verified add consumes a request (execution).
+        # The whole automatic run is silent. Ishay, 2026-09-20: "רק צריך לא
+        # לקבל הודעות על העגלה ממולאת כי זה שולח כמה פעמים ביום ואין
+        # משמעות". The first cut (6ebf408) muted only the "everything was
+        # already there" shape; the very next night (2026-09-21 03:32 and
+        # 03:42) a real run -- 9 Shufersal adds, 11 Tiv Taam click failures
+        # -- still produced two messages, and the failed items stay pending
+        # so it would repeat every listwatch.COOLDOWN_HOURS. The cart work
+        # itself is unchanged: items are still added, requests still
+        # consumed on a verified add, failures still land in /failures and
+        # questions in /questions. Explicit commands stay chatty.
+        logger.info("List watcher: running %d pending items quietly", len(terms))
         try:
             _run_id, reports, _outcomes, _consumed = await asyncio.to_thread(
                 execution.run_list_items, self.storage, factories, items,
             )
         except Exception:
-            logger.exception("List watcher cart run failed")
-            await context.bot.send_message(
-                chat_id=int(chat_id),
-                text="לא הצלחתי להכניס את הפריטים לעגלה. הם נשארו ברשימה — "
-                     "אפשר לנסות שוב עם /start_order.",
-            )
+            logger.exception("List watcher cart run failed; items stay on the list")
             return
 
-        # Everything requested was already in the cart -- nothing added,
-        # nothing wrong, nothing to choose. Per Ishay 2026-09-20: he does
-        # not want a Telegram message for this shape, which was recurring
-        # every listwatch.COOLDOWN_HOURS for the same stuck-pending items
-        # (see outcome.is_uneventful). Explicit commands (/start_order
-        # etc.) are unaffected -- only this proactive ping goes quiet.
+        summary, _markup = self._store_cycle_summary(reports)
         if outcome.is_uneventful(self.storage, reports):
-            logger.info("List watcher: everything already in the cart, nothing to report")
-            return
-
-        summary, markup = self._store_cycle_summary(reports)
-        await _send_html(context, int(chat_id), summary or "לא הצלחתי להוסיף כלום.",
-                         reply_markup=markup)
-        await self._ask_ambiguities(int(chat_id), context, reports)
+            logger.info("List watcher: everything already in the cart")
+        else:
+            logger.info("List watcher result (not sent): %s", summary.replace("\n", " | "))
 
     async def drain_deferred_cycle(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Run a queued cycle once the Israeli exit is reachable again.
