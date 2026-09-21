@@ -759,6 +759,19 @@ parser now sees — verify against the cart read). `/status` added the
 same morning (`site_status`): per chain browser mode / logged in / cart
 lines+total, exit node, last synced order.
 
+**TEST STATE set 2026-09-21 ~11:40 on Ishay's request ("אני רוצה לעשות
+טסטים מול הבוט… למחוק את העגלה ולשנות כאילו אני אחרי קנייה"):** both real
+carts emptied via `scripts/clear_cart.py` (Shufersal 9 lines, Tiv Taam
+28 lines — verified 0/₪0 each), `execution.mark_shopped(storage, "all")`
+recorded a shop today for both chains **without** the refill `/done`
+would trigger, and the vNext draft was cancelled. The 14 old
+`adhoc_requests` rows were left pending (the plan reconciles 7 as
+likely-fulfilled). Found on the way: the exit node dropped mid-run
+(`ERR_SOCKS_CONNECTION_FAILED`, all 9 Shufersal removals failed) —
+re-ran through GordonChrome instead; and Shufersal serves its mobile
+layout below ~1024px, hiding the remove icons — the CDP tab now sets a
+1280×900 viewport. Tiv Taam per-line remove now exists (`remove_line`).
+
 **GordonChrome on liran-aba-pc — built 2026-09-21 (`5be3bac`), NOT yet
 switched on.** Ishay approved (2026-09-21) running the store browsers in a
 dedicated Chrome on the household PC: one Chrome process per bot (a CDP
