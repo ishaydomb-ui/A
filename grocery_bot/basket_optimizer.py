@@ -137,6 +137,19 @@ def _price_at(storage, store: str, code: str, name: str) -> float | None:
             sp = storage.latest_store_price(store, code)
             if sp and sp.get("price") is not None:
                 return float(sp["price"])
+        if store == "tivtaam" and code:
+            # Tiv Taam's own product codes (1985506) are not barcodes; the
+            # order lines carry the price the household actually paid,
+            # the freshest reference there is for a bought-before item.
+            lines = storage.tivtaam_purchase_lines_for(code)
+            for line in reversed(lines):
+                if line.get("price") not in (None, "", 0):
+                    return float(line["price"])
+            barcode = next((str(l.get("barcode")) for l in reversed(lines) if l.get("barcode")), "")
+            if barcode:
+                sp = storage.latest_store_price(store, barcode)
+                if sp and sp.get("price") is not None:
+                    return float(sp["price"])
         return None
     except Exception:  # noqa: BLE001
         logger.debug("price lookup failed %s %s", store, code, exc_info=True)
@@ -244,6 +257,11 @@ def quotes_for(items: list[dict], chains: dict, config: VNextConfig = DEFAULT) -
     # quotes everything the split quotes.
     best_single = min(enabled, key=lambda s: (single[s]["unpriced"], single[s]["total"]))
     single_total = single[best_single]["total"]
+    # A fair "cheaper than the other chain" figure exists only on the
+    # items both chains price (plus the delivery difference).
+    shared = [i for i in included if all((i.get("prices") or {}).get(s) is not None for s in enabled)]
+    shared_totals = {s: sum(float((i.get("prices") or {})[s]) * float(i.get("quantity") or 1) for i in shared)
+                     + (econ[s].delivery_fee or 0.0) for s in enabled} if shared else {}
     saving = round(single_total - split_total, 2) if split_total is not None and single_total else 0.0
     if len(used) > 1 and saving >= config.split_min_saving:
         assignment = split_assign
@@ -253,8 +271,15 @@ def quotes_for(items: list[dict], chains: dict, config: VNextConfig = DEFAULT) -
     else:
         assignment = {i["key"]: best_single for i in included}
         other = [s for s in enabled if s != best_single]
+        saving_vs_other = None
+        if other and shared_totals:
+            saving_vs_other = round(shared_totals[other[0]] - shared_totals[best_single], 2)
         recommendation = {"single": best_single, "total": single_total,
-                          "saving_vs_other": round(single[other[0]]["total"] - single_total, 2) if other and single[other[0]]["total"] else None,
+                          "saving_vs_other": saving_vs_other if saving_vs_other and saving_vs_other > 0 else None,
+                          "other_cheaper_by": round(-saving_vs_other, 2) if saving_vs_other and saving_vs_other < 0 else None,
+                          "other": other[0] if other else None,
+                          "shared_items": len(shared),
+                          "coverage": f"{per_chain[best_single]['items']}/{len(included)}",
                           "note": _threshold_note(best_single, per_chain[best_single]["subtotal"])}
         if len(used) > 1 and 0 < saving < config.split_min_saving:
             recommendation["note"] = (recommendation["note"] + "\n" if recommendation["note"] else "") + \

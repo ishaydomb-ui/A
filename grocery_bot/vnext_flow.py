@@ -595,9 +595,17 @@ def compare_screen(draft: Draft, config: VNextConfig = DEFAULT) -> tuple[str, li
         lines.append(f"לקנות {parts}.")
         lines.append(f"חיסכון צפוי: {_money(rec.get('saving'))} (אחרי שני משלוחים)")
     elif rec.get("single"):
-        lines.append(f"💡 הכי משתלם: הכל ב{display_name(rec['single'])} — {_money(rec.get('total'))} כולל משלוח")
+        lines.append(f"💡 הצעה: הכל ב{display_name(rec['single'])}"
+                     + (f" (מכסה {rec['coverage']})" if rec.get("coverage") else "")
+                     + f" — {_money(rec.get('total'))} כולל משלוח")
         if rec.get("saving_vs_other"):
-            lines.append(f"(זול ב-{_money(rec['saving_vs_other'])} מהרשת השנייה)")
+            lines.append(f"זול ב-{_money(rec['saving_vs_other'])} מהרשת השנייה על "
+                         f"{count(rec.get('shared_items', 0), 'הפריט המשותף', 'הפריטים המשותפים')}")
+        elif rec.get("other_cheaper_by") and rec.get("other"):
+            other_q = quotes.get("chains", {}).get(rec["other"], {})
+            lines.append(f"{display_name(rec['other'])} זולה ב-{_money(rec['other_cheaper_by'])} על "
+                         f"{count(rec.get('shared_items', 0), 'הפריט המשותף', 'הפריטים המשותפים')}, "
+                         f"אבל {count(len(other_q.get('missing', [])), 'פריט אחד לא נמצא שם', 'פריטים לא נמצאו שם')}")
     if rec.get("note"):
         lines.append(rec["note"])
     toggles = [(("✅ " if draft.chains.get(s, True) else "▫️ ") + display_name(s), cb("chain", s))

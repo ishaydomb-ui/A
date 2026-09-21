@@ -1,0 +1,286 @@
+{
+ "chains": {
+  "tivtaam": {
+   "items": 17,
+   "subtotal": 295.79,
+   "delivery": 29.9,
+   "total": 325.69,
+   "promos": 0,
+   "missing": [
+    "סילאן"
+   ],
+   "lines": [
+    {
+     "key": "גרנולה ללא תוספת סוכר",
+     "name": "גרנולה ללא סוכר 500 גר",
+     "price": 27.9,
+     "unit_price": 27.9,
+     "promo": false
+    },
+    {
+     "key": "מלח",
+     "name": "מלח ים",
+     "price": 7.5,
+     "unit_price": 7.5,
+     "promo": false
+    },
+    {
+     "key": "שמן זית",
+     "name": "שמן זית כתית מעולה",
+     "price": 34.9,
+     "unit_price": 34.9,
+     "promo": false
+    },
+    {
+     "key": "פלפל צהוב",
+     "name": "פלפל צהוב",
+     "price": 7.09,
+     "unit_price": 12.897,
+     "promo": false
+    },
+    {
+     "key": "מלפפונים",
+     "name": "מלפפונים",
+     "price": 5.79,
+     "unit_price": 8.9,
+     "promo": false
+    },
+    {
+     "key": "קשואים",
+     "name": "קשואים",
+     "price": 8.9,
+     "unit_price": 8.9,
+     "promo": false
+    },
+    {
+     "key": "תפוח עץ סמיט",
+     "name": "תפוח עץ סמיט",
+     "price": 6.71,
+     "unit_price": 12.9,
+     "promo": false
+    },
+    {
+     "key": "הפטרוזיליה",
+     "name": "הפטרוזיליה",
+     "price": 5.9,
+     "unit_price": 5.9,
+     "promo": false
+    },
+    {
+     "key": "זיתים ירוקים טבעות",
+     "name": "זיתים ירוקים טבעות",
+     "price": 16.9,
+     "unit_price": 16.9,
+     "promo": false
+    },
+    {
+     "key": "נפוליאון גבינת שמנת זיתים ירוקים 24%",
+     "name": "נפוליאון גבינת שמנת זיתים ירוקים 24%",
+     "price": 12.5,
+     "unit_price": 12.5,
+     "promo": false
+    },
+    {
+     "key": "נקניק פפרוני",
+     "name": "נקניק פפרוני",
+     "price": 22.55,
+     "unit_price": 205.0,
+     "promo": false
+    },
+    {
+     "key": "סלרי אמריקאי",
+     "name": "סלרי אמריקאי",
+     "price": 7.9,
+     "unit_price": 7.9,
+     "promo": false
+    },
+    {
+     "key": "רצועות / קוביות עוף",
+     "name": "רצועות / קוביות עוף",
+     "price": 48.77,
+     "unit_price": 46.898,
+     "promo": false
+    },
+    {
+     "key": "אוכמניות טריות יחידה",
+     "name": "אוכמניות טריות יחידה",
+     "price": 17.45,
+     "unit_price": 17.45,
+     "promo": false
+    },
+    {
+     "key": "דלעת",
+     "name": "דלעת",
+     "price": 11.76,
+     "unit_price": 14.513,
+     "promo": false
+    },
+    {
+     "key": "בצל אדום",
+     "name": "בצל אדום",
+     "price": 4.27,
+     "unit_price": 7.9,
+     "promo": false
+    },
+    {
+     "key": "רוטב סויה מופחת נתרן",
+     "name": "רוטב סויה מופחת נתרן קיקומן 444 מ\"ל",
+     "price": 49.0,
+     "unit_price": 24.5,
+     "promo": false
+    }
+   ],
+   "coverage": 0.9444444444444444
+  },
+  "shufersal": {
+   "items": 15,
+   "subtotal": 228.78,
+   "delivery": 35.9,
+   "total": 264.68,
+   "promos": 1,
+   "missing": [
+    "גרנולה ללא תוספת סוכר",
+    "קשואים",
+    "הפטרוזיליה"
+   ],
+   "lines": [
+    {
+     "key": "מלח",
+     "name": "מלח ים דק",
+     "price": 7.9,
+     "unit_price": 7.9,
+     "promo": false
+    },
+    {
+     "key": "סילאן",
+     "name": "סילאן אורגני לחיץ",
+     "price": 19.9,
+     "unit_price": 19.9,
+     "promo": false
+    },
+    {
+     "key": "שמן זית",
+     "name": "שמן זית כתית מעולה",
+     "price": 39.9,
+     "unit_price": 39.9,
+     "promo": false
+    },
+    {
+     "key": "פלפל צהוב",
+     "name": "פלפל צהוב",
+     "price": 7.1,
+     "unit_price": 12.9,
+     "promo": false
+    },
+    {
+     "key": "מלפפונים",
+     "name": "מלפפון",
+     "price": 5.79,
+     "unit_price": 8.9,
+     "promo": false
+    },
+    {
+     "key": "תפוח עץ סמיט",
+     "name": "תפוח עץ סמיט",
+     "price": 7.75,
+     "unit_price": 14.9,
+     "promo": false
+    },
+    {
+     "key": "זיתים ירוקים טבעות",
+     "name": "טבעות זיתים ירוקים 560ג",
+     "price": 15.9,
+     "unit_price": 15.9,
+     "promo": false
+    },
+    {
+     "key": "נפוליאון גבינת שמנת זיתים ירוקים 24%",
+     "name": "ג.שמנת טבעי9% נפוליאון",
+     "price": 17.9,
+     "unit_price": 17.9,
+     "promo": false
+    },
+    {
+     "key": "נקניק פפרוני",
+     "name": "נקניק תה במשקל",
+     "price": 7.7,
+     "unit_price": 70.0,
+     "promo": false
+    },
+    {
+     "key": "סלרי אמריקאי",
+     "name": "סלרי ראש (ק)",
+     "price": 6.9,
+     "unit_price": 6.9,
+     "promo": false
+    },
+    {
+     "key": "רצועות / קוביות עוף",
+     "name": "רצועות גיישנית שופרסל",
+     "price": 10.3,
+     "unit_price": 9.9,
+     "promo": false
+    },
+    {
+     "key": "אוכמניות טריות יחידה",
+     "name": "אוכמניות 125 גרם",
+     "price": 16.9,
+     "unit_price": 16.9,
+     "promo": false
+    },
+    {
+     "key": "דלעת",
+     "name": "דלעת ארוזה",
+     "price": 10.45,
+     "unit_price": 12.9,
+     "promo": false
+    },
+    {
+     "key": "בצל אדום",
+     "name": "מארז בצלי שאלוט",
+     "price": 8.59,
+     "unit_price": 15.9,
+     "promo": false
+    },
+    {
+     "key": "רוטב סויה מופחת נתרן",
+     "name": "רוטב סויה מופחת נתרן",
+     "price": 45.8,
+     "unit_price": 22.9,
+     "promo": true
+    }
+   ],
+   "coverage": 0.8333333333333334
+  }
+ },
+ "assignment": {
+  "גרנולה ללא תוספת סוכר": "tivtaam",
+  "מלח": "tivtaam",
+  "סילאן": "tivtaam",
+  "שמן זית": "tivtaam",
+  "פלפל צהוב": "tivtaam",
+  "מלפפונים": "tivtaam",
+  "קשואים": "tivtaam",
+  "תפוח עץ סמיט": "tivtaam",
+  "הפטרוזיליה": "tivtaam",
+  "זיתים ירוקים טבעות": "tivtaam",
+  "נפוליאון גבינת שמנת זיתים ירוקים 24%": "tivtaam",
+  "נקניק פפרוני": "tivtaam",
+  "סלרי אמריקאי": "tivtaam",
+  "רצועות / קוביות עוף": "tivtaam",
+  "אוכמניות טריות יחידה": "tivtaam",
+  "דלעת": "tivtaam",
+  "בצל אדום": "tivtaam",
+  "רוטב סויה מופחת נתרן": "tivtaam"
+ },
+ "recommendation": {
+  "single": "tivtaam",
+  "total": 325.69,
+  "saving_vs_other": null,
+  "other_cheaper_by": 38.22,
+  "other": "shufersal",
+  "shared_items": 14,
+  "coverage": "17/18",
+  "note": "פיצול היה חוסך רק 5₪ — לא שווה משלוח כפול"
+ }
+}
