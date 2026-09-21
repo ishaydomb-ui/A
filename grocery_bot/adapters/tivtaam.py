@@ -123,6 +123,30 @@ SEARCH_ATTEMPTS = 3
 SEARCH_RETRY_MS = 3000
 
 
+def _cart_lines_from_dom(raw: list) -> list[dict]:
+    """Normalise the panel's lines; drop the ones the site itself marks removed.
+
+    Pure, so it can be tested without a browser. An out-of-stock line is
+    kept and flagged: it is still a line of this cart (the household sees
+    it, the guard should not re-add it), it just will not be delivered.
+    """
+    lines = []
+    for r in raw or []:
+        if not isinstance(r, dict) or r.get("removed"):
+            continue
+        name = (r.get("name") or "").strip()
+        if not name:
+            continue
+        lines.append({
+            "name": name,
+            "qty": (r.get("qty") or "").strip(),
+            "price": (r.get("price") or "").strip(),
+            "line_id": r.get("line_id") or "",
+            "out_of_stock": bool(r.get("out_of_stock")),
+        })
+    return lines
+
+
 class TivTaamAdapter(StoreAdapter):
     """Search Tiv Taam and put things in the real cart. No payment surface."""
 
@@ -500,7 +524,9 @@ class TivTaamAdapter(StoreAdapter):
         exception handler is not a count.
         """
         try:
-            return self._page.locator(".product-in-cart").count()
+            # `.removed` lines stay in the DOM with a "הוסר" marker; they
+            # are not in the cart and must not count (2026-09-21).
+            return self._page.locator(".product-in-cart:not(.removed)").count()
         except Exception:
             logger.debug("Tiv Taam: cart line count unreadable", exc_info=True)
             return None
@@ -566,29 +592,43 @@ class TivTaamAdapter(StoreAdapter):
     def _cart_line_names(self) -> list[dict]:
         """Open the cart panel and read its line items. [] if it will not.
 
-        A line renders as `qty | brand | name | size | price`, so the
-        product name is the third row of the container's text and the
-        quantity is the first. Reading them positionally rather than by
-        class because only the container carries a stable class
-        (`.product-in-cart`); the rows inside it do not.
+        Read by element, not by text position. Until 2026-09-21 this split
+        the container's innerText on newlines and took rows 0/1/2/4 as
+        qty/brand/name/price -- but the panel's rows vary per line (a
+        promotion badge, a weight row, a "הוסר" marker), so the fields
+        landed in the wrong slots: `name="יח'"`, `price="הוסר"`,
+        `brand="סלק אדום מקולף"`. CartGuard matches presence by exact
+        name, so nothing ever matched, every item already in the cart was
+        clicked again, the click only bumped a quantity (line count
+        unchanged) and was reported as "the click did not change the
+        cart" -- 11 of 11 on the 2026-09-21 03:32 run, against a cart that
+        held every one of them. The panel is an Angular list: each
+        `.product-in-cart` carries the product name in `aria-label` and
+        `span.name`, the quantity in `div.quantity`, the price in
+        `span.price`, and a `removed` / `out-stock` class.
         """
         try:
             if not self._open_cart_panel():
                 return []
-            return self._page.evaluate(
+            raw = self._page.evaluate(
                 """() => Array.from(
                     document.querySelectorAll('.product-in-cart')
                 ).map(line => {
-                    const parts = (line.innerText || '')
-                        .split('\\n').map(s => s.trim()).filter(Boolean);
+                    const t = sel => {
+                        const el = line.querySelector(sel);
+                        return el ? (el.innerText || el.textContent || '').trim() : '';
+                    };
                     return {
-                        qty: parts[0] || '',
-                        brand: parts[1] || '',
-                        name: parts[2] || '',
-                        price: parts[4] || '',
+                        name: t('span.name') || (line.getAttribute('aria-label') || '').trim(),
+                        qty: t('div.quantity'),
+                        price: t('span.price'),
+                        line_id: line.id || '',
+                        removed: line.classList.contains('removed'),
+                        out_of_stock: line.classList.contains('out-stock'),
                     };
                 })"""
             )
+            return _cart_lines_from_dom(raw)
         except Exception:
             logger.debug("Tiv Taam: cart panel would not open", exc_info=True)
             return []
