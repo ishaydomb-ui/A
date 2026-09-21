@@ -538,8 +538,7 @@ class VNextFlow:
     # -- execution: the only path into the cart engine ---------------------------------
 
     async def _go(self, update, context, draft, query=None) -> None:
-        from .exitnode import ensure_israeli_exit
-        from .telegram_bot import _build_adapter_factories
+        from .telegram_bot import _build_adapter_factories, ensure_israeli_exit
 
         chat_id = draft.chat_id
         if not draft.included:
@@ -550,7 +549,7 @@ class VNextFlow:
         if not factories:
             await context.bot.send_message(chat_id=chat_id, text="אין רשת פעילה להכנת עגלה.")
             return
-        status = await asyncio.to_thread(ensure_israeli_exit, self.bot.config.playwright_proxy)
+        status = await asyncio.to_thread(ensure_israeli_exit, self.bot.config.playwright_proxy, self.bot.config)
         if not status.available:
             self._save(draft, status="confirmed")
             await context.bot.send_message(

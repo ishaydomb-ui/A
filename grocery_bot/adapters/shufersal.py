@@ -138,8 +138,35 @@ class ShufersalAdapter(StoreAdapter):
         proxy: str = "",
         username: str = "",
         password: str = "",
+        cdp_url: str = "",
     ):
         from playwright.sync_api import sync_playwright  # lazy: only needed here
+
+        from .. import browser as browser_mode
+
+        self._storage_state_path = storage_state_path
+        self._proxy = proxy
+        self._headless = headless
+        self._username = username
+        self._password = password
+        # Remote Chrome on the household PC (browser.py). The profile
+        # there already holds a person's login, so no session file, no
+        # proxy and no headless re-login context are involved; a run is
+        # one new tab in the browser's default context, closed on exit.
+        self._remote = bool(cdp_url) and browser_mode.cdp_reachable(cdp_url)
+        if cdp_url and not self._remote:
+            logger.warning(
+                "Shufersal: remote Chrome %s unreachable; falling back to the local browser via %s",
+                cdp_url, proxy or "(no proxy)",
+            )
+
+        if self._remote:
+            self._playwright = sync_playwright().start()
+            self._browser = self._playwright.chromium.connect_over_cdp(cdp_url)
+            contexts = self._browser.contexts
+            self._context = contexts[0] if contexts else self._browser.new_context()
+            self._page = self._context.new_page()
+            return
 
         if not proxy:
             raise RuntimeError(
@@ -148,12 +175,6 @@ class ShufersalAdapter(StoreAdapter):
                 "Without it the site returns a geo-block page with HTTP 200, which looks "
                 "like broken selectors rather than a blocked request."
             )
-
-        self._storage_state_path = storage_state_path
-        self._proxy = proxy
-        self._headless = headless
-        self._username = username
-        self._password = password
 
         state_path = Path(storage_state_path)
         if not state_path.exists():
@@ -208,6 +229,19 @@ class ShufersalAdapter(StoreAdapter):
         if not self._username or not self._password:
             logger.warning("Shufersal session expired and no credentials to renew it")
             return False
+        if self._remote:
+            # The login must land in the remote profile itself, so it is
+            # done in this very tab: a throwaway context would leave the
+            # cookies in a context nobody keeps, and the default context
+            # is the household's -- never closed or replaced from here.
+            from ..login import fill_login_form
+
+            try:
+                fill_login_form(self._page, self._username, self._password)
+            except Exception:
+                logger.exception("Shufersal: re-login in the remote browser failed")
+                return False
+            return self.is_session_valid()
         try:
             self._login(browser=self._browser)
         except Exception:
@@ -536,8 +570,13 @@ class ShufersalAdapter(StoreAdapter):
 
     def close(self) -> None:
         try:
-            self._context.close()
-            self._browser.close()
+            if self._remote:
+                # Only the tab this run opened. The context and the
+                # browser belong to the household's Chrome.
+                self._page.close()
+            else:
+                self._context.close()
+                self._browser.close()
         finally:
             self._playwright.stop()
 

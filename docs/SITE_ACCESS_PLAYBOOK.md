@@ -38,6 +38,53 @@ fixes the most.
 
 ---
 
+## 0b. The better unlock (2026-09-21): a browser that already lives in Israel
+
+Since 2026-09-21 the store adapters can run inside a Chrome on the
+household PC (`liran-aba-pc`) instead of a headless Chromium here behind
+the SOCKS exit. Playwright connects over Tailscale to Chrome's
+remote-debugging port (`chromium.connect_over_cdp`), opens **one new tab
+in the browser's default context**, works, and closes only that tab.
+That browser has an Israeli residential IP, a real Windows Chrome
+fingerprint, and — the part that matters for Tiv Taam — a profile a
+person logged into once, captcha included. No captured session file, no
+proxy, no 16-day session cliff, no mid-run exit-node drop.
+
+**One Chrome process per bot — the rule, and why.** A debugging port
+belongs to a whole Chrome *process*, never to a window or a tab: anyone
+connected to the port sees, and can close, every window of that
+process. Windows inside one process cannot be isolated. So each bot
+gets its own process with its own `--user-data-dir` and its own port:
+
+| Process | Port | Owner |
+|---|---|---|
+| MiriChrome | 9222 | Miri / Nigel — Gordon never connects here |
+| BobEdge | 9223 | Bob — never |
+| **GordonChrome** | **9224** | Gordon only |
+
+GordonChrome is started at logon on the PC (Bob's task) as
+`chrome.exe --user-data-dir="C:\Users\<user>\GordonChrome" --remote-debugging-port=9224 --remote-allow-origins=* --no-first-run`,
+listening on the Tailscale address. **Log in once, by a human, in that
+window** — tivtaam.co.il and shufersal.co.il — and the profile keeps it.
+Shufersal's automatic re-login still works there (it fills the form in
+Gordon's own tab so the cookies land in that profile); Tiv Taam's
+captcha does not, so an expired Tiv Taam login means a person logs in
+again in GordonChrome, not a noVNC capture.
+
+**Configuration** (`grocery_bot/browser.py`, `config.py`):
+`GORDON_BROWSER_CDP_URL=http://100.64.121.81:9224`, and
+`GORDON_BROWSER_CDP_STORES=tivtaam` to move one chain first (default:
+both). Per run, each store's mode is decided by one 3-second probe of
+`/json/version`: **unreachable → the local browser behind
+`PLAYWRIGHT_PROXY`, exactly as before, with one WARNING naming the
+fallback.** The pre-run Israeli-exit probe is skipped only when *every*
+enabled store is on the remote browser; with any store local it still
+runs, failover included.
+
+**What it does not change.** Selectors, cart guard, the hard rule
+against checkout, the session-content checks — all identical. It
+changes where the browser is, not what it does.
+
 ## 1. Taxonomy of barriers — recognise, then treat
 
 Five distinct barriers, easy to confuse because several return HTTP 200.

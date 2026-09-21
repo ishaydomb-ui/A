@@ -98,34 +98,44 @@ def _perform_login(browser, username: str, password: str, output_path: str) -> N
     context = browser.new_context()
     try:
         page = context.new_page()
-        page.goto(LOGIN_URL, wait_until="domcontentloaded")
-        page.locator(USERNAME_SELECTOR).fill(username)
-        page.locator(PASSWORD_SELECTOR).fill(password)
-        page.locator(SUBMIT_SELECTOR).first.click()
-
-        try:
-            page.wait_for_load_state("networkidle", timeout=20_000)
-        except Exception:
-            pass  # the state checks below decide, not this wait
-
-        if page.locator(OTP_SELECTOR).count() > 0:
-            raise OtpRequired(
-                "Shufersal asked for a one-time code. Use "
-                "scripts/login_helper.py over noVNC to log in by hand."
-            )
-
-        if "error=true" in page.url.lower():
-            raise LoginFailed("Shufersal rejected the credentials.")
-
-        # Confirm against the account page rather than trusting the
-        # post-submit URL: some failures redirect to a generic page
-        # instead of surfacing an explicit error.
-        page.goto(ACCOUNT_URL, wait_until="domcontentloaded")
-        if "login" in page.url.lower():
-            raise LoginFailed(
-                f"Did not reach the account page after login (landed on {page.url})."
-            )
-
+        fill_login_form(page, username, password)
         context.storage_state(path=output_path)
     finally:
         context.close()
+
+
+def fill_login_form(page, username: str, password: str) -> None:
+    """Drive the login form on `page` and verify it landed logged in.
+
+    Shared by the throwaway-context login above and the remote-browser
+    renewal, where the cookies must end up in the tab's own (persistent)
+    context rather than a file. Raises LoginFailed/OtpRequired exactly as
+    before; never returns on a page that is not actually logged in.
+    """
+    page.goto(LOGIN_URL, wait_until="domcontentloaded")
+    page.locator(USERNAME_SELECTOR).fill(username)
+    page.locator(PASSWORD_SELECTOR).fill(password)
+    page.locator(SUBMIT_SELECTOR).first.click()
+
+    try:
+        page.wait_for_load_state("networkidle", timeout=20_000)
+    except Exception:
+        pass  # the state checks below decide, not this wait
+
+    if page.locator(OTP_SELECTOR).count() > 0:
+        raise OtpRequired(
+            "Shufersal asked for a one-time code. Use "
+            "scripts/login_helper.py over noVNC to log in by hand."
+        )
+
+    if "error=true" in page.url.lower():
+        raise LoginFailed("Shufersal rejected the credentials.")
+
+    # Confirm against the account page rather than trusting the
+    # post-submit URL: some failures redirect to a generic page
+    # instead of surfacing an explicit error.
+    page.goto(ACCOUNT_URL, wait_until="domcontentloaded")
+    if "login" in page.url.lower():
+        raise LoginFailed(
+            f"Did not reach the account page after login (landed on {page.url})."
+        )

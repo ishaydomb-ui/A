@@ -157,9 +157,31 @@ class TivTaamAdapter(StoreAdapter):
         storage_state_path: str,
         headless: bool = True,
         proxy: str = "",
+        cdp_url: str = "",
         **_ignored,
     ):
         from playwright.sync_api import sync_playwright
+
+        from .. import browser as browser_mode
+
+        # Remote Chrome on the household PC (browser.py): its profile
+        # holds the login a person did once, captcha included, so neither
+        # the captured session file nor the proxy is involved. One new tab
+        # in the browser's default context, closed on exit.
+        self._remote = bool(cdp_url) and browser_mode.cdp_reachable(cdp_url)
+        if cdp_url and not self._remote:
+            logger.warning(
+                "Tiv Taam: remote Chrome %s unreachable; falling back to the local browser via %s",
+                cdp_url, proxy or "(no proxy)",
+            )
+        if self._remote:
+            self._playwright = sync_playwright().start()
+            self._browser = self._playwright.chromium.connect_over_cdp(cdp_url)
+            contexts = self._browser.contexts
+            self._context = contexts[0] if contexts else self._browser.new_context()
+            self._page = self._context.new_page()
+            self._opened = False
+            return
 
         if not proxy:
             # The geo-block returns a plausible page with HTTP 200, so
@@ -686,10 +708,15 @@ class TivTaamAdapter(StoreAdapter):
     # -- teardown ---------------------------------------------------------
 
     def close(self) -> None:
-        shutdowns = [self._context.close]
-        if self._browser is not None:
-            shutdowns.append(self._browser.close)
-        shutdowns.append(self._playwright.stop)
+        if self._remote:
+            # Only the tab this run opened; the context and browser are
+            # the household's Chrome.
+            shutdowns = [self._page.close, self._playwright.stop]
+        else:
+            shutdowns = [self._context.close]
+            if self._browser is not None:
+                shutdowns.append(self._browser.close)
+            shutdowns.append(self._playwright.stop)
         for shut in shutdowns:
             try:
                 shut()

@@ -49,6 +49,13 @@ class Config:
     # want costs seconds, and a deal that only arrives as a message costs
     # a second action that measurably does not happen.
     auto_add_deals: bool = True
+    # A dedicated Chrome on the household PC, reached over Tailscale via
+    # Chrome's remote-debugging port (see browser.py). Empty = every store
+    # uses the local Chromium behind playwright_proxy. `browser_cdp_stores`
+    # lets one chain move first (Tiv Taam, whose captured session is the
+    # fragile one). Unreachable CDP falls back to local automatically.
+    browser_cdp_url: str = ""
+    browser_cdp_stores: list[str] = field(default_factory=lambda: ["shufersal", "tivtaam"])
 
     @staticmethod
     def from_env() -> "Config":
@@ -80,6 +87,10 @@ class Config:
             shufersal_password=shufersal_password,
             shufersal_credential_source=shufersal_credential_source,
             auto_add_deals=os.environ.get("AUTO_ADD_DEALS", "true").lower() != "false",
+            browser_cdp_url=os.environ.get("GORDON_BROWSER_CDP_URL", "").strip(),
+            browser_cdp_stores=_split_csv(
+                os.environ.get("GORDON_BROWSER_CDP_STORES", "shufersal,tivtaam")
+            ),
         )
 
 

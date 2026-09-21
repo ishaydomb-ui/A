@@ -49,7 +49,8 @@ from .disambiguate import describe_card
 from .listbuilder import as_paste_text, available_lists, build as build_list, summarise
 from .connectivity import check_israeli_exit
 from .listbuilder import as_paste_text, available_lists, build as build_list, summarise  # noqa: F401  (kept for tests/back-compat)
-from .exitnode import ensure_israeli_exit
+from . import browser as browser_mode
+from .exitnode import ensure_israeli_exit as _ensure_israeli_exit_via_proxy
 from .learn import digest_due, sync_from_orders
 from .nlu import ParsedItem, build_meal_plan, expand_recipe, parse_message
 from .orchestrator import (
@@ -146,6 +147,18 @@ ADAPTER_CLASSES: dict[str, type[StoreAdapter]] = {
 }
 
 
+def ensure_israeli_exit(proxy: str, config=None):
+    """The pre-run exit check, skipped when every store runs in the remote Chrome.
+
+    Keeps the old (proxy-only) signature for callers and tests; with a
+    config it defers to browser.exit_status, which knows which stores are
+    on the household PC and therefore never touch the SOCKS route.
+    """
+    if config is not None:
+        return browser_mode.exit_status(config)
+    return _ensure_israeli_exit_via_proxy(proxy)
+
+
 def _build_adapter_factories(config: Config):
     session_paths = {
         "shufersal": config.shufersal_storage_state_path,
@@ -164,8 +177,9 @@ def _build_adapter_factories(config: Config):
             if store == "shufersal"
             else {}
         )
-        factories[store] = lambda cls=adapter_cls, path=state_path, creds=credentials: cls(
-            path, headless=config.headless, proxy=config.playwright_proxy, **creds
+        cdp_url = browser_mode.cdp_url_for(config, store)
+        factories[store] = lambda cls=adapter_cls, path=state_path, creds=credentials, cdp=cdp_url: cls(
+            path, headless=config.headless, proxy=config.playwright_proxy, cdp_url=cdp, **creds
         )
     return factories
 
@@ -434,7 +448,7 @@ class GroceryBot:
         factories = _build_adapter_factories(self.config)
         if not factories:
             return
-        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy)
+        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy, self.config)
         if not status.available:
             await update.message.reply_text(
                 f"🕒 אין כרגע חיבור לרשתות ({status.detail}). "
@@ -1112,7 +1126,7 @@ class GroceryBot:
         household. Quietly skipped when the exit node is asleep; the next
         night catches up, and being a day behind costs nothing.
         """
-        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy)
+        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy, self.config)
         if not status.available:
             logger.info("Nightly learn skipped: exit node down")
             return
@@ -1467,7 +1481,7 @@ class GroceryBot:
             await update.message.reply_text("אין אף רשת מוגדרת/מיושמת.")
             return
 
-        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy)
+        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy, self.config)
         if not status.available:
             # Keep them rather than lose them: they go on the list and the
             # next cycle picks them up.
@@ -1985,7 +1999,7 @@ class GroceryBot:
         # Tries the current exit node, then any other that can reach Israel:
         # the household has several devices offering themselves, and
         # Tailscale never switches between them on its own.
-        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy)
+        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy, self.config)
         if not status.available:
             self.storage.defer_cycle(
                 chat_id=update.effective_chat.id,
@@ -2782,7 +2796,7 @@ class GroceryBot:
         open_runs = await asyncio.to_thread(self.storage.running_cart_runs)
         if not open_runs:
             return
-        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy)
+        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy, self.config)
         if not status.available:
             logger.warning("RESUME: %d open run(s) but no Israeli exit; leaving them interrupted",
                            len(open_runs))
@@ -2829,7 +2843,7 @@ class GroceryBot:
             return
 
         # action == "run"
-        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy)
+        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy, self.config)
         if not status.available:
             # Quietly: the nudge and the deferred cycle already report a
             # down exit, and a third voice saying it every twelve minutes
@@ -2901,7 +2915,7 @@ class GroceryBot:
         # Tries the current exit node, then any other that can reach Israel:
         # the household has several devices offering themselves, and
         # Tailscale never switches between them on its own.
-        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy)
+        status = await asyncio.to_thread(ensure_israeli_exit, self.config.playwright_proxy, self.config)
         if not status.available:
             return
 
