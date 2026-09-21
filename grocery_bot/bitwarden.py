@@ -99,29 +99,46 @@ def _items(url: str, _retry: bool = True) -> list:
         return []
 
 
-def password_for(url: str) -> str | None:
-    if not available() or not url:
+def _items_by_name(name: str, _retry: bool = True) -> list:
+    """Items whose name matches, for vault entries saved without a URI.
+
+    The household's "טיב טעם" item has no URI (2026-09-21), so `--url`
+    cannot find it; `--search` matches on the name.
+    """
+    key = _session()
+    _sync()
+    r = _run(["list", "items", "--search", name], extra_env={"BW_SESSION": key})
+    if r.returncode != 0:
+        if _retry:
+            _SESSION.update(key=None, at=0.0)
+            return _items_by_name(name, _retry=False)
+        return []
+    try:
+        return json.loads(r.stdout or "[]")
+    except ValueError:
+        return []
+
+
+def _lookup(url: str, name: str | None, field: str) -> str | None:
+    if not available() or not (url or name):
         return None
     try:
-        items = _items(url)
+        items = _items(url) if url else []
+        if not any((it.get("login") or {}).get(field) for it in items) and name:
+            items = _items_by_name(name)
     except Exception:
         return None
     for it in items:
-        pw = (it.get("login") or {}).get("password")
-        if pw:
-            return pw
+        value = (it.get("login") or {}).get(field)
+        if value:
+            return value
     return None
 
 
-def username_for(url: str) -> str | None:
-    if not available() or not url:
-        return None
-    try:
-        items = _items(url)
-    except Exception:
-        return None
-    for it in items:
-        u = (it.get("login") or {}).get("username")
-        if u:
-            return u
-    return None
+def password_for(url: str, name: str | None = None) -> str | None:
+    """The password for `url`, falling back to an item named `name`."""
+    return _lookup(url, name, "password")
+
+
+def username_for(url: str, name: str | None = None) -> str | None:
+    return _lookup(url, name, "username")
