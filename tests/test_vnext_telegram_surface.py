@@ -60,24 +60,33 @@ class ReadOnlySurface(Seeded):
             p.start()
             self.addCleanup(p.stop)
 
-    def test_plan_and_readiness_reply_and_change_nothing(self):
+    def test_plan_opens_a_proposal_and_touches_only_the_draft_table(self):
+        """Phase 2b: /plan opens a draft (one row in vnext_drafts) and
+        nothing else changes -- no cart, no preferences, no requests."""
         before = _dump(self.db)
         update, sent = _update()
-        asyncio.run(self.bot.vnext_plan(update, mock.MagicMock()))
-        text = sent.edit_text.call_args[0][0]
-        self.assertIn("תוכנית בלבד", text)
-        self.assertIn("הקנייה מוכנה", text)
-        self.assertNotIn("parse_mode", sent.edit_text.call_args.kwargs)
+        context = mock.MagicMock()
+        context.bot.send_message = mock.AsyncMock(return_value=sent)
+        context.bot.edit_message_text = mock.AsyncMock()
+        asyncio.run(self.bot.vnext_plan(update, context))
+        text = context.bot.edit_message_text.call_args.kwargs["text"]
+        self.assertIn("הנה הצעת הקנייה שלך", text)
+        self.assertNotIn("parse_mode", context.bot.edit_message_text.call_args.kwargs)
+        after = _dump(self.db)
+        changed = {t for t in after if after[t] != before.get(t)}
+        self.assertEqual(changed - {"sqlite_sequence"}, {"vnext_drafts"})
         update, sent = _update()
         asyncio.run(self.bot.vnext_readiness(update, mock.MagicMock()))
         self.assertIn("קנייה", sent.edit_text.call_args[0][0])
-        self.assertEqual(_dump(self.db), before)
 
     def test_plan_failure_is_reported_not_raised(self):
         update, sent = _update()
+        context = mock.MagicMock()
+        context.bot.send_message = mock.AsyncMock(return_value=sent)
+        context.bot.edit_message_text = mock.AsyncMock()
         with mock.patch("grocery_bot.shopping_plan.build_plan", side_effect=RuntimeError("boom")):
-            asyncio.run(self.bot.vnext_plan(update, mock.MagicMock()))
-        self.assertIn("לא הצלחתי", sent.edit_text.call_args[0][0])
+            asyncio.run(self.bot.vnext_plan(update, context))
+        self.assertIn("לא הצלחתי", context.bot.edit_message_text.call_args.kwargs["text"])
 
     def test_requests_shows_reconciliation_without_touching_rows(self):
         before = _dump(self.db)

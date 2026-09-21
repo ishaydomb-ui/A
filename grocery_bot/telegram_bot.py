@@ -248,6 +248,9 @@ class GroceryBot:
         # One persistent agent session per chat, created lazily. Only
         # populated when GORDON_CONVO_BACKEND=agent — see agentconvo.py.
         self._agent_sessions: dict = {}
+        # vNext Phase 2b: the proposal -> review -> compare -> execute flow.
+        from .vnext_handlers import VNextFlow
+        self.vnext = VNextFlow(self)
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # A Telegram deep link (t.me/<bot>?start=alldeals) arrives as
@@ -273,8 +276,8 @@ class GroceryBot:
             "<b>רשימה מול סל:</b>\n"
             "• <b>תוסיף X</b> — נכנס לרשימה שממתינה למחזור הבא\n"
             "• <b>תוסיף X לעגלה</b> — נכנס עכשיו לסל האמיתי בשופרסל\n"
-            "• <b>מלא את העגלה</b> — מריץ מחזור מלא על כל מה שברשימה\n"
-            "• <b>/plan</b> — מה הייתי מכניס לעגלה ולמה (תוכנית בלבד, לא נוגע בעגלה)\n"
+            "• <b>מלא את העגלה</b> — פותח הצעת קנייה לאישור (כמו /plan)\n"
+            "• <b>/plan</b> — הצעת קנייה: לבדוק, לערוך, להשוות רשתות ולאשר — רק אז אני ממלא עגלה\n"
             "• <b>/readiness</b> — האם כדאי להכין קנייה עכשיו\n\n"
             "<i>תמיד עוצר על סל מוכן — הבדיקה והתשלום נשארים אצלכם.</i>",
             parse_mode="HTML",
@@ -671,39 +674,15 @@ class GroceryBot:
         )
 
     async def vnext_plan(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """/plan — the vNext shopping plan, read-only. Phase 2a.
+        """/plan — the vNext shopping proposal (Phase 2b).
 
-        Shows what the shadow planner would put in a cart and the (few)
-        decisions it genuinely needs; it adds nothing anywhere. The build
-        can take ~15 s cold, so one message is sent and edited in place.
+        Opens (or re-shows) the household's draft: the proposal screen
+        with its buttons. A draft is a proposal until "אשר והכן עגלה" is
+        tapped; nothing here touches a cart, and there is no checkout.
         """
         if not _authorized(self.config, update):
             return
-        from . import telegram_vnext_view
-        from .shopping_plan import build_plan
-        from .vnext_config import VNextConfig
-
-        sent = await update.message.reply_text("מכין תוכנית… (רק תוכנית — לא נוגע בעגלה)")
-        try:
-            plan = await asyncio.to_thread(build_plan, self.storage, VNextConfig.from_env())
-        except Exception:
-            logger.exception("/plan failed")
-            await sent.edit_text("לא הצלחתי להכין תוכנית עכשיו.")
-            return
-        text = "\n\n".join([
-            "📋 תוכנית בלבד — לא נגעתי בעגלה",
-            telegram_vnext_view.plan_message(plan),
-            telegram_vnext_view.exception_message(plan),
-        ])
-        s = plan.summary
-        quiet = telegram_vnext_view.count(
-            s.get("agent_resolvable", 0),
-            "מוצר אחד בחרתי לפי ההיסטוריה — אפשר לתקן",
-            "מוצרים בחרתי לפי ההיסטוריה — אפשר לתקן",
-        )
-        if quiet:
-            text += "\n\n" + quiet
-        await sent.edit_text(text)
+        await self.vnext.start_proposal(update, context)
 
     async def vnext_readiness(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/readiness — is a shop worth preparing now? Read-only. Phase 2a."""
@@ -814,6 +793,15 @@ class GroceryBot:
         self.storage.set_state("digest_chat_id", str(update.effective_chat.id))
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
+        # vNext Phase 2b: the reply to "הוסף פריט" is the item itself —
+        # no classifier call for a bare product name.
+        requested_by_early = update.effective_user.first_name if update.effective_user else "unknown"
+        try:
+            if await self.vnext.handle_awaited_text(update, context, text, requested_by_early):
+                return
+        except Exception:  # noqa: BLE001
+            logger.exception("vNext awaited-text handling failed; continuing normally")
+
         # An alternate conversation backend, off by default
         # (GORDON_CONVO_BACKEND=agent). It keeps its own persistent
         # memory per chat and never reaches this file's parse/dispatch
@@ -854,6 +842,15 @@ class GroceryBot:
         if len(parsed.actions) > 1:
             await self._run_actions(update, context, parsed, requested_by)
             return
+
+        # vNext Phase 2b: while a draft is open, list edits and "מלא את
+        # העגלה" apply to the draft (add_item still records the request).
+        # Not a prompt change — the classifier's answer is used as is.
+        try:
+            if await self.vnext.handle_text(update, context, parsed, requested_by):
+                return
+        except Exception:  # noqa: BLE001
+            logger.exception("vNext draft edit failed; falling back to the normal handler")
 
         handler = self._intent_handlers().get(parsed.intent)
 
@@ -1022,8 +1019,12 @@ class GroceryBot:
         )
 
     async def _do_start_order(self, update, context, parsed, requested_by: str) -> None:
-        """Let plain Hebrew start a cycle, not just the /start_order command."""
-        await self.start_order(update, context)
+        """Plain Hebrew "מלא את העגלה" opens the vNext proposal (Phase 2b).
+
+        The proposal is reviewed before anything is added; the legacy
+        immediate cycle stays available as the /start_order command.
+        """
+        await self.vnext.start_proposal(update, context)
 
     # -- proposal checklists ------------------------------------------------
 
@@ -1069,6 +1070,14 @@ class GroceryBot:
         chat_id = self.storage.get_state("digest_chat_id")
         if not chat_id:
             return
+        # vNext Phase 2b: the proactive nudge ("נראה שכדאי להזמין קניות")
+        # replaces the digest on the days it fires; every reason it does
+        # not fire is logged (vnext_flow.nudge_suppression).
+        try:
+            if await self.vnext.maybe_nudge(context, int(chat_id)):
+                return
+        except Exception:  # noqa: BLE001
+            logger.exception("vNext nudge failed; falling back to the digest")
         due, reason = await asyncio.to_thread(digest_due, self.storage)
         if not due:
             logger.debug("Digest not due: %s", reason)
@@ -1846,6 +1855,12 @@ class GroceryBot:
 
         buttons = [[InlineKeyboardButton(f"🛒 הוסף רק מה שחסר ({len(missing)})",
                                          callback_data=f"rcpmiss:{token}")]]
+        try:
+            if self.vnext.open_draft(chat_id) is not None:
+                buttons.append([InlineKeyboardButton("➕ הוסף להצעת הקנייה הפתוחה",
+                                                     callback_data=f"rcpdraft:{token}")])
+        except Exception:  # noqa: BLE001
+            logger.debug("draft check for recipe failed", exc_info=True)
         buttons.append([
             InlineKeyboardButton("הוסף הכל", callback_data=f"rcpall:{token}"),
             InlineKeyboardButton("ביטול", callback_data=f"rcpno:{token}"),
@@ -1874,6 +1889,24 @@ class GroceryBot:
             await query.answer("בוטל")
             self.storage.set_state(f"recipe_{token}", "")
             await query.edit_message_text(f"'{payload['dish']}' — בוטל, כלום לא נוסף.")
+            return
+        if action == "rcpdraft":
+            # vNext Phase 2b: the missing ingredients go into the open
+            # draft (and, as always, onto the list).
+            draft = self.vnext.open_draft(update.effective_chat.id)
+            if draft is None:
+                await query.answer("אין הצעה פתוחה — /plan")
+                return
+            for item in payload["missing"]:
+                self.storage.add_adhoc_request(text=item["name"], requested_by=f"{payload['by']} (מתכון: {payload['dish']})",
+                                               amount=item.get("amount"), unit=item.get("unit") or "")
+                added = draft.add_item(item["name"], kind="meal")
+                added["meal"] = payload["dish"]
+            from . import vnext_flow as _vf
+            _vf.save_draft(self.storage, draft)
+            self.storage.set_state(f"recipe_{token}", "")
+            await query.edit_message_text(
+                f"{payload['dish']} — הוספתי {len(payload['missing'])} מצרכים להצעת הקנייה. /plan לראות.")
             return
 
         chosen = payload["missing"] + (payload["have"] if action == "rcpall" else [])
@@ -3032,7 +3065,7 @@ def _cheapest_index(cards: list[dict]) -> int | None:
 COMMAND_MENU: list[tuple[str, str]] = [
     ("start", "מה אפשר לבקש ממני"),
     ("list", "הרשימה המלאה והמעודכנת"),
-    ("plan", "תוכנית קנייה — מה ולמה, בלי לגעת בעגלה"),
+    ("plan", "הצעת קנייה — לבדוק, לערוך ולאשר לפני שנוגעים בעגלה"),
     ("readiness", "האם כדאי להכין קנייה עכשיו"),
     ("price", "מחיר נוכחי בסניף + מבצע אם יש"),
     ("deals", "מבצעים אמיתיים על מה שאתם קונים"),
@@ -3273,13 +3306,14 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("requests", bot.requests_status))
     application.add_handler(CommandHandler("autochoice", bot.autochoice))
     application.add_handler(CommandHandler("plan", bot.vnext_plan))
+    application.add_handler(CallbackQueryHandler(bot.vnext.on_callback, pattern=r"^vn:"))
     application.add_handler(CommandHandler("readiness", bot.vnext_readiness))
     application.add_handler(CallbackQueryHandler(bot.resolve_ambiguity, pattern=r"^(resolve|skip):"))
     application.add_handler(
         CallbackQueryHandler(bot.on_proposal_button, pattern=r"^(ptoggle|pall|pnone|pconfirm):")
     )
     application.add_handler(
-        CallbackQueryHandler(bot.on_recipe_button, pattern=r"^(rcpall|rcpmiss|rcpno):")
+        CallbackQueryHandler(bot.on_recipe_button, pattern=r"^(rcpall|rcpmiss|rcpno|rcpdraft):")
     )
     application.add_handler(
         CallbackQueryHandler(bot.on_chain_deals_button, pattern=r"^chaindeals$")

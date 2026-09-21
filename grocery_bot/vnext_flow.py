@@ -78,8 +78,28 @@ class Draft:
     def enabled_chains(self) -> list[str]:
         return [s for s, on in self.chains.items() if on]
 
-    def find(self, key: str) -> dict | None:
+    def find(self, key) -> dict | None:
+        """By term key, or by the numeric id used in callback data."""
+        if isinstance(key, int) or (isinstance(key, str) and key.isdigit()):
+            n = int(key)
+            return next((i for i in self.items if i.get("n") == n), None)
         return next((i for i in self.items if i.get("key") == key), None)
+
+    def add_item(self, term: str, quantity: float = 1, kind: str = KIND_REQUEST, products: dict | None = None) -> dict:
+        existing = self.find(term)
+        if existing is not None:
+            existing["included"], existing["removed"] = True, False
+            if quantity and quantity != 1:
+                existing["quantity"] = float(quantity)
+            return existing
+        item = {"n": max([i.get("n", -1) for i in self.items] + [-1]) + 1, "key": term, "term": term,
+                "display_name": term, "quantity": float(quantity or 1), "unit": "", "kind": kind,
+                "included": True, "removed": False, "mandatory": kind == KIND_REQUEST, "decision": "auto_include",
+                "products": products or {}, "prices": {}, "promo": {},
+                "exception": {"class": "quiet", "reason": ""}, "waste_reduced": False, "meal": "",
+                "substitutes": []}
+        self.items.append(item)
+        return item
 
     def to_json(self) -> str:
         return json.dumps(self.data, ensure_ascii=False)
@@ -151,7 +171,7 @@ def draft_data_from_plan(storage, plan, config: VNextConfig = DEFAULT, important
         products = _products_by_store(pi, stores)
         waste_reduced = "waste reported" in (pi.reason or "")
         items.append({
-            "key": key, "term": pi.term, "display_name": pi.display_name or pi.term,
+            "n": len(items), "key": key, "term": pi.term, "display_name": pi.display_name or pi.term,
             "quantity": float(pi.quantity or 1), "unit": pi.unit or "",
             "kind": kind, "included": bool(included), "removed": False,
             "mandatory": bool(pi.mandatory), "decision": pi.decision,
@@ -394,6 +414,7 @@ def proposal_screen(draft: Draft) -> tuple[str, list]:
         [("ערוך / הסר פריטים", cb("edit", 0))],
         [("השווה בין רשתות", cb("compare"))],
         [("אשר והכן עגלה", cb("go"))],
+        [("בטל את ההצעה", cb("cancel"))],
     ]
     return "\n".join(lines), keyboard
 
@@ -419,7 +440,7 @@ def waste_card(draft: Draft, storage, config: VNextConfig = DEFAULT) -> tuple[st
     else:
         lines.append("לא הוספתי הפעם.")
     lines += ["", "רוצה שאוסיף בכל זאת?"]
-    return "\n".join(lines), [[("כן, הוסף", cb("waste", key, "yes")), ("לא", cb("waste", key, "no"))]]
+    return "\n".join(lines), [[("כן, הוסף", cb("waste", item["n"], "yes")), ("לא", cb("waste", item["n"], "no"))]]
 
 
 def _recent_waste_for(storage, item: dict, config: VNextConfig) -> int | None:
@@ -457,7 +478,7 @@ def stockup_card(draft: Draft) -> tuple[str, list] | None:
         lines.append(f"להוסיף {p['units']} לעגלה?")
     else:
         lines.append("להוסיף לעגלה?")
-    return "\n".join(lines), [[("כן, הוסף", cb("su", item["key"], "yes")), ("לא עכשיו", cb("su", item["key"], "no"))]]
+    return "\n".join(lines), [[("כן, הוסף", cb("su", item["n"], "yes")), ("לא עכשיו", cb("su", item["n"], "no"))]]
 
 
 # -- screen 3: review & adjust ----------------------------------------------------------
@@ -505,7 +526,6 @@ def item_screen(draft: Draft, index: int, full: bool = False) -> tuple[str, list
     if index < 0 or index >= len(items):
         return None
     item = items[index]
-    key = item["key"]
     lines = [item["display_name"], ""]
     for store, prod in (item.get("products") or {}).items():
         price = (item.get("prices") or {}).get(store)
@@ -519,16 +539,16 @@ def item_screen(draft: Draft, index: int, full: bool = False) -> tuple[str, list
     lines += ["", f"כמות: {float(item['quantity']):g}"]
     keyboard = []
     if item.get("included"):
-        keyboard.append([("הסר", cb("rm", key)), ("כמות 1", cb("qty", key, 1)), ("2", cb("qty", key, 2)),
-                         ("3", cb("qty", key, 3)), ("4", cb("qty", key, 4))])
+        keyboard.append([("הסר", cb("rm", item["n"])), ("כמות 1", cb("qty", item["n"], 1)), ("2", cb("qty", item["n"], 2)),
+                         ("3", cb("qty", item["n"], 3)), ("4", cb("qty", item["n"], 4))])
     else:
-        keyboard.append([("הוסף להצעה", cb("inc", key))])
+        keyboard.append([("הוסף להצעה", cb("inc", item["n"]))])
     if item["exception"]["class"] == "true_user_decision" and item.get("products"):
-        keyboard.append([("קח את ההצעה שלך", cb("keep", key))])
+        keyboard.append([("קח את ההצעה שלך", cb("keep", item["n"]))])
     if item.get("substitutes") and not item.get("products"):
         for n, sub in enumerate(item["substitutes"][:2]):
-            keyboard.append([(f"במקום: {sub}"[:60], cb("sub", key, n))])
-    keyboard.append([("מצא אלטרנטיבה זולה יותר", cb("alt", key))])
+            keyboard.append([(f"במקום: {sub}"[:60], cb("sub", item["n"], n))])
+    keyboard.append([("מצא אלטרנטיבה זולה יותר", cb("alt", item["n"]))])
     keyboard.append([("חזרה לרשימה", cb("list" if full else "edit", draft.page))])
     return "\n".join(lines), keyboard
 

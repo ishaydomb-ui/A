@@ -2782,7 +2782,7 @@ class Storage:
     def open_vnext_draft(self, chat_id: int) -> dict | None:
         with closing(self._connect()) as conn:
             row = conn.execute(
-                "SELECT * FROM vnext_drafts WHERE chat_id = ? AND status IN ('draft', 'confirmed', 'executing') "
+                "SELECT * FROM vnext_drafts WHERE chat_id = ? AND status IN ('draft', 'confirmed', 'executing', 'done') "
                 "ORDER BY id DESC LIMIT 1",
                 (int(chat_id),),
             ).fetchone()
