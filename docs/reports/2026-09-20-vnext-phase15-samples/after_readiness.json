@@ -1,0 +1,43 @@
+{
+  "schema": "gordon-vnext-readiness/v1",
+  "generated_at": "2026-09-20T23:28:09",
+  "as_of": "2026-09-20",
+  "score": 0.525,
+  "suggested_action": "prepare_soon",
+  "confidence": 0.75,
+  "reasons": [
+    "6 recurring items look due by cadence (inference, inventory unknown)",
+    "4 explicit requests active, 3 possibly already bought; 7 older ones look already bought and are not counted — cart presence not verified in shadow mode",
+    "3 days since the last recorded order; household rhythm ~9 days",
+    "2 stock-up opportunities on things the household buys",
+    "estimated basket: 10 auto-include items, 43 to review",
+    "a shop nobody reported yet would not be visible here until the nightly order sync",
+    "cart_state=unknown — one cycle-level caveat, not a question per item"
+  ],
+  "signals": {
+    "essentials_due": 6,
+    "explicit_pending": 7,
+    "explicit_active": 4,
+    "explicit_uncertain": 3,
+    "explicit_likely_fulfilled": 7,
+    "true_user_decisions": 1,
+    "days_since_last_order": 3.2,
+    "household_gap_days": 9.0,
+    "cadence_signal": 0.0,
+    "upcoming_meals": 0,
+    "upcoming_events": 0,
+    "meal_items": 0,
+    "savings_opportunities": 2,
+    "estimated_basket": 10,
+    "to_review": 43,
+    "score_parts": {
+      "essentials": 0.262,
+      "explicit": 0.229,
+      "cadence": 0.0,
+      "meals": 0.0,
+      "savings": 0.033
+    },
+    "cart_state_known": false
+  },
+  "sends_messages": false
+}

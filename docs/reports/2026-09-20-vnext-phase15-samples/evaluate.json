@@ -1,0 +1,350 @@
+{
+  "schema": "gordon-vnext-evaluate/v1",
+  "as_of": "2026-09-20",
+  "generated_at": "2026-09-20T23:32:12",
+  "mutates_cart": false,
+  "cart_state": "unknown",
+  "total_candidate_needs": 720,
+  "plan_items": 53,
+  "auto_includes": 10,
+  "suggestions": 43,
+  "quiet_suggestions": 42,
+  "true_user_decisions": 1,
+  "agent_resolvable": 52,
+  "product_resolver": {
+    "exact_match": 51,
+    "acceptable_match": 2
+  },
+  "old_pending_requests": {
+    "active": 4,
+    "likely_fulfilled": 7,
+    "uncertain": 3
+  },
+  "semantic_constraint_violations_detected": 442,
+  "stock_up_candidates": 2,
+  "low_trust_cadence_excluded_from_auto_include": 14,
+  "cadence_strata_among_auto_includes": {
+    "household_fallback": 4,
+    "measured": 6
+  },
+  "readiness": {
+    "score": 0.525,
+    "action": "prepare_soon",
+    "confidence": 0.75
+  },
+  "decisions": [
+    {
+      "term": "לחם חיטה מלא דגנית עין בר",
+      "reason": "requested brand not found; closest is לחם חיטה מלא — a different brand is the household's call"
+    }
+  ],
+  "reconciliation": [
+    {
+      "request_id": 114,
+      "text": "חלב עמיד",
+      "created_at": "2026-09-11T12:48:25.317296+00:00",
+      "request_status_estimate": "likely_fulfilled",
+      "fulfillment_evidence": [
+        {
+          "store": "tivtaam",
+          "order_code": "17697887",
+          "date": "2026-09-17",
+          "line": "חלב עמיד 3% 1 ליטר",
+          "quantity": 1.0,
+          "resolver_status": "exact_match",
+          "qualifiers_unverified": [],
+          "substituted": false
+        },
+        {
+          "store": "tivtaam",
+          "order_code": "17697887",
+          "date": "2026-09-17",
+          "line": "חלב 3% קרטון מהדרין",
+          "quantity": 3.0,
+          "resolver_status": "acceptable_match",
+          "qualifiers_unverified": [
+            "qualifier:עמיד"
+          ],
+          "substituted": false
+        },
+        {
+          "store": "tivtaam",
+          "order_code": "17655403",
+          "date": "2026-09-12",
+          "line": "חלב 3% קרטון מהדרין",
+          "quantity": 2.0,
+          "resolver_status": "acceptable_match",
+          "qualifiers_unverified": [
+            "qualifier:עמיד"
+          ],
+          "substituted": false
+        }
+      ],
+      "considered_lines": 59,
+      "note": "a later line satisfies every stated qualifier"
+    },
+    {
+      "request_id": 116,
+      "text": "דפי אורז",
+      "created_at": "2026-09-16T18:16:38.043460+00:00",
+      "request_status_estimate": "likely_fulfilled",
+      "fulfillment_evidence": [
+        {
+          "store": "tivtaam",
+          "order_code": "17697887",
+          "date": "2026-09-17",
+          "line": "מזרח ומערב דפי אורז 400 גרם",
+          "quantity": 2.0,
+          "resolver_status": "exact_match",
+          "qualifiers_unverified": [],
+          "substituted": false
+        }
+      ],
+      "considered_lines": 35,
+      "note": "a later line satisfies every stated qualifier"
+    },
+    {
+      "request_id": 121,
+      "text": "שמן זית",
+      "created_at": "2026-09-16T18:16:45.067158+00:00",
+      "request_status_estimate": "active",
+      "fulfillment_evidence": [],
+      "considered_lines": 35,
+      "note": "no later order line matches this request"
+    },
+    {
+      "request_id": 122,
+      "text": "מלח",
+      "created_at": "2026-09-16T18:16:46.583733+00:00",
+      "request_status_estimate": "active",
+      "fulfillment_evidence": [],
+      "considered_lines": 35,
+      "note": "no later order line matches this request"
+    },
+    {
+      "request_id": 123,
+      "text": "גרנולה ללא תוספת סוכר",
+      "created_at": "2026-09-16T18:16:47.707558+00:00",
+      "request_status_estimate": "active",
+      "fulfillment_evidence": [],
+      "considered_lines": 35,
+      "note": "no later order line matches this request"
+    },
+    {
+      "request_id": 124,
+      "text": "עגבניות שרי במגוון צבעים",
+      "created_at": "2026-09-16T18:16:48.758806+00:00",
+      "request_status_estimate": "uncertain",
+      "fulfillment_evidence": [
+        {
+          "store": "tivtaam",
+          "order_code": "17697887",
+          "date": "2026-09-17",
+          "line": "עגבניות שרי",
+          "quantity": 1.17,
+          "resolver_status": "acceptable_match",
+          "qualifiers_unverified": [
+            "variety"
+          ],
+          "substituted": false
+        }
+      ],
+      "considered_lines": 35,
+      "note": "a later line matches the head noun but a stated qualifier is unverified"
+    },
+    {
+      "request_id": 125,
+      "text": "פלפלים בכמה צבעים",
+      "created_at": "2026-09-16T18:16:49.595229+00:00",
+      "request_status_estimate": "uncertain",
+      "fulfillment_evidence": [
+        {
+          "store": "tivtaam",
+          "order_code": "17697887",
+          "date": "2026-09-17",
+          "line": "פלפל אדום",
+          "quantity": 0.884,
+          "resolver_status": "unresolved",
+          "qualifiers_unverified": [
+            "variety"
+          ],
+          "substituted": false
+        }
+      ],
+      "considered_lines": 35,
+      "note": "a later line matches the head noun but a stated qualifier is unverified"
+    },
+    {
+      "request_id": 126,
+      "text": "סלק (לא באריזת ואקום)",
+      "created_at": "2026-09-16T18:16:50.998761+00:00",
+      "request_status_estimate": "likely_fulfilled",
+      "fulfillment_evidence": [
+        {
+          "store": "tivtaam",
+          "order_code": "17697887",
+          "date": "2026-09-17",
+          "line": "סלק",
+          "quantity": 0.46,
+          "resolver_status": "exact_match",
+          "qualifiers_unverified": [],
+          "substituted": false
+        }
+      ],
+      "considered_lines": 35,
+      "note": "a later line satisfies every stated qualifier"
+    },
+    {
+      "request_id": 127,
+      "text": "לחם חיטה מלא דגנית עין בר",
+      "created_at": "2026-09-16T18:16:52.171504+00:00",
+      "request_status_estimate": "uncertain",
+      "fulfillment_evidence": [
+        {
+          "store": "tivtaam",
+          "order_code": "17697887",
+          "date": "2026-09-17",
+          "line": "לחם דגנים מלא",
+          "quantity": 1.0,
+          "resolver_status": "acceptable_match",
+          "qualifiers_unverified": [
+            "brand:דגנית עין בר",
+            "qualifier:חיטה"
+          ],
+          "substituted": false
+        },
+        {
+          "store": "tivtaam",
+          "order_code": "17697887",
+          "date": "2026-09-17",
+          "line": "לחם ברמן אקטיב 750 גרם",
+          "quantity": 1.0,
+          "resolver_status": "acceptable_match",
+          "qualifiers_unverified": [
+            "brand:דגנית עין בר",
+            "qualifier:חיטה",
+            "qualifier:מלא"
+          ],
+          "substituted": true
+        }
+      ],
+      "considered_lines": 35,
+      "note": "a later line matches the head noun but a stated qualifier is unverified"
+    },
+    {
+      "request_id": 128,
+      "text": "שזיפים",
+      "created_at": "2026-09-16T18:16:54.285205+00:00",
+      "request_status_estimate": "likely_fulfilled",
+      "fulfillment_evidence": [
+        {
+          "store": "tivtaam",
+          "order_code": "17697887",
+          "date": "2026-09-17",
+          "line": "שזיף סנטה רוזה",
+          "quantity": 0.804,
+          "resolver_status": "exact_match",
+          "qualifiers_unverified": [],
+          "substituted": false
+        }
+      ],
+      "considered_lines": 35,
+      "note": "a later line satisfies every stated qualifier"
+    },
+    {
+      "request_id": 130,
+      "text": "גזר",
+      "created_at": "2026-09-16T18:18:55.409053+00:00",
+      "request_status_estimate": "likely_fulfilled",
+      "fulfillment_evidence": [
+        {
+          "store": "tivtaam",
+          "order_code": "17697887",
+          "date": "2026-09-17",
+          "line": "גזר ארוז",
+          "quantity": 0.576,
+          "resolver_status": "exact_match",
+          "qualifiers_unverified": [],
+          "substituted": false
+        }
+      ],
+      "considered_lines": 35,
+      "note": "a later line satisfies every stated qualifier"
+    },
+    {
+      "request_id": 131,
+      "text": "סילאן",
+      "created_at": "2026-09-16T18:18:56.439115+00:00",
+      "request_status_estimate": "active",
+      "fulfillment_evidence": [],
+      "considered_lines": 35,
+      "note": "no later order line matches this request"
+    },
+    {
+      "request_id": 132,
+      "text": "יוגורט Pro וניל",
+      "created_at": "2026-09-16T18:18:57.635395+00:00",
+      "request_status_estimate": "likely_fulfilled",
+      "fulfillment_evidence": [
+        {
+          "store": "tivtaam",
+          "order_code": "17697887",
+          "date": "2026-09-17",
+          "line": "מולר פרוטאין יוגורט בטעם וניל 25 גרם חלבון 0% שומן 200 גרם",
+          "quantity": 2.0,
+          "resolver_status": "exact_match",
+          "qualifiers_unverified": [],
+          "substituted": false
+        }
+      ],
+      "considered_lines": 35,
+      "note": "a later line satisfies every stated qualifier"
+    },
+    {
+      "request_id": 134,
+      "text": "מלפפונים מיני",
+      "created_at": "2026-09-16T18:19:06.438863+00:00",
+      "request_status_estimate": "likely_fulfilled",
+      "fulfillment_evidence": [
+        {
+          "store": "tivtaam",
+          "order_code": "17697887",
+          "date": "2026-09-17",
+          "line": "מלפפון בייבי ארוז",
+          "quantity": 1.0,
+          "resolver_status": "exact_match",
+          "qualifiers_unverified": [],
+          "substituted": false
+        }
+      ],
+      "considered_lines": 35,
+      "note": "a later line satisfies every stated qualifier"
+    }
+  ],
+  "price_source_freshness": {
+    "shufersal": {
+      "source": "price_history (daily snapshot of the transparency feed)",
+      "from": "2026-08-30",
+      "to": "2026-09-20",
+      "days_recorded": 22,
+      "items": 6059
+    },
+    "tivtaam": {
+      "source": "store_prices (portal feed snapshots + order prices)",
+      "from": "2020-03-30",
+      "to": "2026-09-20",
+      "days_recorded": 53,
+      "items": 25384,
+      "days_in_last_30": 14
+    }
+  },
+  "caveats": [
+    "no waste reports on record — waste dampening is inactive",
+    "no human-confirmed product preferences — every product choice is inference",
+    "no planned meals declared — meal demand is inactive",
+    "live cart contents are NOT read in shadow mode; 'already in cart' is unknown for every item",
+    "no external spend signal source exists yet",
+    "cart_state=unknown: nothing here was checked against a live cart — one cycle-level fact, not a per-item question; Phase 2 must read the cart before acting"
+  ],
+  "telegram_mock": "בקרוב כדאי להכין קנייה\n6 דברים כנראה עומדים להיגמר\n7 בקשות פתוחות\nמצאתי 2 הזדמנויות חיסכון טובות\n\nהקנייה מוכנה\n10 פריטים\n6 צריכה שוטפת\n4 בקשות\n\nצריך ממך החלטה אחת בלבד\n\n• לחם חיטה מלא דגנית עין בר — המותג לא נמצא — לקחת לחם חיטה מלא?\n\n7 בקשות ישנות כנראה כבר נקנו\n52 מוצרים בחרתי לפי ההיסטוריה — אפשר לתקן"
+}

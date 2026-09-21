@@ -1,0 +1,206 @@
+vNext shopping plan — as of 2026-09-20 (shadow mode, mutates_cart=False)
+  53 items: 10 auto-include, 43 suggested, 667 ignored
+  explicit 7 · routine 6 · meal 0 · stock-up 2 · decisions needed 1 (+42 quiet suggestions, not pushed)
+  product choice: human 0 · inferred-only 53 · unresolved 0
+  resolver: {'exact_match': 51, 'acceptable_match': 2} · pending requests: {'active': 4, 'likely_fulfilled': 7, 'uncertain': 3}
+  exceptions: true decisions 1 · agent-resolvable 52 · quiet 0 · semantic rejections 442 · low-trust cadence excluded 14
+  cart_state=unknown (one caveat for the whole cycle)
+
+  [auto_include] need 0.95 qty 0.8 product 0.85 retailer 0.9  x1  גרנולה ללא תוספת סוכר !  -> i:גרנולה ללא סוכר 500 גר  @tivtaam  [active]
+      explicitly requested: לירן asked for it
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [auto_include] need 0.95 qty 0.8 product 0.85 retailer 0.6  x1  מלח !  -> i:מלח ים  @shufersal,tivtaam  [active]
+      explicitly requested: לירן asked for it
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [auto_include] need 0.95 qty 0.8 product 0.85 retailer 0.6  x1  סילאן !  -> i:סילאן תמרים 900  @shufersal,tivtaam  [active]
+      explicitly requested: לירן asked for it
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [auto_include] need 0.95 qty 0.8 product 0.88 retailer 0.6  x1  שמן זית !  -> i:שמן זית כתית מעולה  @shufersal,tivtaam  [active]
+      explicitly requested: לירן asked for it
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.74 qty 0.8 product 0.52 retailer 0.6  x1  לחם חיטה מלא דגנית עין בר !  -> i:לחם חיטה מלא  @shufersal,tivtaam  [uncertain]
+      explicitly requested: לירן asked for it (a later order may have covered it — uncertain)
+      !! DECISION: requested brand not found; closest is לחם חיטה מלא — a different brand is the household's call
+      ? unverified: brand:דגנית עין בר
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.74 qty 0.8 product 0.85 retailer 0.9  x1  עגבניות שרי במגוון צבעים !  -> i:עגבניות שרי מיקס  @shufersal  [uncertain]
+      explicitly requested: לירן asked for it (a later order may have covered it — uncertain)
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.74 qty 0.8 product 0.85 retailer 0.6  x1  פלפלים בכמה צבעים !  -> i:פלפל צבעוני  @shufersal,tivtaam  [uncertain]
+      explicitly requested: לירן asked for it (a later order may have covered it — uncertain)
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [auto_include] need 0.86 qty 1.0 product 0.97 retailer 0.6  x0.56ק"ג  פלפל צהוב   -> i:פלפל צהוב  @shufersal,tivtaam
+      bought regularly (tier A); overdue: 19d since purchase vs ~8d cadence [measured cadence]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [auto_include] need 0.84 qty 1.0 product 0.97 retailer 0.6  x0.54ק"ג  תפוח עץ סמיט   -> i:תפוח עץ סמיט  @shufersal,tivtaam
+      bought regularly (tier B); overdue: 19d since purchase vs ~9d cadence [measured cadence]
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [auto_include] need 0.82 qty 1.0 product 0.97 retailer 0.9  x0.52ק"ג  בצל אדום   -> i:בצל אדום  @tivtaam
+      bought regularly (tier C); overdue: 45d since purchase vs ~16d cadence [measured cadence]
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [auto_include] need 0.82 qty 1.0 product 0.97 retailer 0.9  x2  נפוליאון גבינת שמנת זיתים ירוקים 24%   -> i:נפוליאון גבינת שמנת זיתים ירוקים 24%  @tivtaam
+      bought regularly (tier C); overdue: 53d since purchase vs ~29d cadence [measured cadence]
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [auto_include] need 0.82 qty 1.0 product 0.97 retailer 0.9  x1  סלרי אמריקאי   -> i:סלרי אמריקאי  @tivtaam
+      bought regularly (tier C); overdue: 53d since purchase vs ~26d cadence [measured cadence]
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [auto_include] need 0.78 qty 1.0 product 0.97 retailer 0.9  x1  הפטרוזיליה   -> i:הפטרוזיליה  @tivtaam
+      bought regularly (tier C); overdue: 91d since purchase vs ~31d cadence [measured cadence]
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.73 qty 0.9 product 0.97 retailer 0.9  x0.11ק"ג  נקניק פפרוני   -> i:נקניק פפרוני  @tivtaam
+      bought regularly (tier C); overdue: 53d since purchase vs ~29d cadence [measured cadence]
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.73 qty 0.9 product 0.97 retailer 0.9  x1.04ק"ג  רצועות / קוביות עוף   -> i:רצועות / קוביות עוף  @tivtaam
+      bought regularly (tier C); overdue: 76d since purchase vs ~38d cadence [measured cadence]
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.70 qty 1.0 product 0.97 retailer 0.9  x0.6ק"ג  בטטה   -> i:בטטה  @tivtaam
+      bought regularly (tier B); likely due: 8d since purchase vs ~7d cadence [measured cadence]
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.70 qty 0.9 product 0.97 retailer 0.9  x1  זיתים ירוקים ענקיים   -> i:זיתים ירוקים ענקיים  @tivtaam
+      bought regularly (tier C); likely due: 45d since purchase vs ~31d cadence [measured cadence]
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.69 qty 0.9 product 0.97 retailer 0.9  x1  זיתים ירוקים טבעות   -> i:זיתים ירוקים טבעות  @tivtaam
+      bought regularly (tier C); likely due: 60d since purchase vs ~42d cadence [measured cadence]
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.69 qty 0.8 product 0.94 retailer 0.9  x1  קוטג' 9%   -> i:קוטג' 9%  @tivtaam
+      bought regularly (tier C); overdue: 96d since purchase vs ~60d cadence [measured cadence]
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.60 qty 1.0 product 0.97 retailer 0.6  x0.57ק"ג  אבוקדו   -> i:אבוקדו  @shufersal,tivtaam
+      bought regularly (tier B); approaching due: 8d since purchase vs ~10d cadence [measured cadence]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.60 qty 0.6 product 0.85 retailer 0.9  x1  אצבעות גבינה צהובה   -> i:אצבעות גבינה צהובה  @shufersal
+      bought regularly (tier B); likely due: 19d since purchase vs ~17d cadence [household_fallback cadence, capped at 0.44]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.60 qty 0.6 product 0.97 retailer 0.9  x1  ביצים   -> i:ביצים רגילות 12 יח L  @tivtaam
+      on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.60 qty 0.6 product 0.85 retailer 0.9  x1  בננה   -> i:בננה  @shufersal
+      bought regularly (tier B); likely due: 19d since purchase vs ~14d cadence [household_fallback cadence, capped at 0.44]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.60 qty 1.0 product 0.64 retailer 0.9  x2ק"ג  בצל יבש 📦  -> i:בצל אדום  @tivtaam
+      bought regularly (tier A); approaching due: 8d since purchase vs ~16d cadence [measured cadence]; on the standing list; stock-up: 2 units at 4.90₪ vs 7.90₪ reference saves 6.00₪ (38%) — unusually low price
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? unverified: qualifier:יבש
+  [suggest     ] need 0.60 qty 0.6 product 0.94 retailer 0.6  x4  דנונה דל לקטוז   -> i:דנונה דל לקטוז 200 גרם  @shufersal,tivtaam
+      bought regularly (tier A); overdue: 19d since purchase vs ~12d cadence [household_fallback cadence, capped at 0.44]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.60 qty 0.6 product 0.97 retailer 0.6  x1  חוט דנטלי   -> i:פלאקרס פלוסר חוט דנטלי ירוק -מנטה  @shufersal,tivtaam
+      on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.60 qty 0.6 product 0.85 retailer 0.6  x1  חומוס עשיר ב40% טחינה   -> i:חומוס עשיר ב40% טחינה  @shufersal,tivtaam
+      bought regularly (tier C); lapsed (probably no longer bought, or bought elsewhere): 325d since purchase vs ~38d cadence [household_fallback cadence]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.60 qty 0.6 product 0.85 retailer 0.6  x2  חלב בקרטון 3% שומן   -> i:חלב בקרטון 3% שומן  @shufersal,tivtaam
+      bought regularly (tier B); likely due: 19d since purchase vs ~15d cadence [household_fallback cadence, capped at 0.44]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.60 qty 1.0 product 0.97 retailer 0.6  x1  חסה לאליק הידרופונית   -> i:חסה לאליק הידרופונית  @shufersal,tivtaam
+      bought regularly (tier B); recently bought: 3d since purchase vs ~8d cadence [measured cadence]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.60 qty 0.6 product 0.85 retailer 0.9  x1  טונה בשמן קנולה   -> i:טונה בשמן קנולה  @shufersal
+      bought regularly (tier C); recently bought: 19d since purchase vs ~38d cadence [household_fallback cadence]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.60 qty 1.0 product 0.97 retailer 0.6  x1.4ק"ג  כרוב לבן   -> i:כרוב לבן  @shufersal,tivtaam
+      bought regularly (tier B); recently bought: 8d since purchase vs ~26d cadence [measured cadence]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.60 qty 0.6 product 0.85 retailer 0.6  x1  מגבונים לניקוי כללי   -> i:מגבונים לניקוי כללי  @shufersal,tivtaam
+      bought regularly (tier C); lapsed (probably no longer bought, or bought elsewhere): 511d since purchase vs ~51d cadence [household_fallback cadence]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.60 qty 0.6 product 0.97 retailer 0.6  x1  מלפפון   -> i:מלפפונים  @shufersal,tivtaam
+      bought regularly (tier A); likely due: 19d since purchase vs ~13d cadence [household_fallback cadence, capped at 0.44]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.60 qty 0.6 product 0.85 retailer 0.6  x1  עגבניות שרי יובל ליקופן   -> i:עגבניה שרי יובל ליקופן  @shufersal,tivtaam
+      bought regularly (tier B); lapsed (probably no longer bought, or bought elsewhere): 238d since purchase vs ~17d cadence [household_fallback cadence]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.60 qty 1.0 product 0.97 retailer 0.6  x1ק"ג  פלפל אדום   -> i:פלפל אדום  @shufersal,tivtaam
+      bought regularly (tier A); recently bought: 3d since purchase vs ~8d cadence [measured cadence]; on the standing list; promotion not worth stocking up: bought 3d ago — one purchase's worth already at home; promotion needs 1, household would use 0 before spoilage; perishable — stocking up would be waste, not saving
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.60 qty 0.6 product 0.94 retailer 0.6  x1  פסטה פנה   -> i:פסטה פנה ריגטה 500 גר Agnesi  @shufersal,tivtaam
+      bought regularly (tier C); recently bought: 19d since purchase vs ~51d cadence [household_fallback cadence]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.60 qty 0.6 product 0.85 retailer 0.6  x2  קוטג' 5% שומן   -> i:קוטג' 5% שומן  @shufersal,tivtaam
+      bought regularly (tier A); overdue: 19d since purchase vs ~10d cadence [household_fallback cadence, capped at 0.44]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.60 qty 0.6 product 0.85 retailer 0.6  x1  קורנפלקס   -> i:קורנפלקס  @shufersal,tivtaam
+      on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.60 qty 0.6 product 0.85 retailer 0.6  x1  קטשופ מופחת סוכר   -> i:קטשופ מופחת סוכר  @shufersal,tivtaam
+      bought regularly (tier C); recently bought: 19d since purchase vs ~38d cadence [household_fallback cadence]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.60 qty 0.6 product 0.85 retailer 0.9  x1  קיסמי שיניים פלסטיק   -> i:קיסמי שיניים פלסטיק  @shufersal
+      bought regularly (tier D); overdue: 455d since purchase vs ~153d cadence [household_fallback cadence]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.60 qty 0.6 product 0.85 retailer 0.9  x1  קישואים מובחר   -> i:קישואים מובחר  @shufersal
+      bought regularly (tier A); overdue: 19d since purchase vs ~10d cadence [household_fallback cadence, capped at 0.44]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.60 qty 0.6 product 0.85 retailer 0.9  x1  שימורי עגבניות   -> i:שימורי עגבניות קוביות  @tivtaam
+      on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.60 qty 0.6 product 0.88 retailer 0.6  x2  שמן זית כתית מעולה   -> i:שמן זית כתית מעולה  @shufersal,tivtaam
+      bought regularly (tier C); approaching due: 27d since purchase vs ~51d cadence [household_fallback cadence]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.60 qty 0.6 product 0.85 retailer 0.6  x1  שניצלונים   -> i:שניצלונים  @shufersal,tivtaam
+      bought regularly (tier C); recently bought: 19d since purchase vs ~51d cadence [household_fallback cadence]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.60 qty 0.6 product 0.85 retailer 0.6  x2  שעועית עדינה שלמה קפואה   -> i:שעועית עדינה שלמה קפואה  @shufersal,tivtaam
+      bought regularly (tier C); lapsed (probably no longer bought, or bought elsewhere): 325d since purchase vs ~31d cadence [household_fallback cadence]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.60 qty 0.6 product 0.85 retailer 0.6  x1  תפוח אדמה לבן ארוז   -> i:תפוח אדמה לבן ארוז  @shufersal,tivtaam
+      bought regularly (tier D); lapsed (probably no longer bought, or bought elsewhere): 554d since purchase vs ~153d cadence [household_fallback cadence]; on the standing list
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.59 qty 0.8 product 0.94 retailer 0.9  x1  דבש טהור מפרחי בר לחיץ   -> i:דבש טהור מפרחי בר לחיץ  @tivtaam
+      bought regularly (tier D); overdue: 114d since purchase vs ~48d cadence [measured cadence]
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.59 qty 0.8 product 0.94 retailer 0.9  x1  לקט לסלט בסגנון אסייתי   -> i:לקט לסלט בסגנון אסייתי  @tivtaam
+      bought regularly (tier D); overdue: 60d since purchase vs ~33d cadence [measured cadence]
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.59 qty 0.8 product 0.94 retailer 0.9  x1  רוטב סויה   -> i:רוטב סויה  @tivtaam
+      bought regularly (tier D); overdue: 114d since purchase vs ~48d cadence [measured cadence]
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.51 qty 0.9 product 0.97 retailer 0.6  x0.33ק"ג  פלפל חריף   -> i:פלפל חריף  @shufersal,tivtaam
+      bought regularly (tier C); approaching due: 45d since purchase vs ~49d cadence [measured cadence]
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+      ? available at more than one chain — chain choice open
+  [suggest     ] need 0.50 qty 0.6 product 0.85 retailer 0.9  x2  רוטב סויה מופחת נתרן 📦  -> i:רוטב סויה מופחת נתרן  @shufersal
+      bought regularly (tier C); approaching due: 27d since purchase vs ~38d cadence [household_fallback cadence]; stock-up: 2 units at 15.90₪ vs 22.90₪ reference saves 14.00₪ (31%) — unusually low price
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.50 qty 1.0 product 0.97 retailer 0.9  x1ק"ג  בננות   -> i:בננות  @tivtaam
+      bought regularly (tier B); approaching due: 8d since purchase vs ~10d cadence [measured cadence]
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+  [suggest     ] need 0.46 qty 1.0 product 0.97 retailer 0.9  x1.5  נייר טואלט לח נשטף   -> i:נייר טואלט לח נשטף  @tivtaam
+      bought regularly (tier B); approaching due: 8d since purchase vs ~10d cadence [measured cadence]
+      .. agent: product inferred, not human-confirmed — resolved by evidence
+
+caveats:
+  - no waste reports on record — waste dampening is inactive
+  - no human-confirmed product preferences — every product choice is inference
+  - no planned meals declared — meal demand is inactive
+  - live cart contents are NOT read in shadow mode; 'already in cart' is unknown for every item
+  - no external spend signal source exists yet
+  - cart_state=unknown: nothing here was checked against a live cart — one cycle-level fact, not a per-item question; Phase 2 must read the cart before acting
+
+(add --json for the machine-readable plan)

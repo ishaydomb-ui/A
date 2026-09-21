@@ -1,0 +1,6256 @@
+{
+  "schema": "gordon-vnext-shopping-plan/v1",
+  "generated_at": "2026-09-20T22:42:07",
+  "as_of": "2026-09-20",
+  "mutates_cart": false,
+  "summary": {
+    "total_items": 73,
+    "auto_include": 20,
+    "suggest": 53,
+    "ignored": 647,
+    "explicit_requests": 14,
+    "routine": 6,
+    "meal_related": 0,
+    "stock_up": 9,
+    "with_human_product": 0,
+    "with_inferred_product_only": 70,
+    "unresolved_products": 3,
+    "evidence_counts": {
+      "explicit_need": 14,
+      "explicit_preference": 806,
+      "purchase_history": 681,
+      "purchase_recency": 670,
+      "purchase_cadence": 681,
+      "observed_quantity": 681,
+      "promotion": 28
+    },
+    "decisions_needed": 41,
+    "quiet_suggestions": 12
+  },
+  "caveats": [
+    "no waste reports on record — waste dampening is inactive",
+    "no human-confirmed product preferences — every product choice is inference",
+    "no planned meals declared — meal demand is inactive",
+    "live cart contents are NOT read in shadow mode; 'already in cart' is unknown for every item",
+    "no external spend signal source exists yet"
+  ],
+  "items": [
+    {
+      "term": "גזר",
+      "display_name": "גזר",
+      "decision": "auto_include",
+      "mandatory": true,
+      "stock_up": false,
+      "confidence": 0.95,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.8,
+      "reason": "explicitly requested: לירן asked for it",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_7296073754848",
+        "product_name": "גזר ארוז",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:גזר"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "may already be in a cart — cart presence is unknown in shadow mode",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "adhoc_requests:130",
+        "preferred_products:shufersal:גזר",
+        "preferred_products:tivtaam:גזר"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2
+      }
+    },
+    {
+      "term": "גרנולה ללא תוספת סוכר",
+      "display_name": "גרנולה ללא תוספת סוכר",
+      "decision": "auto_include",
+      "mandatory": true,
+      "stock_up": false,
+      "confidence": 0.95,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.8,
+      "reason": "explicitly requested: לירן asked for it",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_311432",
+        "product_name": "עוגיות גרנולה קינמון ללס",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:גרנולה ללא תוספת סוכר"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "may already be in a cart — cart presence is unknown in shadow mode",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "adhoc_requests:123",
+        "preferred_products:shufersal:גרנולה ללא תוספת סוכר",
+        "preferred_products:tivtaam:גרנולה ללא תוספת סוכר"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2
+      }
+    },
+    {
+      "term": "דפי אורז",
+      "display_name": "דפי אורז",
+      "decision": "auto_include",
+      "mandatory": true,
+      "stock_up": false,
+      "confidence": 0.95,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.8,
+      "reason": "explicitly requested: לירן asked for it",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_7296073731498",
+        "product_name": "דפי אורז 22 ס\"מ",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:דפי אורז"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "may already be in a cart — cart presence is unknown in shadow mode",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "adhoc_requests:116",
+        "preferred_products:shufersal:דפי אורז",
+        "preferred_products:tivtaam:דפי אורז"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2
+      }
+    },
+    {
+      "term": "חלב עמיד",
+      "display_name": "חלב עמיד",
+      "decision": "auto_include",
+      "mandatory": true,
+      "stock_up": false,
+      "confidence": 0.95,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.8,
+      "reason": "explicitly requested: ישי asked for it",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_4131074",
+        "product_name": "חלב בקרטון 3% שומן",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:חלב עמיד"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "may already be in a cart — cart presence is unknown in shadow mode",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "adhoc_requests:114",
+        "preferred_products:shufersal:חלב עמיד",
+        "preferred_products:tivtaam:חלב עמיד"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2
+      }
+    },
+    {
+      "term": "יוגורט Pro וניל",
+      "display_name": "יוגורט Pro וניל",
+      "decision": "auto_include",
+      "mandatory": true,
+      "stock_up": false,
+      "confidence": 0.95,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.8,
+      "reason": "explicitly requested: לירן asked for it",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_7290117860892",
+        "product_name": "תחליב רחצה יוגורט וניל",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:יוגורט Pro וניל"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "may already be in a cart — cart presence is unknown in shadow mode",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "adhoc_requests:132",
+        "preferred_products:shufersal:יוגורט Pro וניל",
+        "preferred_products:tivtaam:יוגורט Pro וניל"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2
+      }
+    },
+    {
+      "term": "לחם חיטה מלא דגנית עין בר",
+      "display_name": "לחם חיטה מלא דגנית עין בר",
+      "decision": "auto_include",
+      "mandatory": true,
+      "stock_up": false,
+      "confidence": 0.95,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.8,
+      "reason": "explicitly requested: לירן asked for it",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_574141",
+        "product_name": "לחם חיטה מלא",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:לחם חיטה מלא דגנית עין בר"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "may already be in a cart — cart presence is unknown in shadow mode",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "adhoc_requests:127",
+        "preferred_products:shufersal:לחם חיטה מלא דגנית עין בר",
+        "preferred_products:tivtaam:לחם חיטה מלא דגנית עין בר"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2
+      }
+    },
+    {
+      "term": "מלח",
+      "display_name": "מלח",
+      "decision": "auto_include",
+      "mandatory": true,
+      "stock_up": false,
+      "confidence": 0.95,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.8,
+      "reason": "explicitly requested: לירן asked for it",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_523125",
+        "product_name": "מלח ים דק",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:מלח"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "may already be in a cart — cart presence is unknown in shadow mode",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "adhoc_requests:122",
+        "preferred_products:shufersal:מלח",
+        "preferred_products:tivtaam:מלח"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2
+      }
+    },
+    {
+      "term": "מלפפונים מיני",
+      "display_name": "מלפפונים מיני",
+      "decision": "auto_include",
+      "mandatory": true,
+      "stock_up": false,
+      "confidence": 0.95,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.8,
+      "reason": "explicitly requested: לירן asked for it",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_7296073125334",
+        "product_name": "מלפפונים קטנים בחומץ",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:מלפפונים מיני"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "may already be in a cart — cart presence is unknown in shadow mode",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "adhoc_requests:134",
+        "preferred_products:shufersal:מלפפונים מיני",
+        "preferred_products:tivtaam:מלפפונים מיני"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2
+      }
+    },
+    {
+      "term": "סילאן",
+      "display_name": "סילאן",
+      "decision": "auto_include",
+      "mandatory": true,
+      "stock_up": false,
+      "confidence": 0.95,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.8,
+      "reason": "explicitly requested: לירן asked for it",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_7296073473466",
+        "product_name": "סילאן אורגני לחיץ",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:סילאן"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "may already be in a cart — cart presence is unknown in shadow mode",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "adhoc_requests:131",
+        "preferred_products:shufersal:סילאן",
+        "preferred_products:tivtaam:סילאן"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2
+      }
+    },
+    {
+      "term": "סלק (לא באריזת ואקום)",
+      "display_name": "סלק (לא באריזת ואקום)",
+      "decision": "auto_include",
+      "mandatory": true,
+      "stock_up": false,
+      "confidence": 0.95,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.8,
+      "reason": "explicitly requested: לירן asked for it",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_4770577229062",
+        "product_name": "סלק מבושל בואקום -אורגני",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:סלק (לא באריזת ואקום)"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "may already be in a cart — cart presence is unknown in shadow mode",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "adhoc_requests:126",
+        "preferred_products:shufersal:סלק (לא באריזת ואקום)",
+        "preferred_products:tivtaam:סלק (לא באריזת ואקום)"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2
+      }
+    },
+    {
+      "term": "עגבניות שרי במגוון צבעים",
+      "display_name": "עגבניות שרי במגוון צבעים",
+      "decision": "auto_include",
+      "mandatory": true,
+      "stock_up": false,
+      "confidence": 0.95,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.8,
+      "reason": "explicitly requested: לירן asked for it",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_2766056",
+        "product_name": "מארז עגבניות שרי תמר",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:עגבניות שרי במגוון צבעים"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "may already be in a cart — cart presence is unknown in shadow mode",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "adhoc_requests:124",
+        "preferred_products:shufersal:עגבניות שרי במגוון צבעים",
+        "preferred_products:tivtaam:עגבניות שרי במגוון צבעים"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2
+      }
+    },
+    {
+      "term": "פלפלים בכמה צבעים",
+      "display_name": "פלפלים בכמה צבעים",
+      "decision": "auto_include",
+      "mandatory": true,
+      "stock_up": false,
+      "confidence": 0.95,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.8,
+      "reason": "explicitly requested: לירן asked for it",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_91",
+        "product_name": "פלפל אדום",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:פלפלים בכמה צבעים"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "may already be in a cart — cart presence is unknown in shadow mode",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "adhoc_requests:125",
+        "preferred_products:shufersal:פלפלים בכמה צבעים",
+        "preferred_products:tivtaam:פלפלים בכמה צבעים"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2
+      }
+    },
+    {
+      "term": "שזיפים",
+      "display_name": "שזיפים",
+      "decision": "auto_include",
+      "mandatory": true,
+      "stock_up": false,
+      "confidence": 0.95,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.8,
+      "reason": "explicitly requested: לירן asked for it",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "שזיפים ללא גלעין",
+        "product_name": "שזיפים ללא גלעין",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:שזיפים"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "may already be in a cart — cart presence is unknown in shadow mode",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "adhoc_requests:128",
+        "preferred_products:shufersal:שזיפים",
+        "preferred_products:tivtaam:שזיפים"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2
+      }
+    },
+    {
+      "term": "שמן זית",
+      "display_name": "שמן זית",
+      "decision": "auto_include",
+      "mandatory": true,
+      "stock_up": false,
+      "confidence": 0.95,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.8,
+      "reason": "explicitly requested: לירן asked for it",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_7290120871090",
+        "product_name": "שמן זית כתית מעולה",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:שמן זית"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "may already be in a cart — cart presence is unknown in shadow mode",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "adhoc_requests:121",
+        "preferred_products:shufersal:שמן זית",
+        "preferred_products:tivtaam:שמן זית"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2
+      }
+    },
+    {
+      "term": "פלפל צהוב",
+      "display_name": "פלפל צהוב",
+      "decision": "auto_include",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.865,
+      "quantity": 0.56,
+      "unit": "ק\"ג",
+      "quantity_confidence": 1.0,
+      "reason": "bought regularly (tier A); overdue: 19d since purchase vs ~8d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_855",
+        "product_name": "פלפל צהוב",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:פלפל צהוב"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 7.5,
+        "days_since": 19.0,
+        "ratio": 2.53,
+        "state": "overdue",
+        "cadence_trust": 0.85,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:30",
+        "preferred_products:shufersal:פלפל צהוב",
+        "preferred_products:tivtaam:פלפל צהוב",
+        "stock_items:shufersal:P_855",
+        "last_purchase:shufersal:P_855",
+        "derived:shufersal:P_855",
+        "stock_items:shufersal:P_855",
+        "stock_items:tivtaam:1985506",
+        "last_purchase:tivtaam:1985506",
+        "derived:tivtaam:1985506",
+        "tivtaam_order_lines:1985506"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 4,
+        "FACT": 6
+      }
+    },
+    {
+      "term": "תפוח עץ סמיט",
+      "display_name": "תפוח עץ סמיט",
+      "decision": "auto_include",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.842,
+      "quantity": 0.54,
+      "unit": "ק\"ג",
+      "quantity_confidence": 1.0,
+      "reason": "bought regularly (tier B); overdue: 19d since purchase vs ~9d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_963518",
+        "product_name": "תפוח עץ סמיט",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:תפוח עץ סמיט"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 9.0,
+        "days_since": 19.0,
+        "ratio": 2.11,
+        "state": "overdue",
+        "cadence_trust": 0.85,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:shufersal:תפוח עץ סמיט",
+        "preferred_products:tivtaam:תפוח עץ סמיט",
+        "stock_items:shufersal:P_963518",
+        "last_purchase:shufersal:P_963518",
+        "derived:shufersal:P_963518",
+        "stock_items:shufersal:P_963518",
+        "stock_items:tivtaam:1985486",
+        "last_purchase:tivtaam:1985486",
+        "derived:tivtaam:1985486",
+        "tivtaam_order_lines:1985486"
+      ],
+      "origin_summary": {
+        "INFERENCE": 4,
+        "FACT": 6
+      }
+    },
+    {
+      "term": "בצל אדום",
+      "display_name": "בצל אדום",
+      "decision": "auto_include",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.824,
+      "quantity": 0.52,
+      "unit": "ק\"ג",
+      "quantity_confidence": 1.0,
+      "reason": "bought regularly (tier C); overdue: 45d since purchase vs ~16d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "4412500",
+        "product_name": "בצל אדום",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:בצל אדום"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 15.5,
+        "days_since": 45.0,
+        "ratio": 2.9,
+        "state": "overdue",
+        "cadence_trust": 0.85,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:tivtaam:בצל אדום",
+        "stock_items:tivtaam:1985488",
+        "last_purchase:tivtaam:1985488",
+        "derived:tivtaam:1985488",
+        "tivtaam_order_lines:1985488"
+      ],
+      "origin_summary": {
+        "INFERENCE": 2,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "נפוליאון גבינת שמנת זיתים ירוקים 24%",
+      "display_name": "נפוליאון גבינת שמנת זיתים ירוקים 24%",
+      "decision": "auto_include",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.824,
+      "quantity": 2.0,
+      "unit": "",
+      "quantity_confidence": 1.0,
+      "reason": "bought regularly (tier C); overdue: 53d since purchase vs ~29d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "5661858",
+        "product_name": "נפוליאון גבינת שמנת זיתים ירוקים 24%",
+        "origin": "INFERENCE",
+        "source_ref": "stock_items:tivtaam:5661858"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 29.0,
+        "days_since": 53.0,
+        "ratio": 1.83,
+        "state": "overdue",
+        "cadence_trust": 0.85,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "stock_items:tivtaam:5661858",
+        "last_purchase:tivtaam:5661858",
+        "derived:tivtaam:5661858",
+        "tivtaam_order_lines:5661858"
+      ],
+      "origin_summary": {
+        "FACT": 3,
+        "INFERENCE": 1
+      }
+    },
+    {
+      "term": "סלרי אמריקאי",
+      "display_name": "סלרי אמריקאי",
+      "decision": "auto_include",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.824,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 1.0,
+      "reason": "bought regularly (tier C); overdue: 53d since purchase vs ~26d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "1536878",
+        "product_name": "סלרי אמריקאי",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:סלרי אמריקאי"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 26.5,
+        "days_since": 53.0,
+        "ratio": 2.0,
+        "state": "overdue",
+        "cadence_trust": 0.85,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:tivtaam:סלרי אמריקאי",
+        "stock_items:tivtaam:1536878",
+        "last_purchase:tivtaam:1536878",
+        "derived:tivtaam:1536878",
+        "tivtaam_order_lines:1536878"
+      ],
+      "origin_summary": {
+        "INFERENCE": 2,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "הפטרוזיליה",
+      "display_name": "הפטרוזיליה",
+      "decision": "auto_include",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.779,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 1.0,
+      "reason": "bought regularly (tier C); overdue: 91d since purchase vs ~31d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "1536875",
+        "product_name": "הפטרוזיליה",
+        "origin": "INFERENCE",
+        "source_ref": "stock_items:tivtaam:1536875"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 31.0,
+        "days_since": 91.0,
+        "ratio": 2.94,
+        "state": "overdue",
+        "cadence_trust": 0.78,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "stock_items:tivtaam:1536875",
+        "last_purchase:tivtaam:1536875",
+        "derived:tivtaam:1536875",
+        "tivtaam_order_lines:1536875"
+      ],
+      "origin_summary": {
+        "FACT": 3,
+        "INFERENCE": 1
+      }
+    },
+    {
+      "term": "נקניק פפרוני",
+      "display_name": "נקניק פפרוני",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.734,
+      "quantity": 0.11,
+      "unit": "ק\"ג",
+      "quantity_confidence": 0.9,
+      "reason": "bought regularly (tier C); overdue: 53d since purchase vs ~29d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "7290004053024",
+        "product_name": "נקניק פפרוני",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:נקניק פפרוני"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 29.0,
+        "days_since": 53.0,
+        "ratio": 1.83,
+        "state": "overdue",
+        "cadence_trust": 0.71,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:tivtaam:נקניק פפרוני",
+        "stock_items:tivtaam:1521383",
+        "last_purchase:tivtaam:1521383",
+        "derived:tivtaam:1521383",
+        "tivtaam_order_lines:1521383"
+      ],
+      "origin_summary": {
+        "INFERENCE": 2,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "רצועות / קוביות עוף",
+      "display_name": "רצועות / קוביות עוף",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.734,
+      "quantity": 1.04,
+      "unit": "ק\"ג",
+      "quantity_confidence": 0.9,
+      "reason": "bought regularly (tier C); overdue: 76d since purchase vs ~38d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "2556671",
+        "product_name": "רצועות / קוביות עוף",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:רצועות / קוביות עוף"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 38.0,
+        "days_since": 76.0,
+        "ratio": 2.0,
+        "state": "overdue",
+        "cadence_trust": 0.71,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:tivtaam:רצועות / קוביות עוף",
+        "stock_items:tivtaam:2556671",
+        "last_purchase:tivtaam:2556671",
+        "derived:tivtaam:2556671",
+        "tivtaam_order_lines:2556671"
+      ],
+      "origin_summary": {
+        "INFERENCE": 2,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "דנונה דל לקטוז",
+      "display_name": "דנונה דל לקטוז",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.717,
+      "quantity": 4.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier A); overdue: 19d since purchase vs ~12d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "דנונה 8 מעודן ללא סוכר מוסף",
+        "product_name": "דנונה 8 מעודן ללא סוכר מוסף",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:דנונה דל לקטוז"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 11.8,
+        "days_since": 19.0,
+        "ratio": 1.61,
+        "state": "overdue",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:34",
+        "preferred_products:tivtaam:דנונה דל לקטוז",
+        "preferred_products:shufersal:דנונה דל לקטוז",
+        "stock_items:shufersal:P_7290110561352",
+        "last_purchase:shufersal:P_7290110561352",
+        "derived:shufersal:P_7290110561352",
+        "stock_items:shufersal:P_7290110561352"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 3,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "קוטג 5% שומן",
+      "display_name": "קוטג' 5% שומן",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.717,
+      "quantity": 2.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier A); overdue: 19d since purchase vs ~10d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_4127329",
+        "product_name": "קוטג' 5% שומן",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:קוטג' 5% שומן"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 10.2,
+        "days_since": 19.0,
+        "ratio": 1.86,
+        "state": "overdue",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:31",
+        "preferred_products:shufersal:קוטג' 5% שומן",
+        "preferred_products:tivtaam:קוטג' 5% שומן",
+        "stock_items:shufersal:P_4127329",
+        "last_purchase:shufersal:P_4127329",
+        "derived:shufersal:P_4127329",
+        "stock_items:shufersal:P_4127329"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 3,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "קישואים מובחר",
+      "display_name": "קישואים מובחר",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.717,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier A); overdue: 19d since purchase vs ~10d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_53",
+        "product_name": "קישואים מובחר",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:קישואים מובחר"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 9.6,
+        "days_since": 19.0,
+        "ratio": 1.98,
+        "state": "overdue",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:29",
+        "preferred_products:shufersal:קישואים מובחר",
+        "preferred_products:tivtaam:קישואים מובחר",
+        "stock_items:shufersal:P_53",
+        "last_purchase:shufersal:P_53",
+        "derived:shufersal:P_53",
+        "stock_items:shufersal:P_53"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 3,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "בטטה",
+      "display_name": "בטטה",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.7,
+      "quantity": 0.6,
+      "unit": "ק\"ג",
+      "quantity_confidence": 1.0,
+      "reason": "bought regularly (tier B); likely due: 8d since purchase vs ~7d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "4412319",
+        "product_name": "בטטה",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:בטטה"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 7.0,
+        "days_since": 8.0,
+        "ratio": 1.14,
+        "state": "likely due",
+        "cadence_trust": 0.85,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:tivtaam:בטטה",
+        "stock_items:tivtaam:1985470",
+        "last_purchase:tivtaam:1985470",
+        "derived:tivtaam:1985470",
+        "tivtaam_order_lines:1985470"
+      ],
+      "origin_summary": {
+        "INFERENCE": 2,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "מלפפון",
+      "display_name": "מלפפון",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.697,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier A); likely due: 19d since purchase vs ~13d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_46",
+        "product_name": "מלפפון",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:מלפפון"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 12.8,
+        "days_since": 19.0,
+        "ratio": 1.48,
+        "state": "likely due",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:36",
+        "preferred_products:shufersal:מלפפון",
+        "preferred_products:tivtaam:מלפפון",
+        "stock_items:shufersal:P_46",
+        "last_purchase:shufersal:P_46",
+        "derived:shufersal:P_46",
+        "stock_items:shufersal:P_46"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 3,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "זיתים ירוקים ענקיים",
+      "display_name": "זיתים ירוקים ענקיים",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.696,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.9,
+      "reason": "bought regularly (tier C); likely due: 45d since purchase vs ~31d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "16068717",
+        "product_name": "זיתים ירוקים ענקיים",
+        "origin": "INFERENCE",
+        "source_ref": "stock_items:tivtaam:16068717"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 31.0,
+        "days_since": 45.0,
+        "ratio": 1.45,
+        "state": "likely due",
+        "cadence_trust": 0.71,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "stock_items:tivtaam:16068717",
+        "last_purchase:tivtaam:16068717",
+        "derived:tivtaam:16068717",
+        "tivtaam_order_lines:16068717"
+      ],
+      "origin_summary": {
+        "FACT": 3,
+        "INFERENCE": 1
+      }
+    },
+    {
+      "term": "זיתים ירוקים טבעות",
+      "display_name": "זיתים ירוקים טבעות",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.69,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.9,
+      "reason": "bought regularly (tier C); likely due: 60d since purchase vs ~42d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "7438648",
+        "product_name": "זיתים ירוקים טבעות",
+        "origin": "INFERENCE",
+        "source_ref": "stock_items:tivtaam:7438648"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 42.0,
+        "days_since": 60.0,
+        "ratio": 1.43,
+        "state": "likely due",
+        "cadence_trust": 0.71,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "stock_items:tivtaam:7438648",
+        "last_purchase:tivtaam:7438648",
+        "derived:tivtaam:7438648",
+        "tivtaam_order_lines:7438648"
+      ],
+      "origin_summary": {
+        "FACT": 3,
+        "INFERENCE": 1
+      }
+    },
+    {
+      "term": "קוטג 9%",
+      "display_name": "קוטג' 9%",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.69,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.8,
+      "reason": "bought regularly (tier C); overdue: 96d since purchase vs ~60d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "7290004127336",
+        "product_name": "קוטג' 9%",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:קוטג' 9%"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 59.5,
+        "days_since": 96.0,
+        "ratio": 1.61,
+        "state": "overdue",
+        "cadence_trust": 0.64,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:tivtaam:קוטג' 9%",
+        "stock_items:tivtaam:5662487",
+        "last_purchase:tivtaam:5662487",
+        "derived:tivtaam:5662487",
+        "tivtaam_order_lines:5662487"
+      ],
+      "origin_summary": {
+        "INFERENCE": 2,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "שמנת לבישול 9%",
+      "display_name": "שמנת לבישול 9%",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.634,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.7,
+      "reason": "bought regularly (tier B); overdue: 60d since purchase vs ~26d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_7290106520912",
+        "product_name": "שמנת לבישול 9%",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:שמנת לבישול 9%"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 25.5,
+        "days_since": 60.0,
+        "ratio": 2.35,
+        "state": "overdue",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:shufersal:שמנת לבישול 9%",
+        "stock_items:shufersal:P_7290106520912",
+        "last_purchase:shufersal:P_7290106520912",
+        "derived:shufersal:P_7290106520912",
+        "stock_items:shufersal:P_7290106520912",
+        "stock_items:tivtaam:1538004",
+        "last_purchase:tivtaam:1538004",
+        "derived:tivtaam:1538004",
+        "tivtaam_order_lines:1538004"
+      ],
+      "origin_summary": {
+        "INFERENCE": 3,
+        "FACT": 6
+      }
+    },
+    {
+      "term": "אבוקדו",
+      "display_name": "אבוקדו",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 0.57,
+      "unit": "ק\"ג",
+      "quantity_confidence": 1.0,
+      "reason": "bought regularly (tier B); approaching due: 8d since purchase vs ~10d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_964980",
+        "product_name": "אבוקדו",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:אבוקדו"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 10.0,
+        "days_since": 8.0,
+        "ratio": 0.8,
+        "state": "approaching due",
+        "cadence_trust": 0.85,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:39",
+        "preferred_products:shufersal:אבוקדו",
+        "preferred_products:tivtaam:אבוקדו",
+        "stock_items:shufersal:P_964980",
+        "last_purchase:shufersal:P_964980",
+        "derived:shufersal:P_964980",
+        "stock_items:shufersal:P_964980",
+        "stock_items:tivtaam:1985502",
+        "last_purchase:tivtaam:1985502",
+        "derived:tivtaam:1985502",
+        "tivtaam_order_lines:1985502"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 4,
+        "FACT": 6
+      }
+    },
+    {
+      "term": "אצבעות גבינה צהובה",
+      "display_name": "אצבעות גבינה צהובה",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier B); likely due: 19d since purchase vs ~17d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_4122683",
+        "product_name": "אצבעות גבינה צהובה",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:אצבעות גבינה צהובה"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 17.0,
+        "days_since": 19.0,
+        "ratio": 1.12,
+        "state": "likely due",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:41",
+        "preferred_products:shufersal:אצבעות גבינה צהובה",
+        "stock_items:shufersal:P_4122683",
+        "last_purchase:shufersal:P_4122683",
+        "derived:shufersal:P_4122683",
+        "stock_items:shufersal:P_4122683"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "ביצים",
+      "display_name": "ביצים",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_1201589",
+        "product_name": "ביצי משק טריות L",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:ביצים"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "base_list_items:52",
+        "preferred_products:shufersal:ביצים",
+        "preferred_products:tivtaam:ביצים"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2
+      }
+    },
+    {
+      "term": "בננה",
+      "display_name": "בננה",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier B); likely due: 19d since purchase vs ~14d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "משקה בננה 1 ליטר",
+        "product_name": "משקה בננה 1 ליטר",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:בננה"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 13.9,
+        "days_since": 19.0,
+        "ratio": 1.37,
+        "state": "likely due",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:35",
+        "preferred_products:tivtaam:בננה",
+        "preferred_products:shufersal:בננה",
+        "stock_items:shufersal:P_967684",
+        "last_purchase:shufersal:P_967684",
+        "derived:shufersal:P_967684",
+        "stock_items:shufersal:P_967684",
+        "stock_items:shufersal:P_964775",
+        "last_purchase:shufersal:P_964775",
+        "derived:shufersal:P_964775",
+        "stock_items:shufersal:P_964775"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 4,
+        "FACT": 6
+      }
+    },
+    {
+      "term": "בצל יבש",
+      "display_name": "בצל יבש",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": true,
+      "confidence": 0.6,
+      "quantity": 2.0,
+      "unit": "ק\"ג",
+      "quantity_confidence": 1.0,
+      "reason": "bought regularly (tier A); approaching due: 8d since purchase vs ~16d cadence; on the standing list; good promotion (38%, saves 3.00₪): stock-up candidate",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_480",
+        "product_name": "בצל יבש",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:בצל יבש"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 15.5,
+        "days_since": 8.0,
+        "ratio": 0.52,
+        "state": "approaching due",
+        "cadence_trust": 0.85,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:32",
+        "preferred_products:shufersal:בצל יבש",
+        "preferred_products:tivtaam:בצל יבש",
+        "stock_items:shufersal:P_480",
+        "last_purchase:shufersal:P_480",
+        "derived:shufersal:P_480",
+        "stock_items:shufersal:P_480",
+        "stock_items:tivtaam:19314409",
+        "last_purchase:tivtaam:19314409",
+        "derived:tivtaam:19314409",
+        "tivtaam_order_lines:19314409",
+        "stock_items:tivtaam:1519091",
+        "last_purchase:tivtaam:1519091",
+        "derived:tivtaam:1519091",
+        "stock_items:tivtaam:1519091",
+        "dealfill:shufersal:בצל יבש"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 5,
+        "FACT": 10
+      }
+    },
+    {
+      "term": "חוט דנטלי",
+      "display_name": "חוט דנטלי",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "מקלוני חוט דנטלי",
+        "product_name": "מקלוני חוט דנטלי",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:חוט דנטלי"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "base_list_items:55",
+        "preferred_products:tivtaam:חוט דנטלי",
+        "preferred_products:shufersal:חוט דנטלי"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2
+      }
+    },
+    {
+      "term": "חומוס עשיר ב40% טחינה",
+      "display_name": "חומוס עשיר ב40% טחינה",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier C); lapsed (probably no longer bought, or bought elsewhere): 325d since purchase vs ~38d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "חומוס טחינה צבר",
+        "product_name": "חומוס טחינה צבר",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:חומוס עשיר ב40% טחינה"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 38.2,
+        "days_since": 325.0,
+        "ratio": 8.51,
+        "state": "lapsed (probably no longer bought, or bought elsewhere)",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:44",
+        "preferred_products:tivtaam:חומוס עשיר ב40% טחינה",
+        "preferred_products:shufersal:חומוס עשיר ב40% טחינה",
+        "stock_items:shufersal:P_7290110564360",
+        "last_purchase:shufersal:P_7290110564360",
+        "derived:shufersal:P_7290110564360",
+        "stock_items:shufersal:P_7290110564360"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 3,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "חלב בקרטון 3% שומן",
+      "display_name": "חלב בקרטון 3% שומן",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 2.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier B); likely due: 19d since purchase vs ~15d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_4131074",
+        "product_name": "חלב בקרטון 3% שומן",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:חלב בקרטון 3% שומן"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 15.3,
+        "days_since": 19.0,
+        "ratio": 1.24,
+        "state": "likely due",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:38",
+        "preferred_products:shufersal:חלב בקרטון 3% שומן",
+        "preferred_products:tivtaam:חלב בקרטון 3% שומן",
+        "stock_items:shufersal:P_4131074",
+        "last_purchase:shufersal:P_4131074",
+        "derived:shufersal:P_4131074",
+        "stock_items:shufersal:P_4131074"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 3,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "חסה לאליק הידרופונית",
+      "display_name": "חסה לאליק הידרופונית",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 1.0,
+      "reason": "bought regularly (tier B); recently bought: 3d since purchase vs ~8d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "16323094",
+        "product_name": "חסה לאליק הידרופונית",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:חסה לאליק הידרופונית"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 8.5,
+        "days_since": 3.0,
+        "ratio": 0.35,
+        "state": "recently bought",
+        "cadence_trust": 0.85,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:33",
+        "preferred_products:tivtaam:חסה לאליק הידרופונית",
+        "preferred_products:shufersal:חסה לאליק הידרופונית",
+        "stock_items:shufersal:P_7296073495758",
+        "last_purchase:shufersal:P_7296073495758",
+        "derived:shufersal:P_7296073495758",
+        "stock_items:shufersal:P_7296073495758",
+        "stock_items:shufersal:P_7290013366689",
+        "derived:shufersal:P_7290013366689",
+        "stock_items:shufersal:P_7290013366689",
+        "stock_items:tivtaam:16323094",
+        "last_purchase:tivtaam:16323094",
+        "derived:tivtaam:16323094",
+        "tivtaam_order_lines:16323094"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 5,
+        "FACT": 8
+      }
+    },
+    {
+      "term": "טונה בשמן קנולה",
+      "display_name": "טונה בשמן קנולה",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier C); recently bought: 19d since purchase vs ~38d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_7290010066582",
+        "product_name": "טונה בשמן קנולה",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:טונה בשמן קנולה"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 38.2,
+        "days_since": 19.0,
+        "ratio": 0.5,
+        "state": "recently bought",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:45",
+        "preferred_products:shufersal:טונה בשמן קנולה",
+        "preferred_products:tivtaam:טונה בשמן קנולה",
+        "stock_items:shufersal:P_7290010066582",
+        "last_purchase:shufersal:P_7290010066582",
+        "derived:shufersal:P_7290010066582",
+        "stock_items:shufersal:P_7290010066582"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 3,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "כרוב לבן",
+      "display_name": "כרוב לבן",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 1.4,
+      "unit": "ק\"ג",
+      "quantity_confidence": 1.0,
+      "reason": "bought regularly (tier B); recently bought: 8d since purchase vs ~26d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_138",
+        "product_name": "כרוב לבן",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:כרוב לבן"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 25.5,
+        "days_since": 8.0,
+        "ratio": 0.31,
+        "state": "recently bought",
+        "cadence_trust": 0.85,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:48",
+        "preferred_products:shufersal:כרוב לבן",
+        "preferred_products:tivtaam:כרוב לבן",
+        "stock_items:shufersal:P_138",
+        "last_purchase:shufersal:P_138",
+        "derived:shufersal:P_138",
+        "stock_items:shufersal:P_138",
+        "stock_items:tivtaam:1985520",
+        "last_purchase:tivtaam:1985520",
+        "derived:tivtaam:1985520",
+        "tivtaam_order_lines:1985520"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 4,
+        "FACT": 6
+      }
+    },
+    {
+      "term": "מגבונים לניקוי כללי",
+      "display_name": "מגבונים לניקוי כללי",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier C); lapsed (probably no longer bought, or bought elsewhere): 511d since purchase vs ~51d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_7290107280037",
+        "product_name": "מגבונים לניקוי כללי",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:מגבונים לניקוי כללי"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 51.0,
+        "days_since": 511.0,
+        "ratio": 10.02,
+        "state": "lapsed (probably no longer bought, or bought elsewhere)",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:43",
+        "preferred_products:shufersal:מגבונים לניקוי כללי",
+        "preferred_products:tivtaam:מגבונים לניקוי כללי",
+        "stock_items:shufersal:P_7290107280037",
+        "last_purchase:shufersal:P_7290107280037",
+        "derived:shufersal:P_7290107280037",
+        "stock_items:shufersal:P_7290107280037"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 3,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "עגבניות שרי יובל ליקופן",
+      "display_name": "עגבניות שרי יובל ליקופן",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier B); lapsed (probably no longer bought, or bought elsewhere): 238d since purchase vs ~17d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "1985513",
+        "product_name": "עגבניות שרי צהובות",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:עגבניות שרי יובל ליקופן"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 17.0,
+        "days_since": 238.0,
+        "ratio": 14.0,
+        "state": "lapsed (probably no longer bought, or bought elsewhere)",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:37",
+        "preferred_products:tivtaam:עגבניות שרי יובל ליקופן",
+        "preferred_products:shufersal:עגבניות שרי יובל ליקופן",
+        "stock_items:shufersal:P_7290015055000",
+        "last_purchase:shufersal:P_7290015055000",
+        "derived:shufersal:P_7290015055000",
+        "stock_items:shufersal:P_7290015055000"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 3,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "פלפל אדום",
+      "display_name": "פלפל אדום",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": true,
+      "confidence": 0.6,
+      "quantity": 2.0,
+      "unit": "ק\"ג",
+      "quantity_confidence": 1.0,
+      "reason": "bought regularly (tier A); recently bought: 3d since purchase vs ~8d cadence; on the standing list; good promotion (51%, saves 5.00₪): stock-up candidate",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_91",
+        "product_name": "פלפל אדום",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:פלפל אדום"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 7.5,
+        "days_since": 3.0,
+        "ratio": 0.4,
+        "state": "recently bought",
+        "cadence_trust": 0.85,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:28",
+        "preferred_products:shufersal:פלפל אדום",
+        "preferred_products:tivtaam:פלפל אדום",
+        "stock_items:shufersal:P_91",
+        "last_purchase:shufersal:P_91",
+        "derived:shufersal:P_91",
+        "stock_items:shufersal:P_91",
+        "stock_items:tivtaam:19314408",
+        "last_purchase:tivtaam:19314408",
+        "derived:tivtaam:19314408",
+        "tivtaam_order_lines:19314408",
+        "stock_items:tivtaam:1519108",
+        "last_purchase:tivtaam:1519108",
+        "derived:tivtaam:1519108",
+        "stock_items:tivtaam:1519108",
+        "dealfill:shufersal:פלפל אדום"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 5,
+        "FACT": 10
+      }
+    },
+    {
+      "term": "פסטה פנה",
+      "display_name": "פסטה פנה",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier C); recently bought: 19d since purchase vs ~51d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "7692684",
+        "product_name": "פסטה פנה ריגטה",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:פסטה פנה"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 51.0,
+        "days_since": 19.0,
+        "ratio": 0.37,
+        "state": "recently bought",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:47",
+        "preferred_products:tivtaam:פסטה פנה",
+        "preferred_products:shufersal:פסטה פנה",
+        "stock_items:shufersal:P_8004690052044",
+        "last_purchase:shufersal:P_8004690052044",
+        "derived:shufersal:P_8004690052044",
+        "stock_items:shufersal:P_8004690052044",
+        "stock_items:shufersal:P_7296073707325",
+        "last_purchase:shufersal:P_7296073707325",
+        "derived:shufersal:P_7296073707325",
+        "stock_items:shufersal:P_7296073707325"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 4,
+        "FACT": 6
+      }
+    },
+    {
+      "term": "קורנפלקס",
+      "display_name": "קורנפלקס",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_7290112494351",
+        "product_name": "קורנפלקס של אלופים בד\"ץ",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:קורנפלקס"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "base_list_items:53",
+        "preferred_products:shufersal:קורנפלקס",
+        "preferred_products:tivtaam:קורנפלקס"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2
+      }
+    },
+    {
+      "term": "קטשופ מופחת סוכר",
+      "display_name": "קטשופ מופחת סוכר",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier C); recently bought: 19d since purchase vs ~38d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_7290115204056",
+        "product_name": "קטשופ מופחת סוכר",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:קטשופ מופחת סוכר"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 38.2,
+        "days_since": 19.0,
+        "ratio": 0.5,
+        "state": "recently bought",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:46",
+        "preferred_products:shufersal:קטשופ מופחת סוכר",
+        "preferred_products:tivtaam:קטשופ מופחת סוכר",
+        "stock_items:shufersal:P_7290115204056",
+        "last_purchase:shufersal:P_7290115204056",
+        "derived:shufersal:P_7290115204056",
+        "stock_items:shufersal:P_7290115204056"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 3,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "קיסמי שיניים פלסטיק",
+      "display_name": "קיסמי שיניים פלסטיק",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier D); overdue: 455d since purchase vs ~153d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_7290011505806",
+        "product_name": "קיסמי שיניים פלסטיק",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:קיסמי שיניים פלסטיק"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 153.0,
+        "days_since": 455.0,
+        "ratio": 2.97,
+        "state": "overdue",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:51",
+        "preferred_products:shufersal:קיסמי שיניים פלסטיק",
+        "stock_items:shufersal:P_7290011505806",
+        "last_purchase:shufersal:P_7290011505806",
+        "derived:shufersal:P_7290011505806",
+        "stock_items:shufersal:P_7290011505806"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "שימורי עגבניות",
+      "display_name": "שימורי עגבניות",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_8005110002243",
+        "product_name": "תרכיז עגבניות",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:שימורי עגבניות"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "base_list_items:54",
+        "preferred_products:shufersal:שימורי עגבניות",
+        "preferred_products:tivtaam:שימורי עגבניות"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 2
+      }
+    },
+    {
+      "term": "שמן זית כתית מעולה",
+      "display_name": "שמן זית כתית מעולה",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 2.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier C); approaching due: 27d since purchase vs ~51d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "1523800",
+        "product_name": "שמן זית כתית מעולה",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:שמן זית כתית מעולה"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 51.0,
+        "days_since": 27.0,
+        "ratio": 0.53,
+        "state": "approaching due",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:40",
+        "preferred_products:tivtaam:שמן זית כתית מעולה",
+        "preferred_products:shufersal:שמן זית כתית מעולה",
+        "stock_items:shufersal:P_7296073693284",
+        "last_purchase:shufersal:P_7296073693284",
+        "derived:shufersal:P_7296073693284",
+        "stock_items:shufersal:P_7296073693284",
+        "stock_items:shufersal:P_7296073703785",
+        "last_purchase:shufersal:P_7296073703785",
+        "derived:shufersal:P_7296073703785",
+        "stock_items:shufersal:P_7296073703785",
+        "stock_items:tivtaam:1523800",
+        "last_purchase:tivtaam:1523800",
+        "derived:tivtaam:1523800",
+        "tivtaam_order_lines:1523800",
+        "stock_items:tivtaam:17781135",
+        "last_purchase:tivtaam:17781135",
+        "derived:tivtaam:17781135",
+        "tivtaam_order_lines:17781135"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 6,
+        "FACT": 12
+      }
+    },
+    {
+      "term": "שניצלונים",
+      "display_name": "שניצלונים",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier C); recently bought: 19d since purchase vs ~51d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_7290019205807",
+        "product_name": "שניצלונים",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:שניצלונים"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 51.0,
+        "days_since": 19.0,
+        "ratio": 0.37,
+        "state": "recently bought",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:50",
+        "preferred_products:shufersal:שניצלונים",
+        "preferred_products:tivtaam:שניצלונים",
+        "stock_items:shufersal:P_7290019205807",
+        "last_purchase:shufersal:P_7290019205807",
+        "derived:shufersal:P_7290019205807",
+        "stock_items:shufersal:P_7290019205807",
+        "stock_items:tivtaam:18789292",
+        "last_purchase:tivtaam:18789292",
+        "derived:tivtaam:18789292",
+        "stock_items:tivtaam:18789292"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 4,
+        "FACT": 6
+      }
+    },
+    {
+      "term": "שעועית עדינה שלמה קפואה",
+      "display_name": "שעועית עדינה שלמה קפואה",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 2.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier C); lapsed (probably no longer bought, or bought elsewhere): 325d since purchase vs ~31d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_104836",
+        "product_name": "שעועית עדינה שלמה קפואה",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:שעועית עדינה שלמה קפואה"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 30.6,
+        "days_since": 325.0,
+        "ratio": 10.62,
+        "state": "lapsed (probably no longer bought, or bought elsewhere)",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:42",
+        "preferred_products:shufersal:שעועית עדינה שלמה קפואה",
+        "preferred_products:tivtaam:שעועית עדינה שלמה קפואה",
+        "stock_items:shufersal:P_104836",
+        "last_purchase:shufersal:P_104836",
+        "derived:shufersal:P_104836",
+        "stock_items:shufersal:P_104836"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 3,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "תפוח אדמה לבן ארוז",
+      "display_name": "תפוח אדמה לבן ארוז",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.6,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier D); lapsed (probably no longer bought, or bought elsewhere): 554d since purchase vs ~153d cadence; on the standing list",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "1985504",
+        "product_name": "תפוח אדמה לבן",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:תפוח אדמה לבן ארוז"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 153.0,
+        "days_since": 554.0,
+        "ratio": 3.62,
+        "state": "lapsed (probably no longer bought, or bought elsewhere)",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "base_list_items:49",
+        "preferred_products:tivtaam:תפוח אדמה לבן ארוז",
+        "preferred_products:shufersal:תפוח אדמה לבן ארוז",
+        "stock_items:shufersal:P_1715",
+        "last_purchase:shufersal:P_1715",
+        "derived:shufersal:P_1715",
+        "stock_items:shufersal:P_1715",
+        "stock_items:shufersal:P_7296073753117",
+        "derived:shufersal:P_7296073753117",
+        "stock_items:shufersal:P_7296073753117"
+      ],
+      "origin_summary": {
+        "HUMAN_DECLARED": 1,
+        "INFERENCE": 4,
+        "FACT": 5
+      }
+    },
+    {
+      "term": "דבש טהור מפרחי בר לחיץ",
+      "display_name": "דבש טהור מפרחי בר לחיץ",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.589,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.8,
+      "reason": "bought regularly (tier D); overdue: 114d since purchase vs ~48d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "7290005591761",
+        "product_name": "דבש טהור מפרחי בר לחיץ",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:דבש טהור מפרחי בר לחיץ"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 48.5,
+        "days_since": 114.0,
+        "ratio": 2.35,
+        "state": "overdue",
+        "cadence_trust": 0.64,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:tivtaam:דבש טהור מפרחי בר לחיץ",
+        "stock_items:tivtaam:5662112",
+        "last_purchase:tivtaam:5662112",
+        "derived:tivtaam:5662112",
+        "tivtaam_order_lines:5662112"
+      ],
+      "origin_summary": {
+        "INFERENCE": 2,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "לקט לסלט בסגנון אסייתי",
+      "display_name": "לקט לסלט בסגנון אסייתי",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.589,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.8,
+      "reason": "bought regularly (tier D); overdue: 60d since purchase vs ~33d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "13295352",
+        "product_name": "לקט לסלט בסגנון אסייתי",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:לקט לסלט בסגנון אסייתי"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 33.0,
+        "days_since": 60.0,
+        "ratio": 1.82,
+        "state": "overdue",
+        "cadence_trust": 0.64,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:tivtaam:לקט לסלט בסגנון אסייתי",
+        "stock_items:tivtaam:13295352",
+        "last_purchase:tivtaam:13295352",
+        "derived:tivtaam:13295352",
+        "tivtaam_order_lines:13295352"
+      ],
+      "origin_summary": {
+        "INFERENCE": 2,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "רוטב סויה",
+      "display_name": "רוטב סויה",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.589,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.8,
+      "reason": "bought regularly (tier D); overdue: 114d since purchase vs ~48d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "7290017677804",
+        "product_name": "רוטב סויה",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:רוטב סויה"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 48.5,
+        "days_since": 114.0,
+        "ratio": 2.35,
+        "state": "overdue",
+        "cadence_trust": 0.64,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:tivtaam:רוטב סויה",
+        "stock_items:tivtaam:6101133",
+        "last_purchase:tivtaam:6101133",
+        "derived:tivtaam:6101133",
+        "tivtaam_order_lines:6101133"
+      ],
+      "origin_summary": {
+        "INFERENCE": 2,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "גבינת גלבוע פרוסות 22%",
+      "display_name": "גבינת גלבוע פרוסות 22%",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.573,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier B); likely due: 27d since purchase vs ~22d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_46327",
+        "product_name": "גבינת גלבוע פרוסות 22%",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:גבינת גלבוע פרוסות 22%"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 21.9,
+        "days_since": 27.0,
+        "ratio": 1.23,
+        "state": "likely due",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:shufersal:גבינת גלבוע פרוסות 22%",
+        "stock_items:shufersal:P_46327",
+        "last_purchase:shufersal:P_46327",
+        "derived:shufersal:P_46327",
+        "stock_items:shufersal:P_46327"
+      ],
+      "origin_summary": {
+        "INFERENCE": 2,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "מלח שולחן דק",
+      "display_name": "מלח שולחן דק",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.568,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier C); overdue: 103d since purchase vs ~51d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_7296073151555",
+        "product_name": "מלח שולחן דק",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:מלח שולחן דק"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 51.0,
+        "days_since": 103.0,
+        "ratio": 2.02,
+        "state": "overdue",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:shufersal:מלח שולחן דק",
+        "stock_items:shufersal:P_7296073151555",
+        "last_purchase:shufersal:P_7296073151555",
+        "derived:shufersal:P_7296073151555",
+        "stock_items:shufersal:P_7296073151555"
+      ],
+      "origin_summary": {
+        "INFERENCE": 2,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "נקניקיות פרגיות",
+      "display_name": "נקניקיות פרגיות",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.568,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier C); overdue: 103d since purchase vs ~38d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_318035",
+        "product_name": "נקניקיות פרגיות",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:נקניקיות פרגיות"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 38.2,
+        "days_since": 103.0,
+        "ratio": 2.7,
+        "state": "overdue",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:shufersal:נקניקיות פרגיות",
+        "stock_items:shufersal:P_318035",
+        "last_purchase:shufersal:P_318035",
+        "derived:shufersal:P_318035",
+        "stock_items:shufersal:P_318035"
+      ],
+      "origin_summary": {
+        "INFERENCE": 2,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "שזיף אדום",
+      "display_name": "שזיף אדום",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.568,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier C); overdue: 103d since purchase vs ~51d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_965338",
+        "product_name": "שזיף אדום",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:שזיף אדום"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 51.0,
+        "days_since": 103.0,
+        "ratio": 2.02,
+        "state": "overdue",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:shufersal:שזיף אדום",
+        "stock_items:shufersal:P_965338",
+        "last_purchase:shufersal:P_965338",
+        "derived:shufersal:P_965338",
+        "stock_items:shufersal:P_965338"
+      ],
+      "origin_summary": {
+        "INFERENCE": 2,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "פיתות במרקם מיוחד",
+      "display_name": "פיתות במרקם מיוחד",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.532,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier B); approaching due: 19d since purchase vs ~19d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_7290010777099",
+        "product_name": "פיתות במרקם מיוחד",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:פיתות במרקם מיוחד"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 19.1,
+        "days_since": 19.0,
+        "ratio": 0.99,
+        "state": "approaching due",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:shufersal:פיתות במרקם מיוחד",
+        "stock_items:shufersal:P_7290010777099",
+        "last_purchase:shufersal:P_7290010777099",
+        "derived:shufersal:P_7290010777099",
+        "stock_items:shufersal:P_7290010777099"
+      ],
+      "origin_summary": {
+        "INFERENCE": 2,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "קריספיות חיטה קידס",
+      "display_name": "קריספיות חיטה קידס",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.532,
+      "quantity": 1.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier B); approaching due: 19d since purchase vs ~19d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_7290012022067",
+        "product_name": "קריספיות חיטה קידס",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:קריספיות חיטה קידס"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 19.1,
+        "days_since": 19.0,
+        "ratio": 0.99,
+        "state": "approaching due",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:shufersal:קריספיות חיטה קידס",
+        "stock_items:shufersal:P_7290012022067",
+        "last_purchase:shufersal:P_7290012022067",
+        "derived:shufersal:P_7290012022067",
+        "stock_items:shufersal:P_7290012022067"
+      ],
+      "origin_summary": {
+        "INFERENCE": 2,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "פלפל חריף",
+      "display_name": "פלפל חריף",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.511,
+      "quantity": 0.33,
+      "unit": "ק\"ג",
+      "quantity_confidence": 0.9,
+      "reason": "bought regularly (tier C); approaching due: 45d since purchase vs ~49d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_619",
+        "product_name": "פלפל חריף",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:פלפל חריף"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 49.0,
+        "days_since": 45.0,
+        "ratio": 0.92,
+        "state": "approaching due",
+        "cadence_trust": 0.71,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:shufersal:פלפל חריף",
+        "preferred_products:tivtaam:פלפל חריף",
+        "stock_items:tivtaam:1985511",
+        "last_purchase:tivtaam:1985511",
+        "derived:tivtaam:1985511",
+        "tivtaam_order_lines:1985511"
+      ],
+      "origin_summary": {
+        "INFERENCE": 3,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "אורז בסמטי",
+      "display_name": "אורז בסמטי",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": true,
+      "confidence": 0.5,
+      "quantity": 2.0,
+      "unit": "",
+      "quantity_confidence": 0.7,
+      "reason": "bought regularly (tier D); recently bought: 27d since purchase vs ~76d cadence; good promotion (33%, saves 4.90₪): stock-up candidate",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal",
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_8901537024014",
+        "product_name": "אורז בסמטי",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:אורז בסמטי"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed",
+        "bought at more than one chain — chain choice open"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 76.5,
+        "days_since": 27.0,
+        "ratio": 0.35,
+        "state": "recently bought",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:shufersal:אורז בסמטי",
+        "stock_items:shufersal:P_8901537024014",
+        "last_purchase:shufersal:P_8901537024014",
+        "derived:shufersal:P_8901537024014",
+        "stock_items:shufersal:P_8901537024014",
+        "stock_items:tivtaam:1541809",
+        "last_purchase:tivtaam:1541809",
+        "derived:tivtaam:1541809",
+        "tivtaam_order_lines:1541809",
+        "dealfill:shufersal:אורז בסמטי"
+      ],
+      "origin_summary": {
+        "INFERENCE": 3,
+        "FACT": 7
+      }
+    },
+    {
+      "term": "האגיס אקסטרה קר מידה 3",
+      "display_name": "האגיס אקסטרה קר מידה 3",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": true,
+      "confidence": 0.5,
+      "quantity": 2.0,
+      "unit": "",
+      "quantity_confidence": 0.3,
+      "reason": "good promotion (26%, saves 15.90₪): stock-up candidate",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal"
+      ],
+      "human_product": null,
+      "inferred_product": null,
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "no known product for this term at any chain — retailer resolution needed"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "hotdeals:shufersal:7290000205762"
+      ],
+      "origin_summary": {
+        "FACT": 1
+      }
+    },
+    {
+      "term": "חומוס מסעדה צבר",
+      "display_name": "חומוס מסעדה צבר",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": true,
+      "confidence": 0.5,
+      "quantity": 2.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier D); recently bought: 76d since purchase vs ~153d cadence; good promotion (30%, saves 4.60₪): stock-up candidate",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_7290106576537",
+        "product_name": "חומוס מסעדה צבר",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:חומוס מסעדה צבר"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 153.0,
+        "days_since": 76.0,
+        "ratio": 0.5,
+        "state": "recently bought",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:shufersal:חומוס מסעדה צבר",
+        "stock_items:shufersal:P_7290106576537",
+        "last_purchase:shufersal:P_7290106576537",
+        "derived:shufersal:P_7290106576537",
+        "stock_items:shufersal:P_7290106576537",
+        "dealfill:shufersal:חומוס מסעדה צבר"
+      ],
+      "origin_summary": {
+        "INFERENCE": 2,
+        "FACT": 4
+      }
+    },
+    {
+      "term": "מטרנה אקסטרה קר שלב1 700",
+      "display_name": "מטרנה אקסטרה קר שלב1 700",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": true,
+      "confidence": 0.5,
+      "quantity": 2.0,
+      "unit": "",
+      "quantity_confidence": 0.3,
+      "reason": "good promotion (25%, saves 16.90₪): stock-up candidate",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal"
+      ],
+      "human_product": null,
+      "inferred_product": null,
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "no known product for this term at any chain — retailer resolution needed"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "hotdeals:shufersal:7290013083661"
+      ],
+      "origin_summary": {
+        "FACT": 1
+      }
+    },
+    {
+      "term": "מטרנה אקסטרה קר שלב2 700",
+      "display_name": "מטרנה אקסטרה קר שלב2 700",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": true,
+      "confidence": 0.5,
+      "quantity": 2.0,
+      "unit": "",
+      "quantity_confidence": 0.3,
+      "reason": "good promotion (25%, saves 16.90₪): stock-up candidate",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal"
+      ],
+      "human_product": null,
+      "inferred_product": null,
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "no known product for this term at any chain — retailer resolution needed"
+      ],
+      "depletion_inference": {
+        "method": "tier-only",
+        "note": "no cadence available"
+      },
+      "source_evidence": [
+        "hotdeals:shufersal:7290013083678"
+      ],
+      "origin_summary": {
+        "FACT": 1
+      }
+    },
+    {
+      "term": "סוללות AAA",
+      "display_name": "סוללות AAA",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": true,
+      "confidence": 0.5,
+      "quantity": 2.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier D); recently bought: 19d since purchase vs ~76d cadence; good promotion (41%, saves 6.90₪): stock-up candidate",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_7296073693086",
+        "product_name": "סוללות AAA",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:סוללות AAA"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 76.5,
+        "days_since": 19.0,
+        "ratio": 0.25,
+        "state": "recently bought",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:shufersal:סוללות AAA",
+        "stock_items:shufersal:P_7296073693086",
+        "last_purchase:shufersal:P_7296073693086",
+        "derived:shufersal:P_7296073693086",
+        "stock_items:shufersal:P_7296073693086",
+        "dealfill:shufersal:סוללות AAA"
+      ],
+      "origin_summary": {
+        "INFERENCE": 2,
+        "FACT": 4
+      }
+    },
+    {
+      "term": "רוטב סויה מופחת נתרן",
+      "display_name": "רוטב סויה מופחת נתרן",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": true,
+      "confidence": 0.5,
+      "quantity": 2.0,
+      "unit": "",
+      "quantity_confidence": 0.6,
+      "reason": "bought regularly (tier C); approaching due: 27d since purchase vs ~38d cadence; good promotion (31%, saves 7.00₪): stock-up candidate",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "shufersal"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "shufersal",
+        "product_code": "P_4903001925784",
+        "product_name": "רוטב סויה מופחת נתרן",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:shufersal:רוטב סויה מופחת נתרן"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 38.2,
+        "days_since": 27.0,
+        "ratio": 0.71,
+        "state": "approaching due",
+        "cadence_trust": 0.45,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:shufersal:רוטב סויה מופחת נתרן",
+        "stock_items:shufersal:P_4903001925784",
+        "last_purchase:shufersal:P_4903001925784",
+        "derived:shufersal:P_4903001925784",
+        "stock_items:shufersal:P_4903001925784",
+        "dealfill:shufersal:רוטב סויה מופחת נתרן"
+      ],
+      "origin_summary": {
+        "INFERENCE": 2,
+        "FACT": 4
+      }
+    },
+    {
+      "term": "בננות",
+      "display_name": "בננות",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.499,
+      "quantity": 1.0,
+      "unit": "ק\"ג",
+      "quantity_confidence": 1.0,
+      "reason": "bought regularly (tier B); approaching due: 8d since purchase vs ~10d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "4412616",
+        "product_name": "בננות",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:בננות"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 9.5,
+        "days_since": 8.0,
+        "ratio": 0.84,
+        "state": "approaching due",
+        "cadence_trust": 0.85,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:tivtaam:בננות",
+        "stock_items:tivtaam:1985499",
+        "last_purchase:tivtaam:1985499",
+        "derived:tivtaam:1985499",
+        "tivtaam_order_lines:1985499"
+      ],
+      "origin_summary": {
+        "INFERENCE": 2,
+        "FACT": 3
+      }
+    },
+    {
+      "term": "נייר טואלט לח נשטף",
+      "display_name": "נייר טואלט לח נשטף",
+      "decision": "suggest",
+      "mandatory": false,
+      "stock_up": false,
+      "confidence": 0.458,
+      "quantity": 1.5,
+      "unit": "",
+      "quantity_confidence": 1.0,
+      "reason": "bought regularly (tier B); approaching due: 8d since purchase vs ~10d cadence",
+      "meal_or_event": "",
+      "candidate_retailers": [
+        "tivtaam"
+      ],
+      "human_product": null,
+      "inferred_product": {
+        "store": "tivtaam",
+        "product_code": "7290103704919",
+        "product_name": "נייר טואלט לח נשטף",
+        "origin": "INFERENCE",
+        "source_ref": "preferred_products:tivtaam:נייר טואלט לח נשטף"
+      },
+      "inventory_known": false,
+      "unresolved_decisions": [
+        "product choice is inferred, not human-confirmed"
+      ],
+      "depletion_inference": {
+        "method": "cadence-vs-recency",
+        "cadence_days": 10.0,
+        "days_since": 8.0,
+        "ratio": 0.8,
+        "state": "approaching due",
+        "cadence_trust": 0.85,
+        "is_inference": true
+      },
+      "source_evidence": [
+        "preferred_products:tivtaam:נייר טואלט לח נשטף",
+        "stock_items:tivtaam:14871507",
+        "last_purchase:tivtaam:14871507",
+        "derived:tivtaam:14871507",
+        "tivtaam_order_lines:14871507",
+        "stock_items:tivtaam:14335229",
+        "last_purchase:tivtaam:14335229",
+        "derived:tivtaam:14335229",
+        "tivtaam_order_lines:14335229"
+      ],
+      "origin_summary": {
+        "INFERENCE": 3,
+        "FACT": 6
+      }
+    }
+  ],
+  "ignored": [
+    {
+      "term": "10 פיתות במרקם מיוחד",
+      "confidence": 0.414
+    },
+    {
+      "term": "אל סבון לפני השינה",
+      "confidence": 0.414
+    },
+    {
+      "term": "אלספה",
+      "confidence": 0.414
+    },
+    {
+      "term": "אקסלנס שוקולד מריר לימון ונגיעות גינגר",
+      "confidence": 0.414
+    },
+    {
+      "term": "בירה סאן מיגל לאגר",
+      "confidence": 0.414
+    },
+    {
+      "term": "בצק בגביע אומגה",
+      "confidence": 0.414
+    },
+    {
+      "term": "גבינה חצי קשה 24%",
+      "confidence": 0.414
+    },
+    {
+      "term": "גל כביסה מרוכז ירוק",
+      "confidence": 0.414
+    },
+    {
+      "term": "האגיס פרידום פנטס שלב 5",
+      "confidence": 0.414
+    },
+    {
+      "term": "חטיפטף ארוחת תפוח עץ ובננה עם שיבולת שועל",
+      "confidence": 0.414
+    },
+    {
+      "term": "חיתולי שחיה האגיס L",
+      "confidence": 0.414
+    },
+    {
+      "term": "חלב עמיד 3% - מחיר בפיקוח ממשלתי",
+      "confidence": 0.414
+    },
+    {
+      "term": "חצי בגט שוויצרי",
+      "confidence": 0.414
+    },
+    {
+      "term": "טבעות זיתים ירוקים",
+      "confidence": 0.414
+    },
+    {
+      "term": "כוס ספורט כחול",
+      "confidence": 0.414
+    },
+    {
+      "term": "כריות יפניות",
+      "confidence": 0.414
+    },
+    {
+      "term": "כתף מפולפל",
+      "confidence": 0.414
+    },
+    {
+      "term": "מגבונים לחים ללא בישום 4 יחידות",
+      "confidence": 0.414
+    },
+    {
+      "term": "מגבונים לחים לתינוק",
+      "confidence": 0.414
+    },
+    {
+      "term": "מגבונים לחים ריח לבנדר",
+      "confidence": 0.414
+    },
+    {
+      "term": "מגבות נייר גליל כפול",
+      "confidence": 0.414
+    },
+    {
+      "term": "מיקס קרקרים קלאסי",
+      "confidence": 0.414
+    },
+    {
+      "term": "מלח ים אטלנטי בצנצנת",
+      "confidence": 0.414
+    },
+    {
+      "term": "ממחטות אף בקופסא",
+      "confidence": 0.414
+    },
+    {
+      "term": "מקלוני כותנה בלונס",
+      "confidence": 0.414
+    },
+    {
+      "term": "מרק עוף אמיתי בשרי",
+      "confidence": 0.414
+    },
+    {
+      "term": "משטח החתלה",
+      "confidence": 0.414
+    },
+    {
+      "term": "משטחי החתלה",
+      "confidence": 0.414
+    },
+    {
+      "term": "נוזל כלים קלאסי ירוק",
+      "confidence": 0.414
+    },
+    {
+      "term": "נייר אפייה",
+      "confidence": 0.414
+    },
+    {
+      "term": "נייר טואלט דו שכבתי",
+      "confidence": 0.414
+    },
+    {
+      "term": "סוכר לבן בצנצנת",
+      "confidence": 0.414
+    },
+    {
+      "term": "סילאן שקדיה 100% טבעי",
+      "confidence": 0.414
+    },
+    {
+      "term": "סילק & ספייס סילק רוט",
+      "confidence": 0.414
+    },
+    {
+      "term": "סילק אנד ספייס ספייס רוד",
+      "confidence": 0.414
+    },
+    {
+      "term": "ספגטי לה מוליזנה",
+      "confidence": 0.414
+    },
+    {
+      "term": "עלי מנגולד אורגני -יחידה",
+      "confidence": 0.414
+    },
+    {
+      "term": "עלי תרד מוקפאים",
+      "confidence": 0.414
+    },
+    {
+      "term": "פירורי לחם מוזהבים",
+      "confidence": 0.414
+    },
+    {
+      "term": "פיתה מיני ביס",
+      "confidence": 0.414
+    },
+    {
+      "term": "פסטה גמלי",
+      "confidence": 0.414
+    },
+    {
+      "term": "פסטה קוואדרטו",
+      "confidence": 0.414
+    },
+    {
+      "term": "פסטה רדיאטורי",
+      "confidence": 0.414
+    },
+    {
+      "term": "פסטרמה בדבש",
+      "confidence": 0.414
+    },
+    {
+      "term": "פסטרמה גחלים דק דק דק",
+      "confidence": 0.414
+    },
+    {
+      "term": "ציפס בטטה זיגזג קפוא",
+      "confidence": 0.414
+    },
+    {
+      "term": "ציפס לתנור",
+      "confidence": 0.414
+    },
+    {
+      "term": "קורשנישונים מלפפונים בטעם חמוץ מתוק",
+      "confidence": 0.414
+    },
+    {
+      "term": "קטשופ היינץ ללתס ומלח",
+      "confidence": 0.414
+    },
+    {
+      "term": "קריספיות קידס פריכיות חיטה",
+      "confidence": 0.414
+    },
+    {
+      "term": "רביולי גבינה לילדים",
+      "confidence": 0.414
+    },
+    {
+      "term": "רביולי תרד וריקוטה",
+      "confidence": 0.414
+    },
+    {
+      "term": "רוזמרין",
+      "confidence": 0.414
+    },
+    {
+      "term": "רוטב עגבניות מרוכז 22%",
+      "confidence": 0.414
+    },
+    {
+      "term": "שום גבישי",
+      "confidence": 0.414
+    },
+    {
+      "term": "שזיף שגיב",
+      "confidence": 0.414
+    },
+    {
+      "term": "שינקן מעושן פרוס",
+      "confidence": 0.414
+    },
+    {
+      "term": "שמפו אל דמע קמיל בלו",
+      "confidence": 0.414
+    },
+    {
+      "term": "שעועית ירוקה שלמה מוקפאת",
+      "confidence": 0.414
+    },
+    {
+      "term": "שקיות אשפה ריחניות S",
+      "confidence": 0.414
+    },
+    {
+      "term": "שקיות אשפהL ריחניות+שרוך",
+      "confidence": 0.414
+    },
+    {
+      "term": "מארז לחמניות ביס",
+      "confidence": 0.408
+    },
+    {
+      "term": "תירס מתוק ארוז בואקום",
+      "confidence": 0.408
+    },
+    {
+      "term": "קבב מזרחי קפוא",
+      "confidence": 0.407
+    },
+    {
+      "term": "קינמון טחון",
+      "confidence": 0.407
+    },
+    {
+      "term": "שמנת להקצפה 38%",
+      "confidence": 0.407
+    },
+    {
+      "term": "תות שדה ארוז",
+      "confidence": 0.407
+    },
+    {
+      "term": "חסה הידרופונית",
+      "confidence": 0.405
+    },
+    {
+      "term": "דלעת ארוזה",
+      "confidence": 0.402
+    },
+    {
+      "term": "פסטרמה בדבש דק דק דק",
+      "confidence": 0.402
+    },
+    {
+      "term": "יוגורט דל לקטוז בתוספת סידן 3%",
+      "confidence": 0.396
+    },
+    {
+      "term": "לחם לבן עם שמן זית ללא קשה",
+      "confidence": 0.386
+    },
+    {
+      "term": "העירית",
+      "confidence": 0.385
+    },
+    {
+      "term": "בשר עגל טחון טרי (מנתח שלם)",
+      "confidence": 0.379
+    },
+    {
+      "term": "גבינת בייבי בל",
+      "confidence": 0.378
+    },
+    {
+      "term": "האגיס פרידום דריי מידה 5",
+      "confidence": 0.378
+    },
+    {
+      "term": "לקט הכפר",
+      "confidence": 0.378
+    },
+    {
+      "term": "מחית תפוח עץ ובננה",
+      "confidence": 0.378
+    },
+    {
+      "term": "עגבניה",
+      "confidence": 0.378
+    },
+    {
+      "term": "מגבוני פנים לתינוק",
+      "confidence": 0.375
+    },
+    {
+      "term": "מטליות לחות לניקוי כללי",
+      "confidence": 0.375
+    },
+    {
+      "term": "הטימין",
+      "confidence": 0.374
+    },
+    {
+      "term": "קריספיות טבעי",
+      "confidence": 0.374
+    },
+    {
+      "term": "שטוחוני חלבון",
+      "confidence": 0.374
+    },
+    {
+      "term": "פתיתי פרמזן גבינה קשה23%",
+      "confidence": 0.372
+    },
+    {
+      "term": "צילי כתוש חריף",
+      "confidence": 0.372
+    },
+    {
+      "term": "קוסקוס דק",
+      "confidence": 0.372
+    },
+    {
+      "term": "קורגה לשיניים תותבות",
+      "confidence": 0.372
+    },
+    {
+      "term": "מלפפונים",
+      "confidence": 0.357
+    },
+    {
+      "term": "עגבניות",
+      "confidence": 0.357
+    },
+    {
+      "term": "קשואים",
+      "confidence": 0.357
+    },
+    {
+      "term": "נודלס דק",
+      "confidence": 0.357
+    },
+    {
+      "term": "חוט דנטלי מנטה",
+      "confidence": 0.339
+    },
+    {
+      "term": "חיתולים פרידום דריי שלב 4+",
+      "confidence": 0.339
+    },
+    {
+      "term": "שקיות אשפה לפחים בינוניים",
+      "confidence": 0.339
+    },
+    {
+      "term": "גבינת מוצרלה בסגנון איטלקי 22%",
+      "confidence": 0.337
+    },
+    {
+      "term": "תפוח אדמה אדום",
+      "confidence": 0.335
+    },
+    {
+      "term": "לחם זיתים",
+      "confidence": 0.334
+    },
+    {
+      "term": "לחם שיפון צרפתי",
+      "confidence": 0.334
+    },
+    {
+      "term": "נעם פרוסות גבינה חצי קשה קלאסית 28%",
+      "confidence": 0.334
+    },
+    {
+      "term": "סמוזי תפוח ללא תוספת סוכר אורגני",
+      "confidence": 0.334
+    },
+    {
+      "term": "סנו סושי - 6 מגבות הפלא",
+      "confidence": 0.334
+    },
+    {
+      "term": "ספגטי איטלקית מקמח סמולינה",
+      "confidence": 0.334
+    },
+    {
+      "term": "פסטה פנה ריגטה",
+      "confidence": 0.334
+    },
+    {
+      "term": "פתיתים אפויים טבעות",
+      "confidence": 0.334
+    },
+    {
+      "term": "צמרוני אוזניים",
+      "confidence": 0.334
+    },
+    {
+      "term": "שמן זית ישראלי מסיק חדש טבע גב",
+      "confidence": 0.334
+    },
+    {
+      "term": "סמוצי תפוח גזר דלעת אורגני",
+      "confidence": 0.325
+    },
+    {
+      "term": "קלמנטינה",
+      "confidence": 0.325
+    },
+    {
+      "term": "אקסלנס שוקולד מריר 85% קקאו",
+      "confidence": 0.319
+    },
+    {
+      "term": "גרעיני תירס מתוק",
+      "confidence": 0.319
+    },
+    {
+      "term": "דגני בוקר וופל קריספי",
+      "confidence": 0.319
+    },
+    {
+      "term": "לקט בסגנון אסייתי",
+      "confidence": 0.319
+    },
+    {
+      "term": "מגבות נייר בגליל מגה",
+      "confidence": 0.319
+    },
+    {
+      "term": "נייר טואלט בגוון פסטל",
+      "confidence": 0.319
+    },
+    {
+      "term": "סלט המושבה",
+      "confidence": 0.319
+    },
+    {
+      "term": "פילה לברק יפני קפוא",
+      "confidence": 0.319
+    },
+    {
+      "term": "פיתות כוסמין מלא",
+      "confidence": 0.319
+    },
+    {
+      "term": "ציפס אמריקאי",
+      "confidence": 0.319
+    },
+    {
+      "term": "קוביות עגבניות מקולפות במיץ",
+      "confidence": 0.319
+    },
+    {
+      "term": "אטמי אוזניים משעווה",
+      "confidence": 0.316
+    },
+    {
+      "term": "בירה גולדסטאר בקבוקים",
+      "confidence": 0.312
+    },
+    {
+      "term": "ביצי משק M",
+      "confidence": 0.311
+    },
+    {
+      "term": "גבינה לבנה 5%",
+      "confidence": 0.311
+    },
+    {
+      "term": "דבש טבעי לחיץ",
+      "confidence": 0.311
+    },
+    {
+      "term": "חיתול שחיה האגיס מידה S",
+      "confidence": 0.311
+    },
+    {
+      "term": "חלב מועשר 3% בבקבוק",
+      "confidence": 0.311
+    },
+    {
+      "term": "חמאה מהדרין",
+      "confidence": 0.311
+    },
+    {
+      "term": "טופו אורגני במרקם קשה",
+      "confidence": 0.311
+    },
+    {
+      "term": "לחמניות מתוקות בריוש",
+      "confidence": 0.311
+    },
+    {
+      "term": "לילי לח פיור מארז",
+      "confidence": 0.311
+    },
+    {
+      "term": "לקט ערוגות",
+      "confidence": 0.311
+    },
+    {
+      "term": "מארז אוכמניות",
+      "confidence": 0.311
+    },
+    {
+      "term": "מגבוני נייר טואלט לחים",
+      "confidence": 0.311
+    },
+    {
+      "term": "מגבונים לרך נולד",
+      "confidence": 0.311
+    },
+    {
+      "term": "מגבונים ניקוי לעור הפנים",
+      "confidence": 0.311
+    },
+    {
+      "term": "מטליות לחות לחיטוי",
+      "confidence": 0.311
+    },
+    {
+      "term": "מלפפון בחומץ קטן 13-17",
+      "confidence": 0.311
+    },
+    {
+      "term": "מעדן חלב גו בטעם שוקולד",
+      "confidence": 0.311
+    },
+    {
+      "term": "מעדן חלב שוקולד מועשר",
+      "confidence": 0.311
+    },
+    {
+      "term": "סלרי עלים חתוך",
+      "confidence": 0.311
+    },
+    {
+      "term": "פטוציני",
+      "confidence": 0.311
+    },
+    {
+      "term": "פסטה פרפלה",
+      "confidence": 0.311
+    },
+    {
+      "term": "קולורבי",
+      "confidence": 0.311
+    },
+    {
+      "term": "קיסם עם חוט מנטה גורדן",
+      "confidence": 0.311
+    },
+    {
+      "term": "רקנאטי קברנה סובניון",
+      "confidence": 0.311
+    },
+    {
+      "term": "שמן קנולה+נוגדי חימצון",
+      "confidence": 0.311
+    },
+    {
+      "term": "שקיות אשפה חזקות אקסטרה",
+      "confidence": 0.311
+    },
+    {
+      "term": "תפוח אדמה לבן",
+      "confidence": 0.311
+    },
+    {
+      "term": "גרבה מאטה מונטה",
+      "confidence": 0.278
+    },
+    {
+      "term": "דבש טהור",
+      "confidence": 0.278
+    },
+    {
+      "term": "נייר טואלט לח",
+      "confidence": 0.278
+    },
+    {
+      "term": "קפה נמס מיובש",
+      "confidence": 0.278
+    },
+    {
+      "term": "קורנביף במשקל",
+      "confidence": 0.277
+    },
+    {
+      "term": "קפה טסטר צויס",
+      "confidence": 0.268
+    },
+    {
+      "term": "פטריות בסלסלה",
+      "confidence": 0.249
+    },
+    {
+      "term": "דלעת",
+      "confidence": 0.248
+    },
+    {
+      "term": "טבעפרוסט ברוקולי",
+      "confidence": 0.248
+    },
+    {
+      "term": "לבבות קיסר",
+      "confidence": 0.248
+    },
+    {
+      "term": "אוכמניות טריות יחידה",
+      "confidence": 0.243
+    },
+    {
+      "term": "נתחי טונה בשמן",
+      "confidence": 0.243
+    },
+    {
+      "term": "מגבונים לחים 3 יחידות",
+      "confidence": 0.224
+    },
+    {
+      "term": "מיונז אמיתי",
+      "confidence": 0.224
+    },
+    {
+      "term": "מתבל עגבניות ללא תוספת סוכר ומלח",
+      "confidence": 0.224
+    },
+    {
+      "term": "נפוליאון גבינת שמנת פלפל חלפיניו 24%",
+      "confidence": 0.224
+    },
+    {
+      "term": "שעועית עדינה שלמה",
+      "confidence": 0.224
+    },
+    {
+      "term": "חטיף חלבון בטעם בוטנים קרמל",
+      "confidence": 0.224
+    },
+    {
+      "term": "יוגורט עם אורז תפוח מצופה שוקולד ואורז תפוח עם קקאו",
+      "confidence": 0.224
+    },
+    {
+      "term": "מלון",
+      "confidence": 0.224
+    },
+    {
+      "term": "קטשופ",
+      "confidence": 0.224
+    },
+    {
+      "term": "תרכיז עגבניות בשפורפרת",
+      "confidence": 0.224
+    },
+    {
+      "term": "אבטיח אישי",
+      "confidence": 0.223
+    },
+    {
+      "term": "טופו ויילר",
+      "confidence": 0.223
+    },
+    {
+      "term": "מלון גולדן סוויט",
+      "confidence": 0.223
+    },
+    {
+      "term": "ריקוטה בסגנון איטלקי5%",
+      "confidence": 0.223
+    },
+    {
+      "term": "4 סוללות GP AA",
+      "confidence": 0.219
+    },
+    {
+      "term": "מגבונים לחים",
+      "confidence": 0.219
+    },
+    {
+      "term": "מיני לחמניות בסגנון אמריקה",
+      "confidence": 0.219
+    },
+    {
+      "term": "קמיל בלו מגבונים לניקוי אף",
+      "confidence": 0.219
+    },
+    {
+      "term": "גבינת סימפוניה 5%זיתים",
+      "confidence": 0.208
+    },
+    {
+      "term": "זיתים ירוקים ללא גלעין",
+      "confidence": 0.208
+    },
+    {
+      "term": "חטיפי קרח גדולים",
+      "confidence": 0.208
+    },
+    {
+      "term": "לימון",
+      "confidence": 0.208
+    },
+    {
+      "term": "רוטב לפיצה אסם",
+      "confidence": 0.208
+    },
+    {
+      "term": "תרכיז עגבניות",
+      "confidence": 0.208
+    },
+    {
+      "term": "חטף תירס בטעם גבינה צהובה גמבו סטיקס",
+      "confidence": 0.206
+    },
+    {
+      "term": "נתחי פילה סלמון",
+      "confidence": 0.206
+    },
+    {
+      "term": "קיסמי שיניים משולבים בחוט דנטלי בטעם מנטה",
+      "confidence": 0.206
+    },
+    {
+      "term": "תחתיות ארטישוק",
+      "confidence": 0.206
+    },
+    {
+      "term": "תערובת תבלינים בנוסח יווני",
+      "confidence": 0.206
+    },
+    {
+      "term": "דובונים חטיף בטעם תפוחי אדמה",
+      "confidence": 0.196
+    },
+    {
+      "term": "חטיפטף מחית תפוח עץ ובננה",
+      "confidence": 0.196
+    },
+    {
+      "term": "סנו די קידס תחליב דוחה יתושים לילדים",
+      "confidence": 0.196
+    },
+    {
+      "term": "מארז עגבניות שרי לובלו",
+      "confidence": 0.194
+    },
+    {
+      "term": "שוקולד מריר לינדט 85%",
+      "confidence": 0.194
+    },
+    {
+      "term": "טחינה גולמית",
+      "confidence": 0.165
+    },
+    {
+      "term": "עלי טורטייה חיטה מלאה 20 סמ 8 יח",
+      "confidence": 0.165
+    },
+    {
+      "term": "דלורית",
+      "confidence": 0.162
+    },
+    {
+      "term": "12 פיתות ביס",
+      "confidence": 0.158
+    },
+    {
+      "term": "אגס אנגו",
+      "confidence": 0.158
+    },
+    {
+      "term": "אטריות ביצים פטוציני",
+      "confidence": 0.158
+    },
+    {
+      "term": "אטריות דקיקות",
+      "confidence": 0.158
+    },
+    {
+      "term": "איטריות דקות מאסטר שף",
+      "confidence": 0.158
+    },
+    {
+      "term": "אל סבון לילדים",
+      "confidence": 0.158
+    },
+    {
+      "term": "אל סבון קמיל בלו סנסיטיב",
+      "confidence": 0.158
+    },
+    {
+      "term": "אפונת גינה",
+      "confidence": 0.158
+    },
+    {
+      "term": "אקונומיקה מבושמת לימון",
+      "confidence": 0.158
+    },
+    {
+      "term": "בגט לבן",
+      "confidence": 0.158
+    },
+    {
+      "term": "בדין מרכך כביסה כחול",
+      "confidence": 0.158
+    },
+    {
+      "term": "בורקס גבינה )16 יח(",
+      "confidence": 0.158
+    },
+    {
+      "term": "בייבי בטטה",
+      "confidence": 0.158
+    },
+    {
+      "term": "בייגלה שטוחלה מלח",
+      "confidence": 0.158
+    },
+    {
+      "term": "ביצי משק L",
+      "confidence": 0.158
+    },
+    {
+      "term": "ביצי משק טריות L",
+      "confidence": 0.158
+    },
+    {
+      "term": "בירה באדוויזר לאגר פ",
+      "confidence": 0.158
+    },
+    {
+      "term": "בירה גולדסטאר כהה 6 יחידות",
+      "confidence": 0.158
+    },
+    {
+      "term": "בצק פריך מלוח מרודד",
+      "confidence": 0.158
+    },
+    {
+      "term": "ברוקולי ארוז",
+      "confidence": 0.158
+    },
+    {
+      "term": "ברנפלקס קרנצים",
+      "confidence": 0.158
+    },
+    {
+      "term": "גבינה בולגרית למריחה 5%",
+      "confidence": 0.158
+    },
+    {
+      "term": "גבינה גאודה 30% שומן",
+      "confidence": 0.158
+    },
+    {
+      "term": "גבינה לבנה 3%",
+      "confidence": 0.158
+    },
+    {
+      "term": "גבינה צהובה 22%",
+      "confidence": 0.158
+    },
+    {
+      "term": "גבינת עיזים למריחה 5%",
+      "confidence": 0.158
+    },
+    {
+      "term": "גבינת פרמזן מגורד",
+      "confidence": 0.158
+    },
+    {
+      "term": "גבינת שמנת טעם טבעי 30%",
+      "confidence": 0.158
+    },
+    {
+      "term": "גל אסלות אורנים",
+      "confidence": 0.158
+    },
+    {
+      "term": "גל כביסה בייבי",
+      "confidence": 0.158
+    },
+    {
+      "term": "גמדים לדרך תות בננה",
+      "confidence": 0.158
+    },
+    {
+      "term": "דלי פיה סופר",
+      "confidence": 0.158
+    },
+    {
+      "term": "דנונה פרו 20 גרם חלבון",
+      "confidence": 0.158
+    },
+    {
+      "term": "דפי לזניה",
+      "confidence": 0.158
+    },
+    {
+      "term": "זיתים שחורים טבעות",
+      "confidence": 0.158
+    },
+    {
+      "term": "חומץ בלסמי",
+      "confidence": 0.158
+    },
+    {
+      "term": "חומץ בלסמי ממודנה",
+      "confidence": 0.158
+    },
+    {
+      "term": "חטיף דגנים מצופה שוקולד מריר בנגיעות תפוז",
+      "confidence": 0.158
+    },
+    {
+      "term": "חטיף סלים דליס טופינג שוקולד לבן אוכמניות מארז",
+      "confidence": 0.158
+    },
+    {
+      "term": "חטיףWIN חלבון מוס עוגיות",
+      "confidence": 0.158
+    },
+    {
+      "term": "חטיפטף מחית תפוח עץ ואוכמניות",
+      "confidence": 0.158
+    },
+    {
+      "term": "חטיפי קבנוס",
+      "confidence": 0.158
+    },
+    {
+      "term": "חיתולים פרידום דריי שלב 4",
+      "confidence": 0.158
+    },
+    {
+      "term": "חלב 1% קרטון",
+      "confidence": 0.158
+    },
+    {
+      "term": "חלב 1% קרטון - בפיקוח",
+      "confidence": 0.158
+    },
+    {
+      "term": "חלב מועשר סידן+D קרטון3%",
+      "confidence": 0.158
+    },
+    {
+      "term": "חלב מפוסטר 1% בקרטון",
+      "confidence": 0.158
+    },
+    {
+      "term": "חלב עמיד הומוגני 3% שומן",
+      "confidence": 0.158
+    },
+    {
+      "term": "חלה קלועה",
+      "confidence": 0.158
+    },
+    {
+      "term": "חסה עגולה ארוזה",
+      "confidence": 0.158
+    },
+    {
+      "term": "חסה רומית שטופה",
+      "confidence": 0.158
+    },
+    {
+      "term": "חציל",
+      "confidence": 0.158
+    },
+    {
+      "term": "חרדל דיזון",
+      "confidence": 0.158
+    },
+    {
+      "term": "טבעפרוסט אפונה ירוקה",
+      "confidence": 0.158
+    },
+    {
+      "term": "טבעפרוסט שעועית ירוקה שלמה",
+      "confidence": 0.158
+    },
+    {
+      "term": "יוגורט גו מתיקות מעודנת",
+      "confidence": 0.158
+    },
+    {
+      "term": "יין דלתון כנען אדום",
+      "confidence": 0.158
+    },
+    {
+      "term": "יין מבעבע לבן יבש פרוסקו קאבוטה",
+      "confidence": 0.158
+    },
+    {
+      "term": "יין מרלו 2024",
+      "confidence": 0.158
+    },
+    {
+      "term": "יין עמק האלה",
+      "confidence": 0.158
+    },
+    {
+      "term": "כיף אל סבון קטיפתי+שמנים",
+      "confidence": 0.158
+    },
+    {
+      "term": "כרוב אדום",
+      "confidence": 0.158
+    },
+    {
+      "term": "כרוב כבוש",
+      "confidence": 0.158
+    },
+    {
+      "term": "לזניה",
+      "confidence": 0.158
+    },
+    {
+      "term": "לחם חיטה מלא אמריקן סנדוויץ",
+      "confidence": 0.158
+    },
+    {
+      "term": "לחמניה קלועה",
+      "confidence": 0.158
+    },
+    {
+      "term": "לחמניות נקניק",
+      "confidence": 0.158
+    },
+    {
+      "term": "לחמניות קלועות מתוקות",
+      "confidence": 0.158
+    },
+    {
+      "term": "לילי לח קידס מארז 4",
+      "confidence": 0.158
+    },
+    {
+      "term": "ליקר אפרול אפריטיבו",
+      "confidence": 0.158
+    },
+    {
+      "term": "מארז עגבניות שרי צהוב",
+      "confidence": 0.158
+    },
+    {
+      "term": "מגבוני אוטריבונים בייבי",
+      "confidence": 0.158
+    },
+    {
+      "term": "מגבונים לניקוי עפעפיים",
+      "confidence": 0.158
+    },
+    {
+      "term": "מגבות הפלא ארוך פי 3",
+      "confidence": 0.158
+    },
+    {
+      "term": "מגבות נייר סנו סושי",
+      "confidence": 0.158
+    },
+    {
+      "term": "מגבות נייר רב שימושית",
+      "confidence": 0.158
+    },
+    {
+      "term": "מה עז גבינה מחלב עיזים",
+      "confidence": 0.158
+    },
+    {
+      "term": "מוצרלה פרוסות 22%",
+      "confidence": 0.158
+    },
+    {
+      "term": "מחטא משטחים בניחוח ליים",
+      "confidence": 0.158
+    },
+    {
+      "term": "מחית אורגנית שזיפים",
+      "confidence": 0.158
+    },
+    {
+      "term": "מים מינרליים",
+      "confidence": 0.158
+    },
+    {
+      "term": "מלך החומוס סלט חומוס אבו מרוואן",
+      "confidence": 0.158
+    },
+    {
+      "term": "ממרח אגוזי לוז עם קקאו",
+      "confidence": 0.158
+    },
+    {
+      "term": "מקסימה גל כביסה מאסק",
+      "confidence": 0.158
+    },
+    {
+      "term": "מרק פטריות",
+      "confidence": 0.158
+    },
+    {
+      "term": "משחת שיניים אורביטול",
+      "confidence": 0.158
+    },
+    {
+      "term": "משטחי החתלה שופרסל",
+      "confidence": 0.158
+    },
+    {
+      "term": "משקה יוגורט גו בננה קרמל",
+      "confidence": 0.158
+    },
+    {
+      "term": "משקה פרו וניל יטבתה",
+      "confidence": 0.158
+    },
+    {
+      "term": "נוזל רצפות לבנדר",
+      "confidence": 0.158
+    },
+    {
+      "term": "נוזל שמשות",
+      "confidence": 0.158
+    },
+    {
+      "term": "נעם אמנטל פרוסות גבינה צהובה חצי קשה 30%",
+      "confidence": 0.158
+    },
+    {
+      "term": "סימילאק גולד שלב 3",
+      "confidence": 0.158
+    },
+    {
+      "term": "סנו בייבי 99% חיטוי",
+      "confidence": 0.158
+    },
+    {
+      "term": "סנו מסיר עובש",
+      "confidence": 0.158
+    },
+    {
+      "term": "ספריי סאיוס ווליום ליפט",
+      "confidence": 0.158
+    },
+    {
+      "term": "ספריי סאיוס מקס הולד",
+      "confidence": 0.158
+    },
+    {
+      "term": "עגבניות מגי",
+      "confidence": 0.158
+    },
+    {
+      "term": "עגבניות מגי ארוז",
+      "confidence": 0.158
+    },
+    {
+      "term": "עגבניות מקולפות",
+      "confidence": 0.158
+    },
+    {
+      "term": "עגבניות שרי צהוב",
+      "confidence": 0.158
+    },
+    {
+      "term": "עדשים ירוקות",
+      "confidence": 0.158
+    },
+    {
+      "term": "עוגיות חמאה פינגרס",
+      "confidence": 0.158
+    },
+    {
+      "term": "עלי פאק צוי",
+      "confidence": 0.158
+    },
+    {
+      "term": "עמק גבינה צהובה פרוסה 9%",
+      "confidence": 0.158
+    },
+    {
+      "term": "ענבים אדומים",
+      "confidence": 0.158
+    },
+    {
+      "term": "ענבים ירוקים ארלי סוויט",
+      "confidence": 0.158
+    },
+    {
+      "term": "פודינג בטעם וניל",
+      "confidence": 0.158
+    },
+    {
+      "term": "פטריות צמד שמפניון",
+      "confidence": 0.158
+    },
+    {
+      "term": "פיניש קוואנטום למדיח",
+      "confidence": 0.158
+    },
+    {
+      "term": "פלסטר ילדים",
+      "confidence": 0.158
+    },
+    {
+      "term": "פלפל כתום",
+      "confidence": 0.158
+    },
+    {
+      "term": "פלפל צילי",
+      "confidence": 0.158
+    },
+    {
+      "term": "פלפל צילי חריף [טרי",
+      "confidence": 0.158
+    },
+    {
+      "term": "פמפרס מכנסונים מידה 5",
+      "confidence": 0.158
+    },
+    {
+      "term": "פסטה פוסילי",
+      "confidence": 0.158
+    },
+    {
+      "term": "פסטה ריגטוני קצר",
+      "confidence": 0.158
+    },
+    {
+      "term": "פתיתי גבינה קשקבל 28%",
+      "confidence": 0.158
+    },
+    {
+      "term": "קבב מזרחי 600 גרם",
+      "confidence": 0.158
+    },
+    {
+      "term": "קוטג 12% שומן",
+      "confidence": 0.158
+    },
+    {
+      "term": "קוטג 3%",
+      "confidence": 0.158
+    },
+    {
+      "term": "קוקוס טחון",
+      "confidence": 0.158
+    },
+    {
+      "term": "קורנפלור",
+      "confidence": 0.158
+    },
+    {
+      "term": "קורנפלקס של אלופים בדץ",
+      "confidence": 0.158
+    },
+    {
+      "term": "קצף אקונומיקה בלאנקו",
+      "confidence": 0.158
+    },
+    {
+      "term": "קרוטונים אפויים לסלט בתיבול שום בצל ופטרוזיליה",
+      "confidence": 0.158
+    },
+    {
+      "term": "קרפלך במילוי בשר עוף בסגנון ביתי",
+      "confidence": 0.158
+    },
+    {
+      "term": "רוטב טבסקו הבנרו",
+      "confidence": 0.158
+    },
+    {
+      "term": "רוטב טבסקו סקורפיון",
+      "confidence": 0.158
+    },
+    {
+      "term": "רוטב עגבניות 22% מרוכז",
+      "confidence": 0.158
+    },
+    {
+      "term": "רוטב עגבניות דטריני פסטה",
+      "confidence": 0.158
+    },
+    {
+      "term": "רוטב פלפל הבנרו חריף",
+      "confidence": 0.158
+    },
+    {
+      "term": "ריקאסולי קיאנטי דל ברון",
+      "confidence": 0.158
+    },
+    {
+      "term": "שום יבוא מובחר",
+      "confidence": 0.158
+    },
+    {
+      "term": "שוקולד ספלנדיד מריר 85%",
+      "confidence": 0.158
+    },
+    {
+      "term": "שוקולית בקופסא",
+      "confidence": 0.158
+    },
+    {
+      "term": "שזיף מיובש ללא גלעין",
+      "confidence": 0.158
+    },
+    {
+      "term": "שמיר סגירה חוזרת",
+      "confidence": 0.158
+    },
+    {
+      "term": "שמנת לבישול 15%",
+      "confidence": 0.158
+    },
+    {
+      "term": "שמפו קידס ויטמינים",
+      "confidence": 0.158
+    },
+    {
+      "term": "שניצל כלי תחבורה",
+      "confidence": 0.158
+    },
+    {
+      "term": "שניצל מתובל",
+      "confidence": 0.158
+    },
+    {
+      "term": "שעועית לבנה מבושלת מוקפא",
+      "confidence": 0.158
+    },
+    {
+      "term": "שרימפס מבושל מקולף",
+      "confidence": 0.158
+    },
+    {
+      "term": "תבניות אלומיניום",
+      "confidence": 0.158
+    },
+    {
+      "term": "תמר מגהול סופר עסיסי",
+      "confidence": 0.158
+    },
+    {
+      "term": "תערובת תיבול לעוף",
+      "confidence": 0.158
+    },
+    {
+      "term": "תפוח עץ יונתן",
+      "confidence": 0.158
+    },
+    {
+      "term": "תרחיץ פנים לעור רגיש",
+      "confidence": 0.158
+    },
+    {
+      "term": "נפוליאון גבינת שמנת בטעם טבעי 25%",
+      "confidence": 0.155
+    },
+    {
+      "term": "חלב 3% קרטון - מחיר בפיקוח ממשלתי",
+      "confidence": 0.15
+    },
+    {
+      "term": "עוף טחון קפוא",
+      "confidence": 0.147
+    },
+    {
+      "term": "8 פיתות פרו עם חלבון",
+      "confidence": 0.144
+    },
+    {
+      "term": "אול איןחלבון סופט עוגיות",
+      "confidence": 0.144
+    },
+    {
+      "term": "דנונה פרו 20 רול קינמון",
+      "confidence": 0.144
+    },
+    {
+      "term": "חטיף חלבון אסטרה סופט",
+      "confidence": 0.144
+    },
+    {
+      "term": "טונה במי מלח",
+      "confidence": 0.144
+    },
+    {
+      "term": "יוגורט נטול לקטוז 3%שומן",
+      "confidence": 0.144
+    },
+    {
+      "term": "מי עדן ספורט פקק",
+      "confidence": 0.144
+    },
+    {
+      "term": "מלפפונים קורנישונים",
+      "confidence": 0.144
+    },
+    {
+      "term": "צלחות גדולות BASIC",
+      "confidence": 0.144
+    },
+    {
+      "term": "קרם לחות עם חומצה סיליצי",
+      "confidence": 0.144
+    },
+    {
+      "term": "רוטב טריאקי",
+      "confidence": 0.144
+    },
+    {
+      "term": "תחליב לחות ניאצינאמיד",
+      "confidence": 0.144
+    },
+    {
+      "term": "ביצים גדולות",
+      "confidence": 0.142
+    },
+    {
+      "term": "מלח ים מועשר ביוד",
+      "confidence": 0.138
+    },
+    {
+      "term": "סימפלי פרוט יוגורט אפרסק 3%",
+      "confidence": 0.138
+    },
+    {
+      "term": "סימפלי פרוט יוגורט פירות יער 3%",
+      "confidence": 0.138
+    },
+    {
+      "term": "פסטה ספגטיני Agnesi",
+      "confidence": 0.138
+    },
+    {
+      "term": "בזיליקום",
+      "confidence": 0.13
+    },
+    {
+      "term": "נתחי טונה בהירה בשמן",
+      "confidence": 0.13
+    },
+    {
+      "term": "יוגורט דנונה קראנצ פאפס",
+      "confidence": 0.129
+    },
+    {
+      "term": "גבינה צהובה גלבוע 22% - בפיקוח",
+      "confidence": 0.128
+    },
+    {
+      "term": "יוגורט עם תות 3%",
+      "confidence": 0.12
+    },
+    {
+      "term": "מגבונים לחים לתינוק לעור רגיש ללא בישום 4 יחידות",
+      "confidence": 0.12
+    },
+    {
+      "term": "ספוג ניקוי בצורת כלב",
+      "confidence": 0.12
+    },
+    {
+      "term": "עלי דפנה",
+      "confidence": 0.12
+    },
+    {
+      "term": "פסטה ניוקי Agnesi",
+      "confidence": 0.12
+    },
+    {
+      "term": "קפסולות קפה 07 עדין וקטיפתי למכונת נספרסו 10 יח",
+      "confidence": 0.12
+    },
+    {
+      "term": "קפסולות קפה חזק אש 10 יח",
+      "confidence": 0.12
+    },
+    {
+      "term": "מיונז לחיץ",
+      "confidence": 0.101
+    },
+    {
+      "term": "ממרח טונה",
+      "confidence": 0.098
+    },
+    {
+      "term": "פסטרמה הודו בדבש",
+      "confidence": 0.093
+    },
+    {
+      "term": "קוטג 5%",
+      "confidence": 0.093
+    },
+    {
+      "term": "רוטב פיצה",
+      "confidence": 0.093
+    },
+    {
+      "term": "יוגורט בסגנון יווני עם תות 6%",
+      "confidence": 0.091
+    },
+    {
+      "term": "שמפו וגל רחצה מנטה לגבר",
+      "confidence": 0.091
+    },
+    {
+      "term": "חצילים",
+      "confidence": 0.09
+    },
+    {
+      "term": "פיתה קריצה ארטיזן 8 יחידות",
+      "confidence": 0.089
+    },
+    {
+      "term": "טבעפרוסט שעועית ירוקה עדינה",
+      "confidence": 0.08
+    },
+    {
+      "term": "גזר ארוז",
+      "confidence": 0.08
+    },
+    {
+      "term": "נקניק קבנוס מיוחד",
+      "confidence": 0.075
+    },
+    {
+      "term": "שניצל אמיתי מעודן",
+      "confidence": 0.075
+    },
+    {
+      "term": "משקה טעם מנגו מרוכז קפוא",
+      "confidence": 0.065
+    },
+    {
+      "term": "סלט חומוס עשיר ב 40% טחינה גולמית",
+      "confidence": 0.065
+    },
+    {
+      "term": "יוגורט פרוביוטי 3%",
+      "confidence": 0.062
+    },
+    {
+      "term": "מקלוני כותנה",
+      "confidence": 0.062
+    },
+    {
+      "term": "סוללות AA",
+      "confidence": 0.062
+    },
+    {
+      "term": "פסטה ספגטי Agnesi",
+      "confidence": 0.062
+    },
+    {
+      "term": "שמן חמניות",
+      "confidence": 0.062
+    },
+    {
+      "term": "כתף בקר מפולפל",
+      "confidence": 0.057
+    },
+    {
+      "term": "אבטיח",
+      "confidence": 0.054
+    },
+    {
+      "term": "ביסלי ברביקיו",
+      "confidence": 0.054
+    },
+    {
+      "term": "ביסלי גריל",
+      "confidence": 0.054
+    },
+    {
+      "term": "בפלות שוקולד",
+      "confidence": 0.054
+    },
+    {
+      "term": "דובונים חטיף תפוחי אדמה",
+      "confidence": 0.054
+    },
+    {
+      "term": "דוריטוס חמוץ חריף",
+      "confidence": 0.054
+    },
+    {
+      "term": "זר יום הולדת לראש עם פרח",
+      "confidence": 0.054
+    },
+    {
+      "term": "חטיף במבה",
+      "confidence": 0.054
+    },
+    {
+      "term": "חטיפי קרח",
+      "confidence": 0.054
+    },
+    {
+      "term": "יין לבן יבש",
+      "confidence": 0.054
+    },
+    {
+      "term": "יין רוזה חצי יבש 2025",
+      "confidence": 0.054
+    },
+    {
+      "term": "מטבעות שוקולד חלב",
+      "confidence": 0.054
+    },
+    {
+      "term": "מים מינרליים נביעות",
+      "confidence": 0.054
+    },
+    {
+      "term": "מלפפונים קטנים בחומץ",
+      "confidence": 0.054
+    },
+    {
+      "term": "מרשמלו מסולסל",
+      "confidence": 0.054
+    },
+    {
+      "term": "קישקשים בקופסא",
+      "confidence": 0.054
+    },
+    {
+      "term": "תפוזינה ענבים",
+      "confidence": 0.054
+    },
+    {
+      "term": "תפוזינה תפוז",
+      "confidence": 0.054
+    },
+    {
+      "term": "שמן זית כתית מעולה קלאסי",
+      "confidence": 0.049
+    },
+    {
+      "term": "בייבי אדם הולנד",
+      "confidence": 0.047
+    },
+    {
+      "term": "חלב מרוכז מלא עם סוכר",
+      "confidence": 0.047
+    },
+    {
+      "term": "חליטה גרבה מטה",
+      "confidence": 0.047
+    },
+    {
+      "term": "ממרח לימון כבוש",
+      "confidence": 0.047
+    },
+    {
+      "term": "נוזל לניקוי כלים קלאסי",
+      "confidence": 0.047
+    },
+    {
+      "term": "סנומט דוחה יתושים נוזלי",
+      "confidence": 0.047
+    },
+    {
+      "term": "פסטה אליקה צבעוני Agnesi",
+      "confidence": 0.047
+    },
+    {
+      "term": "רביעיית סוללת אלקליי",
+      "confidence": 0.047
+    },
+    {
+      "term": "tinycare מגבונים לתי",
+      "confidence": 0.041
+    },
+    {
+      "term": "מנגו",
+      "confidence": 0.037
+    },
+    {
+      "term": "טבעפרוסט כרובית",
+      "confidence": 0.037
+    },
+    {
+      "term": "מסטיק בטעם מנטה ואקליפטוס",
+      "confidence": 0.037
+    },
+    {
+      "term": "קידס מגבונים הגיינים",
+      "confidence": 0.037
+    },
+    {
+      "term": "שמנת חמוצה אורגינל 15% - מחיר בפיקוח ממשלתי",
+      "confidence": 0.037
+    },
+    {
+      "term": "רביעיית סוללות AA דורסל אופטימום",
+      "confidence": 0.035
+    },
+    {
+      "term": "אקונומיקה ריחנית",
+      "confidence": 0.035
+    },
+    {
+      "term": "סימפוניה גבינה במרקם שמנת בצל מקורמל 5%",
+      "confidence": 0.035
+    },
+    {
+      "term": "שניצל דק דק פריך",
+      "confidence": 0.035
+    },
+    {
+      "term": "עגבניות שרי תמר לב",
+      "confidence": 0.034
+    },
+    {
+      "term": "גו במרקם סמיך בטעם בננה קרמל 0%",
+      "confidence": 0.033
+    },
+    {
+      "term": "גו במרקם סמיך עם אפרסק 0%",
+      "confidence": 0.033
+    },
+    {
+      "term": "ספריי קרטין לשיער",
+      "confidence": 0.033
+    },
+    {
+      "term": "פסטה פפרדלה",
+      "confidence": 0.033
+    },
+    {
+      "term": "פסטה קלמרטה",
+      "confidence": 0.033
+    },
+    {
+      "term": "חסה לאליק טרה מיה",
+      "confidence": 0.032
+    },
+    {
+      "term": "משחת שיניים לילדים",
+      "confidence": 0.032
+    },
+    {
+      "term": "מברשת שיניים לילדים מיניונים לגילאי 6+",
+      "confidence": 0.031
+    },
+    {
+      "term": "פילה סלמון קפוא",
+      "confidence": 0.031
+    },
+    {
+      "term": "שייק חלבון בטעם וניל",
+      "confidence": 0.031
+    },
+    {
+      "term": "יוגורט נטול לקטוז 3%",
+      "confidence": 0.029
+    },
+    {
+      "term": "שפתון לחות מטפח עם מקדם הגנה",
+      "confidence": 0.028
+    },
+    {
+      "term": "חסה לבבות קיסר",
+      "confidence": 0.027
+    },
+    {
+      "term": "עגבניות חתוכות דק",
+      "confidence": 0.027
+    },
+    {
+      "term": "ענבים ירוקים",
+      "confidence": 0.027
+    },
+    {
+      "term": "פתיתים אפויים קוסקוס",
+      "confidence": 0.027
+    },
+    {
+      "term": "ביוטיק",
+      "confidence": 0.027
+    },
+    {
+      "term": "גו יוגורט בטעם טבעי נטול לקטוז",
+      "confidence": 0.027
+    },
+    {
+      "term": "כוסברה ארוז",
+      "confidence": 0.027
+    },
+    {
+      "term": "סלמון נורווגי ללא עור",
+      "confidence": 0.027
+    },
+    {
+      "term": "סלרי ראש",
+      "confidence": 0.027
+    },
+    {
+      "term": "עלי דפנה מיובשים",
+      "confidence": 0.027
+    },
+    {
+      "term": "פרימיום רוסטביף",
+      "confidence": 0.027
+    },
+    {
+      "term": "גבינה צהובה עמק לייט 15%",
+      "confidence": 0.026
+    },
+    {
+      "term": "ביצי רמות השבים 12 M",
+      "confidence": 0.022
+    },
+    {
+      "term": "כתף בקר מפולפל פרימיום",
+      "confidence": 0.022
+    },
+    {
+      "term": "פטה מעודנת עיזים 5%",
+      "confidence": 0.019
+    },
+    {
+      "term": "קרם קוקוס",
+      "confidence": 0.019
+    },
+    {
+      "term": "דקניקים, סלסולי פסטרמה בדבש 120 גרם",
+      "confidence": 0.018
+    },
+    {
+      "term": "חלב טרי 3% 1 ל מחלבת הגולן",
+      "confidence": 0.018
+    },
+    {
+      "term": "שמיניית סוללות AAA דורסל סימפלי",
+      "confidence": 0.018
+    },
+    {
+      "term": "דנונה קראנצ עם קורנפלקס מצופה שוקולד חלב ושוקולד לבן",
+      "confidence": 0.016
+    },
+    {
+      "term": "טונה בשמן זית",
+      "confidence": 0.016
+    },
+    {
+      "term": "ביצי אומגה 3 M",
+      "confidence": 0.013
+    },
+    {
+      "term": "חומוס אבו גוש",
+      "confidence": 0.013
+    },
+    {
+      "term": "חמאה ללא תוספת מלח",
+      "confidence": 0.013
+    },
+    {
+      "term": "מסטיק איירוויבז מנטה",
+      "confidence": 0.013
+    },
+    {
+      "term": "נועם גבינה צהובה 9% חריץ",
+      "confidence": 0.013
+    },
+    {
+      "term": "קפה נמס טסטרס צויס",
+      "confidence": 0.013
+    },
+    {
+      "term": "דקניקים, סלסולי פסטרמה הודו גחלים דל שומן 120 גר",
+      "confidence": 0.013
+    },
+    {
+      "term": "סילאן תמרים בקבוק לחיץ 650 גרם n",
+      "confidence": 0.013
+    },
+    {
+      "term": "שמנת לבישול 15%, יטבתה",
+      "confidence": 0.013
+    },
+    {
+      "term": "חמאה",
+      "confidence": 0.006
+    },
+    {
+      "term": "חומץ 5%",
+      "confidence": 0.004
+    },
+    {
+      "term": "סלק",
+      "confidence": 0.002
+    },
+    {
+      "term": "אקסטרה סופט חטיף גבינה פטל",
+      "confidence": 0.002
+    },
+    {
+      "term": "כוסברה ארוזה",
+      "confidence": 0.002
+    },
+    {
+      "term": "לחם דגנים מלא",
+      "confidence": 0.002
+    },
+    {
+      "term": "נקטרינה",
+      "confidence": 0.002
+    },
+    {
+      "term": "בצל ירוק",
+      "confidence": 0.001
+    },
+    {
+      "term": "לחם ברמן אקטיב",
+      "confidence": 0.001
+    },
+    {
+      "term": "מיץ לימון",
+      "confidence": 0.001
+    },
+    {
+      "term": "נענע",
+      "confidence": 0.001
+    },
+    {
+      "term": "רימון",
+      "confidence": 0.001
+    },
+    {
+      "term": "MUTTI תרכיז עגבניות Doppio Concentrato בשפופרת 185 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "MUTTI, עגבניות חתוכות מקולפות במיץ, 690 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "אגנסי פסטה פנה ריגטה 500 גרם כשר",
+      "confidence": 0.0
+    },
+    {
+      "term": "אולאין חטיף חלבון אקסטרה סופט בטעם עוגת גבינה פטל 55 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "אולאין חטיף חלבון בטעם ונילה קראנץ 60 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "אורז בסמטי 1 DAAWAT קג",
+      "confidence": 0.0
+    },
+    {
+      "term": "אפונה ירוקה טבעפרוסט 800 גר",
+      "confidence": 0.0
+    },
+    {
+      "term": "בזיליקום טרי",
+      "confidence": 0.0
+    },
+    {
+      "term": "בטטה מובחרת",
+      "confidence": 0.0
+    },
+    {
+      "term": "בייגלה שטוחים עם מלח",
+      "confidence": 0.0
+    },
+    {
+      "term": "בייקון",
+      "confidence": 0.0
+    },
+    {
+      "term": "ביצי משק טריות M",
+      "confidence": 0.0
+    },
+    {
+      "term": "ביצי רמות השבים 12 L",
+      "confidence": 0.0
+    },
+    {
+      "term": "בית השיטה טבעות זיתים ירק.א2 12*280ג חדש",
+      "confidence": 0.0
+    },
+    {
+      "term": "בית השיטהnחרוזית ענק n275 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "במבה מארז",
+      "confidence": 0.0
+    },
+    {
+      "term": "בצל",
+      "confidence": 0.0
+    },
+    {
+      "term": "בצל פנינה",
+      "confidence": 0.0
+    },
+    {
+      "term": "בצק פריך מלוח 900 גר מעדנות",
+      "confidence": 0.0
+    },
+    {
+      "term": "בשר בקר לתבשיל",
+      "confidence": 0.0
+    },
+    {
+      "term": "בשר טחון",
+      "confidence": 0.0
+    },
+    {
+      "term": "גבינה בולגרית",
+      "confidence": 0.0
+    },
+    {
+      "term": "גבינה בולגרית 16% שומן",
+      "confidence": 0.0
+    },
+    {
+      "term": "גבינה צהובה",
+      "confidence": 0.0
+    },
+    {
+      "term": "גבינה צהובה מגוררת",
+      "confidence": 0.0
+    },
+    {
+      "term": "גבינה צהובה קלאסית28%נעם",
+      "confidence": 0.0
+    },
+    {
+      "term": "גבינת בייבי בל 100 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "גבינת שמנת נפוליאון עם זיתים 23% 225 ג",
+      "confidence": 0.0
+    },
+    {
+      "term": "גל גילוח עם פחם גילט 200 מל",
+      "confidence": 0.0
+    },
+    {
+      "term": "גל כביסה אוקיאנוס",
+      "confidence": 0.0
+    },
+    {
+      "term": "גרנולה פירות 500 גרם שקדיה",
+      "confidence": 0.0
+    },
+    {
+      "term": "דאודורנט קליר גל פאוואר",
+      "confidence": 0.0
+    },
+    {
+      "term": "דבש טהור יד מרדכי מפרחי בר בבקבוק לחיץ 400 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "דנונה דל לקטוז בתוספת סידן",
+      "confidence": 0.0
+    },
+    {
+      "term": "דנונה פרו 25 גרם חלבון",
+      "confidence": 0.0
+    },
+    {
+      "term": "דנונה קראנצ עם כדורי דגנים מצופים שוקולד",
+      "confidence": 0.0
+    },
+    {
+      "term": "האגיס מגבונים לחים לתינוק ללא בישום מארז 4*56",
+      "confidence": 0.0
+    },
+    {
+      "term": "האגיס פרידום דריי PANTS מידה 5 34 יח",
+      "confidence": 0.0
+    },
+    {
+      "term": "האגיס פרידום דריי פנטס תחתוני חיתולים מידה 5, 12-17 קג, 32 יחידות",
+      "confidence": 0.0
+    },
+    {
+      "term": "הסקוטית יין אדום סילק אנד ספייס 750 מל",
+      "confidence": 0.0
+    },
+    {
+      "term": "חומוס הסדרה עשיר ב50% טחינה גולמית",
+      "confidence": 0.0
+    },
+    {
+      "term": "חומץ 5% 1ל יכין",
+      "confidence": 0.0
+    },
+    {
+      "term": "חטיף במבה מארז",
+      "confidence": 0.0
+    },
+    {
+      "term": "חלב 3% קרטון מהדרין",
+      "confidence": 0.0
+    },
+    {
+      "term": "חמאה 200 גרם מהדרין",
+      "confidence": 0.0
+    },
+    {
+      "term": "חמישיית מאפין דבש גידרון",
+      "confidence": 0.0
+    },
+    {
+      "term": "טבסקו סרירצה רוטב צילי חריף",
+      "confidence": 0.0
+    },
+    {
+      "term": "טבעפרוסט ברוקולי 800 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "טבעפרוסט שעועית ירוקה עדינה 800 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "טבעפרוסט תרד",
+      "confidence": 0.0
+    },
+    {
+      "term": "טבעפרוסט תרד 800 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "טונה סטארקיסט בשמן רביעיות 160 גרם ליח",
+      "confidence": 0.0
+    },
+    {
+      "term": "טורטייה 450 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "טימין טרי",
+      "confidence": 0.0
+    },
+    {
+      "term": "יוגורט נטול לקטוז 3% שומן 180 גרם מחלבות רמת הגולן",
+      "confidence": 0.0
+    },
+    {
+      "term": "יוגורט פרו עם שוקולד",
+      "confidence": 0.0
+    },
+    {
+      "term": "יוגורט קראנצ פצפוצים",
+      "confidence": 0.0
+    },
+    {
+      "term": "יין אדום יבש",
+      "confidence": 0.0
+    },
+    {
+      "term": "יין מבעבע לבן יבש פרוסקו קאבוטה 750 מל",
+      "confidence": 0.0
+    },
+    {
+      "term": "יין סילק אנד ספייס רוז 750 מל",
+      "confidence": 0.0
+    },
+    {
+      "term": "כוסברה",
+      "confidence": 0.0
+    },
+    {
+      "term": "כנען גבינה לבנה דלת נתרן 5% שומן",
+      "confidence": 0.0
+    },
+    {
+      "term": "כרובית טבעפרוסט 800 גר",
+      "confidence": 0.0
+    },
+    {
+      "term": "כתף בקר מפולפל 120 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "לזניה ברילה",
+      "confidence": 0.0
+    },
+    {
+      "term": "לזניה גרפולו 500 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "לחם עננים בסגנון בריוש",
+      "confidence": 0.0
+    },
+    {
+      "term": "לחמניות לסנדביץ",
+      "confidence": 0.0
+    },
+    {
+      "term": "לקט בסגנון אסייתי טבעפרוסט 800 גר",
+      "confidence": 0.0
+    },
+    {
+      "term": "לקט הגינה שטוף לאכילה",
+      "confidence": 0.0
+    },
+    {
+      "term": "לקט השדה 300 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "מארז מלפפון בייבי",
+      "confidence": 0.0
+    },
+    {
+      "term": "מארז עגבניות שרי תמר",
+      "confidence": 0.0
+    },
+    {
+      "term": "מגבוני טואלט",
+      "confidence": 0.0
+    },
+    {
+      "term": "מגבונים האגיס אלוורה",
+      "confidence": 0.0
+    },
+    {
+      "term": "מחית עגבניות קלה+בזיליק.",
+      "confidence": 0.0
+    },
+    {
+      "term": "מיונז אמיתי לחיץ 500 מל",
+      "confidence": 0.0
+    },
+    {
+      "term": "מלח ים דק",
+      "confidence": 0.0
+    },
+    {
+      "term": "מלפפון בייבי",
+      "confidence": 0.0
+    },
+    {
+      "term": "מלפפון קורנישון 530 גרם BF",
+      "confidence": 0.0
+    },
+    {
+      "term": "ממרח אגוזי לוז עם קקאו נוטלה",
+      "confidence": 0.0
+    },
+    {
+      "term": "מעדנים",
+      "confidence": 0.0
+    },
+    {
+      "term": "מקלות גבינה",
+      "confidence": 0.0
+    },
+    {
+      "term": "מרק בקר",
+      "confidence": 0.0
+    },
+    {
+      "term": "מש.שיניים טוטאל אורגינ75",
+      "confidence": 0.0
+    },
+    {
+      "term": "משח.שיניים טוטאל אורגינל",
+      "confidence": 0.0
+    },
+    {
+      "term": "נטורה נובה - סמוזי תפוח גזר דלעת אורגניים 100 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "נייר אפיה אקולוגי",
+      "confidence": 0.0
+    },
+    {
+      "term": "נייר טואלט דו שכבתי XPO",
+      "confidence": 0.0
+    },
+    {
+      "term": "נסקפה טייסטרס צויס אוריגינל 100 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "סאיוס ספריי קרטין 400 מל",
+      "confidence": 0.0
+    },
+    {
+      "term": "סבון כלים",
+      "confidence": 0.0
+    },
+    {
+      "term": "סוכר",
+      "confidence": 0.0
+    },
+    {
+      "term": "סוכר חום",
+      "confidence": 0.0
+    },
+    {
+      "term": "סימפוניה זיתים 5% במרקם שמנת",
+      "confidence": 0.0
+    },
+    {
+      "term": "סירופ דיאט לימונענע750מל",
+      "confidence": 0.0
+    },
+    {
+      "term": "סנו סושי - מטליות לחות לניקוי כללי שלישיה. אנטיבקטריאלי. משמיד עד 99% מהחיידקים",
+      "confidence": 0.0
+    },
+    {
+      "term": "עגבניות חתוכות",
+      "confidence": 0.0
+    },
+    {
+      "term": "עגבניות מרוסקות משומרות",
+      "confidence": 0.0
+    },
+    {
+      "term": "עגבניות שרי שוקו קופסא פרימיום",
+      "confidence": 0.0
+    },
+    {
+      "term": "פטרוזיליה ארוז",
+      "confidence": 0.0
+    },
+    {
+      "term": "פטרוזיליה סגירה חוזרת",
+      "confidence": 0.0
+    },
+    {
+      "term": "פטריות שמפיניון",
+      "confidence": 0.0
+    },
+    {
+      "term": "פילה סלמון נורבגי פרימיום קפוא משקל מוערך 1.5-2 קג",
+      "confidence": 0.0
+    },
+    {
+      "term": "פיניש קוואנטום לימון",
+      "confidence": 0.0
+    },
+    {
+      "term": "פיצה איטלקית דקה 320 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "פיצה מרגריטה עם זיתים",
+      "confidence": 0.0
+    },
+    {
+      "term": "פלאקרס פלוסר חוט דנטלי ירוק -מנטה",
+      "confidence": 0.0
+    },
+    {
+      "term": "פלפלון סוויט בייט",
+      "confidence": 0.0
+    },
+    {
+      "term": "פסטה רומו לינגוינה",
+      "confidence": 0.0
+    },
+    {
+      "term": "פריגת מיץ מנגו קפוא 350 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "פריגת מנגו מרוכז קפוא",
+      "confidence": 0.0
+    },
+    {
+      "term": "פרמזן מגורד",
+      "confidence": 0.0
+    },
+    {
+      "term": "פרמזן מגורר",
+      "confidence": 0.0
+    },
+    {
+      "term": "פתיתי עמק 28%",
+      "confidence": 0.0
+    },
+    {
+      "term": "פתיתים ללא גלוטן350 אסם",
+      "confidence": 0.0
+    },
+    {
+      "term": "קבנוס נקניק מעושן יבש 160 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "קוביות מנגו מוקפאות 300",
+      "confidence": 0.0
+    },
+    {
+      "term": "קוביות סלק מבושל בואקום",
+      "confidence": 0.0
+    },
+    {
+      "term": "קוטג",
+      "confidence": 0.0
+    },
+    {
+      "term": "קוטג 5% מהדרין",
+      "confidence": 0.0
+    },
+    {
+      "term": "קוטג 9% מהדרין",
+      "confidence": 0.0
+    },
+    {
+      "term": "קורנישונים מלפפונים בטעם חמוץ מתוק 530 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "קטשופ קלאסי",
+      "confidence": 0.0
+    },
+    {
+      "term": "קינואה",
+      "confidence": 0.0
+    },
+    {
+      "term": "קינמון",
+      "confidence": 0.0
+    },
+    {
+      "term": "קיסמי שיניים",
+      "confidence": 0.0
+    },
+    {
+      "term": "קמח לבן",
+      "confidence": 0.0
+    },
+    {
+      "term": "קמיל בלו סנסיטיב מגבונים לפנים 60 יח",
+      "confidence": 0.0
+    },
+    {
+      "term": "רוטב סויה יאמסה פרימיום 500 מל",
+      "confidence": 0.0
+    },
+    {
+      "term": "רוטב קיקומן סויה ללא תוספת חומרים משמרים 444 מל",
+      "confidence": 0.0
+    },
+    {
+      "term": "ריו מרה ממרח טונה 100גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "רסק עגבניות",
+      "confidence": 0.0
+    },
+    {
+      "term": "שום",
+      "confidence": 0.0
+    },
+    {
+      "term": "שוק.אקסלנס אורנג100%קקאו",
+      "confidence": 0.0
+    },
+    {
+      "term": "שוקולית עלית אבקת שוקו גביע 500 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "שוקחה שמן חמניות מזוכך 3 ליטר",
+      "confidence": 0.0
+    },
+    {
+      "term": "שלישיית עגבניות מרוסקות 400 גרם MUTTI",
+      "confidence": 0.0
+    },
+    {
+      "term": "שמינית סוללות AA",
+      "confidence": 0.0
+    },
+    {
+      "term": "שמן עץ התה 10 מל",
+      "confidence": 0.0
+    },
+    {
+      "term": "שמן תפוז 10 מל",
+      "confidence": 0.0
+    },
+    {
+      "term": "שמנת לבישול 9%, יטבתה",
+      "confidence": 0.0
+    },
+    {
+      "term": "שמנת מתוקה",
+      "confidence": 0.0
+    },
+    {
+      "term": "שניצל בציפוי מעודן",
+      "confidence": 0.0
+    },
+    {
+      "term": "שעועית ירוקה עדינה טבעפרוסט 800 גר",
+      "confidence": 0.0
+    },
+    {
+      "term": "שעועית ירוקה רחבה קפואה בונדואל 600 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "שעועית ירוקה שלמה טבעפרוסט 800 גר",
+      "confidence": 0.0
+    },
+    {
+      "term": "שעועית עדינה קפואה בונדואל 600 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "שעועית קפואה",
+      "confidence": 0.0
+    },
+    {
+      "term": "שקיות אשפה",
+      "confidence": 0.0
+    },
+    {
+      "term": "שקיות מזון M זיפר",
+      "confidence": 0.0
+    },
+    {
+      "term": "תבליני מימון עלי דפנה שקית 20 גרם",
+      "confidence": 0.0
+    },
+    {
+      "term": "תירוש מיץ ענבים אדום750מ",
+      "confidence": 0.0
+    },
+    {
+      "term": "תמר מגהול ישראלי",
+      "confidence": 0.0
+    },
+    {
+      "term": "תמר מגהול מעולה",
+      "confidence": 0.0
+    },
+    {
+      "term": "תפוחי עץ",
+      "confidence": 0.0
+    }
+  ],
+  "config": {
+    "high_confidence": 0.75,
+    "medium_confidence": 0.45,
+    "exception_margin": 0.15,
+    "recent_factor": 0.5,
+    "due_factor": 1.0,
+    "overdue_factor": 1.6,
+    "lapsed_factor": 3.0,
+    "lapsed_confidence": 0.35,
+    "min_cadence_observations": 3,
+    "cadence_trust_measured": 0.85,
+    "cadence_trust_share_estimate": 0.45,
+    "cadence_trust_household_fallback": 0.25,
+    "tier_base_confidence_a": 0.55,
+    "tier_base_confidence_b": 0.4,
+    "tier_base_confidence_c": 0.28,
+    "explicit_need_confidence": 0.95,
+    "standing_list_confidence": 0.6,
+    "meal_ingredient_confidence": 0.7,
+    "meal_ingredient_likely_have_confidence": 0.35,
+    "meal_lookahead_days": 7,
+    "waste_quantity_factor": 0.6,
+    "waste_confidence_penalty": 0.15,
+    "waste_quantity_confidence_penalty": 0.3,
+    "stockup_min_discount": 0.25,
+    "stockup_min_saving": 3.0,
+    "stockup_quantity": 2,
+    "stockup_confidence": 0.5,
+    "promotion_trust_readable": 0.8,
+    "promotion_trust_conditional": 0.4,
+    "readiness_prepare_now": 0.6,
+    "readiness_prepare_soon": 0.35,
+    "readiness_weight_essentials": 0.35,
+    "readiness_weight_explicit": 0.25,
+    "readiness_weight_cadence": 0.25,
+    "readiness_weight_meals": 0.1,
+    "readiness_weight_savings": 0.05,
+    "readiness_explicit_saturation": 6,
+    "readiness_essentials_saturation": 8,
+    "readiness_savings_saturation": 3,
+    "min_basket_for_cycle": 5,
+    "readiness_confidence_cap_cart_unknown": 0.75
+  }
+}

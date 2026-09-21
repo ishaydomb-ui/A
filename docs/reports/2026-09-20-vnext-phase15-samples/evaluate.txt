@@ -1,0 +1,53 @@
+vNext evaluate — as of 2026-09-20 (shadow mode, mutates_cart=False, cart_state=unknown)
+  total_candidate_needs: 720
+  plan_items: 53
+  auto_includes: 10
+  suggestions: 43
+  quiet_suggestions: 42
+  true_user_decisions: 1
+  agent_resolvable: 52
+  product_resolver: {'exact_match': 51, 'acceptable_match': 2}
+  old_pending_requests: {'active': 4, 'likely_fulfilled': 7, 'uncertain': 3}
+  semantic_constraint_violations_detected: 442
+  stock_up_candidates: 2
+  low_trust_cadence_excluded_from_auto_include: 14
+  cadence_strata_among_auto_includes: {'household_fallback': 4, 'measured': 6}
+  readiness: {'score': 0.525, 'action': 'prepare_soon', 'confidence': 0.75}
+  decisions:
+    - לחם חיטה מלא דגנית עין בר: requested brand not found; closest is לחם חיטה מלא — a different brand is the household's call
+  old requests:
+    - #114 חלב עמיד: likely_fulfilled ← חלב עמיד 3% 1 ליטר (2026-09-17, exact_match)
+    - #116 דפי אורז: likely_fulfilled ← מזרח ומערב דפי אורז 400 גרם (2026-09-17, exact_match)
+    - #121 שמן זית: active
+    - #122 מלח: active
+    - #123 גרנולה ללא תוספת סוכר: active
+    - #124 עגבניות שרי במגוון צבעים: uncertain ← עגבניות שרי (2026-09-17, acceptable_match)
+    - #125 פלפלים בכמה צבעים: uncertain ← פלפל אדום (2026-09-17, unresolved)
+    - #126 סלק (לא באריזת ואקום): likely_fulfilled ← סלק (2026-09-17, exact_match)
+    - #127 לחם חיטה מלא דגנית עין בר: uncertain ← לחם דגנים מלא (2026-09-17, acceptable_match)
+    - #128 שזיפים: likely_fulfilled ← שזיף סנטה רוזה (2026-09-17, exact_match)
+    - #130 גזר: likely_fulfilled ← גזר ארוז (2026-09-17, exact_match)
+    - #131 סילאן: active
+    - #132 יוגורט Pro וניל: likely_fulfilled ← מולר פרוטאין יוגורט בטעם וניל 25 גרם חלבון 0% שומן 200 גרם (2026-09-17, exact_match)
+    - #134 מלפפונים מיני: likely_fulfilled ← מלפפון בייבי ארוז (2026-09-17, exact_match)
+  price sources: {"shufersal": {"source": "price_history (daily snapshot of the transparency feed)", "from": "2026-08-30", "to": "2026-09-20", "days_recorded": 22, "items": 6059}, "tivtaam": {"source": "store_prices (portal feed snapshots + order prices)", "from": "2020-03-30", "to": "2026-09-20", "days_recorded": 53, "items": 25384, "days_in_last_30": 14}}
+
+--- Telegram mock (not sent) ---
+בקרוב כדאי להכין קנייה
+6 דברים כנראה עומדים להיגמר
+7 בקשות פתוחות
+מצאתי 2 הזדמנויות חיסכון טובות
+
+הקנייה מוכנה
+10 פריטים
+6 צריכה שוטפת
+4 בקשות
+
+צריך ממך החלטה אחת בלבד
+
+• לחם חיטה מלא דגנית עין בר — המותג לא נמצא — לקחת לחם חיטה מלא?
+
+7 בקשות ישנות כנראה כבר נקנו
+52 מוצרים בחרתי לפי ההיסטוריה — אפשר לתקן
+
+(add --json for the machine-readable result)
