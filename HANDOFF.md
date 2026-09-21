@@ -6,7 +6,7 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-20 (host time, CEST) — vNext Phase 1 shadow layer built, not wired (§2j, awaiting approval); Tiv Taam Work pilot ended (§2h); uneventful "cart ready" pings muted (§2i)
+**Last anchored:** 2026-09-21 05:50 CEST — vNext Phase 1.5 done (shadow, 41→1 decisions, §2j); list watcher fully silent (§2i); OPEN: second poller on Gordon's Telegram token since 09-19 (§2j end)
 **Session:** https://claude.ai/code/session_01AR7esAYdoXQ71HXtqJPpQV
 **Branch:** `claude/gordon-work-mvp-cartpause`
 **Status is in `git log`, not hand-typed here.**
@@ -673,6 +673,39 @@ deliverables in
 - **Do not wire into Telegram or carts without Ishay's explicit Phase 2
   approval** (his instruction, verbatim: "Do not proceed to Phase 2 or wire
   vNext into production without approval").
+
+**Phase 1.5 (trust/semantics/exception reduction) — DONE 2026-09-21,
+commits `4dc6902`..`3be91e7`, still shadow-only.** Report:
+[`docs/reports/2026-09-20-vnext-phase15.md`](docs/reports/2026-09-20-vnext-phase15.md).
+New: `vnext_semantics.py` (parsed terms, ~400-keyword Hebrew category
+lexicon independent of `department`, qualifier violations),
+`vnext_resolver.py` (exact/acceptable/unresolved/rejected_by_constraints
+with provenance), `vnext_reconcile.py` (pending requests vs later real
+order lines), `vnext_economics.py` (stock-up with `price_history`),
+`vnext_confirmations.py` + additive table `vnext_product_confirmations`
+(API only, nothing writes it yet), `vnext-evaluate` CLI. Real-data
+before→after: true user decisions **41 → 1**; the five headline bad
+mappings (shower gel, vacuum beet, pickles, banana drink, cookies) all
+rejected by constraint, real products found instead; the 14 "pending"
+requests reconcile to 4 active / 7 likely_fulfilled (bought in the real
+09-17 Tiv Taam order) / 3 uncertain — **not mutated**, shadow only;
+auto-includes limited to measured cadence; stock-ups 9 → 1–2 on true
+economics. 59 vNext tests; full suite 1498 + the same 4 pre-existing
+failures. Verified again 21.09 05:40 on the live DB: md5 unchanged by
+`vnext-evaluate`, 1 decision. Blockers to Phase 2 in report §8 (0
+human-confirmed products; cadence coverage; lexicon needs a human
+sample of false rejections; cart unread; ~2 min plan build from an
+unindexed LIKE over `store_prices`).
+
+**SEPARATE, URGENT, NOT vNext — a second process is polling Gordon's
+Telegram token.** `telegram.error.Conflict: terminated by other
+getUpdates request` ~105×/hour continuously since **2026-09-19 14:34
+CEST** (one stray on 09-13). Only one local `grocery_bot.main`; restarts
+don't change it. Messages to Gordon are being split with an unknown
+second receiver. Asked Arthur (usage-audit) 21.09 ~05:45 to locate it
+by cross-session timeline; hypothesis only: a copy started 09-19
+afternoon elsewhere (Bob/liran-aba-pc? the `claude/gordon-work-mvp-deploy`
+branch?). Ishay informed. **Not resolved.**
 
 ## 3. Blocked, and on what
 
