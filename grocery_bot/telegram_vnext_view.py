@@ -54,6 +54,38 @@ def readiness_message(r: Readiness, plan: ShoppingPlan | None = None) -> str:
     return "\n".join(lines)
 
 
+def readiness_details(r: Readiness) -> str:
+    """The household-facing reasons, in Hebrew, from the signals -- the
+    `reasons` list itself is engineering prose for the CLI/JSON."""
+    s = r.signals
+    lines = []
+    since, gap = s.get("days_since_last_order"), s.get("household_gap_days")
+    if since is not None and gap:
+        lines.append(f"• עברו {since:g} ימים מההזמנה האחרונה; הקצב הרגיל ~{gap:g} ימים")
+    elif since is not None:
+        lines.append(f"• עברו {since:g} ימים מההזמנה האחרונה")
+    active, unc, done = s.get("explicit_active", 0), s.get("explicit_uncertain", 0), s.get("explicit_likely_fulfilled", 0)
+    if active or unc or done:
+        bits = []
+        if active:
+            bits.append(count(active, "בקשה אחת פתוחה", "בקשות פתוחות"))
+        if unc:
+            bits.append(count(unc, "אחת לא בטוחה", "לא בטוחות"))
+        if done:
+            bits.append(count(done, "אחת ישנה כנראה כבר נקנתה", "ישנות כנראה כבר נקנו"))
+        lines.append("• " + ", ".join(bits))
+    if s.get("meal_items"):
+        lines.append("• " + count(s["meal_items"], "פריט אחד לארוחה מתוכננת", "פריטים לארוחות מתוכננות"))
+    basket, review = s.get("estimated_basket", 0), s.get("to_review", 0)
+    lines.append(f"• סל משוער: {count(basket, 'פריט אחד', 'פריטים', '0 פריטים')}"
+                 + (f", עוד {review} להצעה" if review else ""))
+    decisions = s.get("true_user_decisions", 0)
+    lines.append("• " + (count(decisions, "החלטה אחת שלך", "החלטות שלך") or "אין החלטות פתוחות"))
+    if not s.get("cart_state_known", False):
+        lines.append("• לא קראתי את העגלה — ייתכן שחלק כבר בפנים")
+    return "\n".join(lines)
+
+
 def plan_message(plan: ShoppingPlan) -> str:
     s = plan.summary
     total = s["auto_include"]

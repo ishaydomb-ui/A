@@ -720,9 +720,7 @@ class GroceryBot:
             logger.exception("/readiness failed")
             await sent.edit_text("לא הצלחתי לבדוק עכשיו.")
             return
-        text = telegram_vnext_view.readiness_message(r)
-        if r.reasons:
-            text += "\n\n" + "\n".join(f"• {x}" for x in r.reasons)
+        text = telegram_vnext_view.readiness_message(r) + "\n\n" + telegram_vnext_view.readiness_details(r)
         await sent.edit_text(text)
 
     async def pausecart(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
