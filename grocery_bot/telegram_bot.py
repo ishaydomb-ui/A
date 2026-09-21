@@ -273,7 +273,9 @@ class GroceryBot:
             "<b>רשימה מול סל:</b>\n"
             "• <b>תוסיף X</b> — נכנס לרשימה שממתינה למחזור הבא\n"
             "• <b>תוסיף X לעגלה</b> — נכנס עכשיו לסל האמיתי בשופרסל\n"
-            "• <b>מלא את העגלה</b> — מריץ מחזור מלא על כל מה שברשימה\n\n"
+            "• <b>מלא את העגלה</b> — מריץ מחזור מלא על כל מה שברשימה\n"
+            "• <b>/plan</b> — מה הייתי מכניס לעגלה ולמה (תוכנית בלבד, לא נוגע בעגלה)\n"
+            "• <b>/readiness</b> — האם כדאי להכין קנייה עכשיו\n\n"
             "<i>תמיד עוצר על סל מוכן — הבדיקה והתשלום נשארים אצלכם.</i>",
             parse_mode="HTML",
         )
@@ -667,6 +669,61 @@ class GroceryBot:
             f"הקטלוג עודכן: {meta.get('product_count', '?')} מוצרים בסניף "
             f"{meta.get('branch', '?')}.\nמקור: {meta.get('price_file', '?')}"
         )
+
+    async def vnext_plan(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/plan — the vNext shopping plan, read-only. Phase 2a.
+
+        Shows what the shadow planner would put in a cart and the (few)
+        decisions it genuinely needs; it adds nothing anywhere. The build
+        can take ~15 s cold, so one message is sent and edited in place.
+        """
+        if not _authorized(self.config, update):
+            return
+        from . import telegram_vnext_view
+        from .shopping_plan import build_plan
+        from .vnext_config import VNextConfig
+
+        sent = await update.message.reply_text("מכין תוכנית… (רק תוכנית — לא נוגע בעגלה)")
+        try:
+            plan = await asyncio.to_thread(build_plan, self.storage, VNextConfig.from_env())
+        except Exception:
+            logger.exception("/plan failed")
+            await sent.edit_text("לא הצלחתי להכין תוכנית עכשיו.")
+            return
+        text = "\n\n".join([
+            "📋 תוכנית בלבד — לא נגעתי בעגלה",
+            telegram_vnext_view.plan_message(plan),
+            telegram_vnext_view.exception_message(plan),
+        ])
+        s = plan.summary
+        quiet = telegram_vnext_view.count(
+            s.get("agent_resolvable", 0),
+            "מוצר אחד בחרתי לפי ההיסטוריה — אפשר לתקן",
+            "מוצרים בחרתי לפי ההיסטוריה — אפשר לתקן",
+        )
+        if quiet:
+            text += "\n\n" + quiet
+        await sent.edit_text(text)
+
+    async def vnext_readiness(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/readiness — is a shop worth preparing now? Read-only. Phase 2a."""
+        if not _authorized(self.config, update):
+            return
+        from . import telegram_vnext_view
+        from .shopping_readiness import assess
+        from .vnext_config import VNextConfig
+
+        sent = await update.message.reply_text("בודק…")
+        try:
+            r = await asyncio.to_thread(assess, self.storage, VNextConfig.from_env())
+        except Exception:
+            logger.exception("/readiness failed")
+            await sent.edit_text("לא הצלחתי לבדוק עכשיו.")
+            return
+        text = telegram_vnext_view.readiness_message(r)
+        if r.reasons:
+            text += "\n\n" + "\n".join(f"• {x}" for x in r.reasons)
+        await sent.edit_text(text)
 
     async def pausecart(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/pausecart <store|all> — stop cart mutations, for a Work benchmark window.
@@ -2406,10 +2463,36 @@ class GroceryBot:
                 _b("📝 ברשימה, עוד לא נכנס לעגלה") + f" ({len(pending)})\n   "
                 + ", ".join(_md(p.text) for p in pending[:12])
             )
+            # vNext Phase 2a: what the later real orders say about each
+            # of them. Display only -- the rows are never touched here.
+            estimate = await asyncio.to_thread(self._vnext_request_estimates)
+            if estimate:
+                blocks.append(_b("🔎 לפי ההזמנות שהגיעו אחרי הבקשה") + "\n   " + "\n   ".join(estimate))
         await _send_html(
             context, update.effective_chat.id,
             "\n\n".join(blocks) or "אין בקשות פתוחות.",
         )
+
+    def _vnext_request_estimates(self) -> list[str]:
+        """One line per pending request: reconciled against later order lines."""
+        from .htmltext import escape as _md
+        from . import vnext_reconcile
+
+        try:
+            results = vnext_reconcile.reconcile_all(self.storage)
+        except Exception:
+            logger.exception("Could not reconcile pending requests")
+            return []
+        out = []
+        for r in results[:12]:
+            if r.status_estimate == vnext_reconcile.LIKELY_FULFILLED:
+                ev = next((e for e in r.fulfillment_evidence if e.get("line")), {})
+                out.append(f"{_md(r.text)} — כנראה כבר נקנה ← {_md(ev.get('line', ''))} ({ev.get('date', '')})")
+            elif r.status_estimate == vnext_reconcile.UNCERTAIN:
+                out.append(f"{_md(r.text)} — לא בטוח")
+            else:
+                out.append(f"{_md(r.text)} — פתוח")
+        return out
 
     async def questions(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/questions — work through the backlog, when *he* chooses to.
@@ -2945,41 +3028,54 @@ def _cheapest_index(cards: list[dict]) -> int | None:
     return best
 
 
+# Every registered command, with its one-line menu text. A test compares
+# this to the CommandHandler registrations so the two cannot drift; the
+# retired /propose is not registered and so not listed.
+COMMAND_MENU: list[tuple[str, str]] = [
+    ("start", "מה אפשר לבקש ממני"),
+    ("list", "הרשימה המלאה והמעודכנת"),
+    ("plan", "תוכנית קנייה — מה ולמה, בלי לגעת בעגלה"),
+    ("readiness", "האם כדאי להכין קנייה עכשיו"),
+    ("price", "מחיר נוכחי בסניף + מבצע אם יש"),
+    ("deals", "מבצעים אמיתיים על מה שאתם קונים"),
+    ("stockup", "שווה לאגור — מבצעים חריגים לקנייה מראש"),
+    ("chaindeals", "מבצעים מכל הרשתות, לא רק שופרסל"),
+    ("alldeals", "כל המבצעים, גם מה שלא ברשימה"),
+    ("basket", "הסל שלי בכל רשת — כולל חוסרים ותחליפים"),
+    ("lastdeals", "אילו מבצעים נוספו לעגלה לבד"),
+    ("cheaper", "השוואת ₪ לק\"ג — יש חלופה זולה יותר?"),
+    ("failures", "פריטים שנכשלו — ומה לשנות"),
+    ("questions", "שאלות בחירה שממתינות — לענות כשנוח"),
+    ("autochoice", "לסגור שאלות שאפשר לענות עליהן בכלל אחד"),
+    ("requests", "מה קרה למה שביקשנו — בעגלה, נקנה, סופק"),
+    ("list_full", "רשימה להדבקה בהזמנה מהירה"),
+    ("digest", "כל הקנייה בהודעה אחת — רשימה, מבצעים, חלופות"),
+    ("start_order", "מילוי מהיר של כל הרשימה"),
+    ("done", "סיימתי לקנות — מלא את העגלה מחדש"),
+    ("refresh_prices", "רענון מחירי הרשתות עכשיו"),
+    ("pausecart", "להשהות הכנסה לעגלה (רשת או הכל)"),
+    ("resumecart", "לחדש הכנסה לעגלה"),
+]
+
+
 async def _register_bot_metadata(application: Application) -> None:
     """Keep BotFather's command list/description in sync with the code.
 
-    Runs once on every startup so the command list never drifts out of
-    sync with the handlers below — no manual BotFather step needed after
-    the first setup.
+    Runs once on every startup so the menu never drifts from the
+    handlers. Until Phase 2a (2026-09-21) only 15 of 21 commands were
+    listed and a failure here would have stopped startup; now every
+    command is listed and a Telegram hiccup is logged, not fatal.
     """
-    # Deliberately short: the bot is meant to be talked to in plain
-    # Hebrew, so the command menu only carries the two things that are
-    # awkward to phrase ("help", "the list") plus the manual order run.
-    # /price, /deals and /refresh_prices still work if typed, but they're
-    # unlisted — asking "כמה עולה קוטג" does the same thing.
-    await application.bot.set_my_commands(
-        [
-            BotCommand("start", "מה אפשר לבקש ממני"),
-            BotCommand("list", "הרשימה המלאה והמעודכנת"),
-            BotCommand("stockup", "שווה לאגור — מבצעים חריגים לקנייה מראש"),
-            BotCommand("chaindeals", "מבצעים מכל הרשתות, לא רק שופרסל"),
-            BotCommand("basket", "הסל שלי בכל רשת — כולל חוסרים ותחליפים"),
-            BotCommand("lastdeals", "אילו מבצעים נוספו לעגלה לבד"),
-            BotCommand("failures", "פריטים שנכשלו — ומה לשנות"),
-            BotCommand("done", "סיימתי לקנות — מלא את העגלה מחדש"),
-            BotCommand("questions", "שאלות בחירה שממתינות — לענות כשנוח"),
-            BotCommand("requests", "מה קרה למה שביקשנו — בעגלה, נקנה, סופק"),
-            BotCommand("autochoice", "לסגור שאלות שאפשר לענות עליהן בכלל אחד"),
-            BotCommand("cheaper", "השוואת ₪ לק\"ג — יש חלופה זולה יותר?"),
-            BotCommand("list_full", "רשימה להדבקה בהזמנה מהירה"),
-            BotCommand("digest", "כל הקנייה בהודעה אחת — רשימה, מבצעים, חלופות"),
-            BotCommand("start_order", "מילוי מהיר של כל הרשימה"),
-        ]
-    )
-    await application.bot.set_my_description(
-        "בוט קניות משפחתי — מדברים איתו רגיל בעברית. מוסיף לרשימה, בודק "
-        "מחירים ומבצעים אמיתיים בסניף, מפרק מתכונים למצרכים ובונה תפריט שבועי."
-    )
+    try:
+        await application.bot.set_my_commands(
+            [BotCommand(name, text) for name, text in COMMAND_MENU]
+        )
+        await application.bot.set_my_description(
+            "בוט קניות משפחתי — מדברים איתו רגיל בעברית. מוסיף לרשימה, בודק "
+            "מחירים ומבצעים אמיתיים בסניף, מפרק מתכונים למצרכים ובונה תפריט שבועי."
+        )
+    except Exception:
+        logger.exception("Could not register the Telegram command menu; commands still work")
 
 
 async def _send_html(context, chat_id: int, text: str, **kwargs):
@@ -3178,6 +3274,8 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("questions", bot.questions))
     application.add_handler(CommandHandler("requests", bot.requests_status))
     application.add_handler(CommandHandler("autochoice", bot.autochoice))
+    application.add_handler(CommandHandler("plan", bot.vnext_plan))
+    application.add_handler(CommandHandler("readiness", bot.vnext_readiness))
     application.add_handler(CallbackQueryHandler(bot.resolve_ambiguity, pattern=r"^(resolve|skip):"))
     application.add_handler(
         CallbackQueryHandler(bot.on_proposal_button, pattern=r"^(ptoggle|pall|pnone|pconfirm):")
