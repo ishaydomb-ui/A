@@ -166,6 +166,11 @@ class ShufersalAdapter(StoreAdapter):
             contexts = self._browser.contexts
             self._context = contexts[0] if contexts else self._browser.new_context()
             self._page = self._context.new_page()
+            # The household PC's Chrome window is narrow; below ~1024px the
+            # site serves its mobile layout, where the per-line remove
+            # icons have zero size (found 2026-09-21). Same viewport as
+            # the local launch, so selectors see the same page.
+            self._page.set_viewport_size({"width": 1280, "height": 900})
             return
 
         if not proxy:

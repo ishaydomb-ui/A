@@ -180,6 +180,7 @@ class TivTaamAdapter(StoreAdapter):
             contexts = self._browser.contexts
             self._context = contexts[0] if contexts else self._browser.new_context()
             self._page = self._context.new_page()
+            self._page.set_viewport_size({"width": 1280, "height": 900})
             self._opened = False
             return
 
@@ -610,6 +611,39 @@ class TivTaamAdapter(StoreAdapter):
             logger.exception("Tiv Taam: could not read the cart")
             return {"ok": False, "items": [], "total": None, "url": CART_URL,
                     "read": "failed"}
+
+    def remove_line(self, name: str) -> bool:
+        """Remove one cart line by its exact product name. False if it is not there.
+
+        Every panel line carries `button.delete` (aria-label "מחק <name>")
+        — the HANDOFF note that Tiv Taam has no per-line remove was wrong
+        (2026-09-21). The button is a hover action, so the line is
+        hovered first. Verified by the line gaining the site's own
+        `removed` class or leaving the DOM; never by trusting the click.
+        Nothing here goes near the checkout control in the same panel.
+        """
+        try:
+            if not self._open_cart_panel():
+                return False
+            line = self._page.locator(
+                f'.product-in-cart:not(.removed)[aria-label="{name}"]'
+            ).first
+            if not line.count():
+                return False
+            line.hover(timeout=5_000)
+            line.locator(CART_LINE_REMOVE_SELECTOR).first.click(timeout=10_000)
+            for _ in range(10):
+                self._page.wait_for_timeout(500)
+                if not line.count() or "removed" in (line.get_attribute("class") or ""):
+                    return True
+            return False
+        except Exception:
+            logger.exception("Tiv Taam: could not remove %r", name)
+            return False
+
+    def remove_item(self, product_code: str) -> bool:
+        """Same contract as Shufersal's; Tiv Taam lines carry names, not codes."""
+        return self.remove_line(product_code)
 
     def _cart_line_names(self) -> list[dict]:
         """Open the cart panel and read its line items. [] if it will not.
