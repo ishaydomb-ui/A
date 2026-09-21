@@ -6,7 +6,7 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-21 06:10 CEST — token override FIXED by Ishay 06:00, Gordon back on its own bot (§2j end); Tiv Taam cart parser fixed; vNext 1.5 done (§2j)
+**Last anchored:** 2026-09-21 06:45 CEST — vNext Phase 2a live (/plan, /readiness, confirmations, menu; §2j); Gordon on its own token + bw.env (§2j end); Tiv Taam cart parser fixed; vNext 1.5 done (§2j)
 **Session:** https://claude.ai/code/session_01AR7esAYdoXQ71HXtqJPpQV
 **Branch:** `claude/gordon-work-mvp-cartpause`
 **Status is in `git log`, not hand-typed here.**
@@ -696,6 +696,26 @@ failures. Verified again 21.09 05:40 on the live DB: md5 unchanged by
 human-confirmed products; cadence coverage; lexicon needs a human
 sample of false rejections; cart unread; ~2 min plan build from an
 unindexed LIKE over `store_prices`).
+
+**Phase 2a — DONE 2026-09-21, commits `ce8062d`..`f396edf`, deployed at
+this anchor.** Report:
+[`docs/reports/2026-09-21-vnext-phase2a.md`](docs/reports/2026-09-21-vnext-phase2a.md).
+Live now, all read-only w.r.t. carts: `/plan` (vNext plan + the 0–3
+decision view, header "תוכנית בלבד — לא נגעתי בעגלה"), `/readiness`,
+a reconciliation block under `/requests` ("כנראה כבר נקנה ← …"), the
+full 23-command Telegram menu (the audit's "no menu" was wrong — 15 of
+21 were listed; now all, incl. the two new ones). **Human confirmations
+now accumulate from real acts** (`vnext_product_confirmations`, with
+`polarity`): a disambiguation tap → `explicit_statement`; "שנה" and the
+old product of a `replace_item` → negative `later_correction`; the new
+product → `accepted_substitution`. `autoresolve` is deliberately not a
+source. Plan build 123 s → ~20 s cold / ~2 s warm (`vnext_catalogue`
+in-memory shortlist; LIKE cannot use an index — verified). 1523 tests +
+the same 4 pre-existing failures. **Not done, needs a separate
+approval:** routing "מה חסר"/"צריך קניות" to the plan (an `nlu.py`
+prompt change). **2b (vNext driving the real fill, exception buttons →
+`kept_exception_choice`) not started — gate: Shufersal cart-read
+reliability + a first batch of real confirmations.**
 
 **SEPARATE, URGENT, NOT vNext — ROOT CAUSE FOUND 2026-09-21 06:00: Gordon
 has been running on MIRI's Telegram token since 2026-09-19 14:34.** The
