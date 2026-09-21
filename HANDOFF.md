@@ -614,7 +614,24 @@ re-earns the identical "0/N בעגלה · N כבר היו" run every
 `listwatch.COOLDOWN_HOURS` (6h) forever — matches the screenshot's
 03:13/09:16/15:19 cadence exactly.
 
-**Fix, commit `6ebf408`:** `outcome.is_uneventful(storage, reports)` —
+**UPDATE 2026-09-21, commit `555761c` — the watcher's run is now fully
+silent.** `6ebf408` was not enough: the first real run after Tiv Taam was
+un-paused (21.09 03:32 start line, 03:42 summary; run=14, 9 Shufersal
+"verified", 11 Tiv Taam "the click did not change the cart" + breaker
+backoffs) was genuinely eventful, so it reported — and its failed items
+stay pending, so it would have repeated every 6h. Miri relayed Ishay's
+"why?" the same morning. Now `watch_list` sends nothing at all (no start
+line, no summary, no failure notice, no questions push); the run itself,
+request consumption, `/failures` and `/questions` are unchanged; the
+result is logged ("List watcher result (not sent): …"). `/start_order`
+is still chatty. Deployed 05:33 CEST, PID 1344740.
+
+Left open by that same run, worth a look: **Tiv Taam adds are failing
+live** — every one of 11 attempts returned "the click did not change the
+cart" (autocomplete/ambiguous path). Separate from the notification
+question; not investigated yet.
+
+**First cut, commit `6ebf408`:** `outcome.is_uneventful(storage, reports)` —
 true only when every run behind a cycle reached `completed` with zero
 verified adds (i.e. everything settled as already-there; a single
 not-found/unverified/pending item anywhere keeps it False).
