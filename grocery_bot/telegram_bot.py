@@ -716,6 +716,63 @@ class GroceryBot:
         text = telegram_vnext_view.readiness_message(r) + "\n\n" + telegram_vnext_view.readiness_details(r)
         await sent.edit_text(text)
 
+    async def site_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/status — per chain: browser mode, logged in?, cart readable?; exit node; last sync.
+
+        Read-only, on demand. Until 2026-09-21 the only way to learn a
+        store session had died was a failed run (or the nightly sync's
+        "skipped" line); Ishay asked whether he could ask the bot. This
+        opens each site for real, so it takes 30-60 s, and it never adds,
+        removes or logs anything the run itself would not.
+        """
+        if not _authorized(self.config, update):
+            return
+        sent = await update.message.reply_text("בודק את החיבורים… (עד דקה)")
+        try:
+            text = await asyncio.to_thread(self._site_status_text)
+        except Exception:
+            logger.exception("/status failed")
+            text = "לא הצלחתי לבדוק עכשיו."
+        await sent.edit_text(text)
+
+    def _site_status_text(self) -> str:
+        from . import browser
+        from .chains import display_name
+        from .connectivity import check_israeli_exit
+
+        lines = ["🔌 מצב החיבורים"]
+        plan = browser.plan_for(self.config)
+        factories = _build_adapter_factories(self.config)
+        for store, factory in factories.items():
+            mode = "GordonChrome" if plan.get(store) == browser.CDP else "דפדפן מקומי + exit node"
+            try:
+                with factory() as adapter:
+                    check = getattr(adapter, "ensure_session", None) or getattr(adapter, "is_session_valid", None)
+                    logged_in = bool(check()) if check else None
+                    cart = adapter.cart_summary() if logged_in else {}
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("/status: %s unreachable: %r", store, exc)
+                lines.append(f"• {display_name(store)} — {mode} — ❌ לא הצלחתי לפתוח את האתר")
+                continue
+            if not logged_in:
+                lines.append(f"• {display_name(store)} — {mode} — ⚠️ לא מחובר (צריך התחברות)")
+                continue
+            items = cart.get("items") or []
+            total = cart.get("total")
+            cart_txt = (f"עגלה: {len(items)} פריטים" + (f", ₪{total:,.2f}" if total else "")
+                        + ("" if cart.get("complete", True) else " (חלקי)")) if cart.get("ok") else "עגלה: לא נקראה"
+            lines.append(f"• {display_name(store)} — {mode} — ✅ מחובר — {cart_txt}")
+        if any(m == browser.LOCAL for m in plan.values()):
+            st = check_israeli_exit(self.config.playwright_proxy)
+            lines.append(f"• exit node: {'✅ ' + (st.country or 'IL') if st.available else '❌ ' + st.detail}")
+        else:
+            lines.append("• exit node: לא נדרש (הכול דרך GordonChrome)")
+        for store in factories:
+            orders = self.storage.list_orders(store, limit=1)
+            if orders:
+                lines.append(f"• הזמנה אחרונה שסונכרנה ב{display_name(store)}: {str(orders[0].get('order_date') or orders[0].get('placed_at') or '')[:10]}")
+        return "\n".join(lines)
+
     async def pausecart(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/pausecart <store|all> — stop cart mutations, for a Work benchmark window.
 
@@ -3081,6 +3138,7 @@ COMMAND_MENU: list[tuple[str, str]] = [
     ("list", "הרשימה המלאה והמעודכנת"),
     ("plan", "הצעת קנייה — לבדוק, לערוך ולאשר לפני שנוגעים בעגלה"),
     ("readiness", "האם כדאי להכין קנייה עכשיו"),
+    ("status", "מצב החיבור לאתרים והעגלות"),
     ("price", "מחיר נוכחי בסניף + מבצע אם יש"),
     ("deals", "מבצעים אמיתיים על מה שאתם קונים"),
     ("stockup", "שווה לאגור — מבצעים חריגים לקנייה מראש"),
@@ -3322,6 +3380,7 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("plan", bot.vnext_plan))
     application.add_handler(CallbackQueryHandler(bot.vnext.on_callback, pattern=r"^vn:"))
     application.add_handler(CommandHandler("readiness", bot.vnext_readiness))
+    application.add_handler(CommandHandler("status", bot.site_status))
     application.add_handler(CallbackQueryHandler(bot.resolve_ambiguity, pattern=r"^(resolve|skip):"))
     application.add_handler(
         CallbackQueryHandler(bot.on_proposal_button, pattern=r"^(ptoggle|pall|pnone|pconfirm):")
