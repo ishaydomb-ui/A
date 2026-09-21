@@ -711,10 +711,17 @@ them), Gordon's own bot had no poller. Bob checked liran-aba-pc: clean.
 **FIXED by Ishay 2026-09-21 06:00 CEST** (ran the one-liner: swapped the
 two `EnvironmentFile` lines, restart). Verified: PID 1374430 holds
 Gordon's token (`17d15a51`), `BW_*` still loaded, **0 Conflict lines in
-the first 3 minutes** (was one every ~30 s for 40 h). Unit backup at
-`grocery-bot.service.bak`. Lesson for `docs/ADDING_A_STORE.md`-class
-memory: a later `EnvironmentFile=` overrides an earlier one — never
-append a shared secrets file after the project's own `.env`. Miri's session informed (fact only).
+the first 3 minutes** (was one every ~30 s for 40 h). **Hardened 06:22 per Ishay: Gordon no longer loads
+`~/.config/familyos/secrets.env` at all.** The unit now reads
+`EnvironmentFile=%h/.config/bitwarden/bw.env` (mode 600; exactly
+`BW_CLIENTID`/`BW_CLIENTSECRET`/`BW_PASSWORD`, copied from secrets.env)
+before Gordon's own `.env`. Verified on PID 1393674: Gordon's token,
+BW=3, zero familyos variables, startup says `credential source:
+bitwarden`, 0 Conflict / 0 errors after 2.5 min. Unit backups:
+`.bak-2026-09-21`, `.bak-2026-09-21b`. If the Bitwarden secret ever
+rotates it must be updated in **both** files now. Lesson: a later
+`EnvironmentFile=` overrides an earlier one — never load a shared
+secrets file into a service that has its own token. Miri's session informed (fact only).
 
 Also found the same morning: **Tiv Taam "click did not change the cart"
 was the cart parser, not the site** — fixed in `1de12d9`, and the
