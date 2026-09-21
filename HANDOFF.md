@@ -6,7 +6,7 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-21 ~08:00 CEST — vNext Phase 2b live in assisted mode (5-screen flow, §2j); Shufersal cart cleaned of 6 wrong picks; Gordon on its own token + bw.env (§2j end); Tiv Taam cart parser fixed; vNext 1.5 done (§2j)
+**Last anchored:** 2026-09-21 ~10:30 CEST — GordonChrome/CDP support deployed but off, awaiting the one-time login (§2j); vNext 2b live; Shufersal cart cleaned; Tiv Taam cart parser fixed; vNext 1.5 done (§2j)
 **Session:** https://claude.ai/code/session_01AR7esAYdoXQ71HXtqJPpQV
 **Branch:** `claude/gordon-work-mvp-cartpause`
 **Status is in `git log`, not hand-typed here.**
@@ -744,6 +744,24 @@ pitted prunes, single-variety cherry pack) via the new
 `scripts/remove_cart_lines.py`; verified 15 → 9 lines, ₪233.06 → ₪145.06.
 Tiv Taam cart untouched (has doubles: two salts, two olive oils, two
 silans, two granolas — Ishay's call).
+
+**GordonChrome on liran-aba-pc — built 2026-09-21 (`5be3bac`), NOT yet
+switched on.** Ishay approved (2026-09-21) running the store browsers in a
+dedicated Chrome on the household PC: one Chrome process per bot (a CDP
+port is a process; windows inside one cannot be isolated) — MiriChrome
+9222 (Miri/Nigel), BobEdge 9223 (Bob), **GordonChrome 9224** (set up by
+Bob: own profile `…\AppData\Local\GordonChrome\profile`, portproxy on
+100.64.121.81, self-healing logon task). Verified from here:
+`/json/version` answers, one blank tab. Code: `grocery_bot/browser.py`
+(`plan_for`, `exit_status`), adapters take `cdp_url` → default context,
+new tab, close only our tab, no proxy; unreachable → local launch +
+exit node with one WARNING. Docs: `docs/SITE_ACCESS_PLAYBOOK.md` §0b.
+**Waiting on:** a human logging in once to tivtaam.co.il and
+shufersal.co.il inside the GordonChrome window. Then `.env`:
+`GORDON_BROWSER_CDP_URL=http://100.64.121.81:9224`,
+`GORDON_BROWSER_CDP_STORES=tivtaam` first, both after a clean run.
+Known leftover: `breaker.py:207` still probes the exit node mid-run —
+harmless on CDP.
 
 **SEPARATE, URGENT, NOT vNext — ROOT CAUSE FOUND 2026-09-21 06:00: Gordon
 has been running on MIRI's Telegram token since 2026-09-19 14:34.** The
