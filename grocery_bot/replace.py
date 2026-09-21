@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from .models import PlanTerm
 from .orchestrator import add_terms_to_cart
 from .storage import normalize_term
+from . import vnext_confirmations
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,12 @@ def replace_product(storage, factories: dict, store: str, old: str, new: str) ->
     out.old_code, out.old_name = _old_identity(storage, factory, store, old)
     if out.old_code:
         storage.reject_product(store, old, out.old_code, out.old_name, source="human")
+        # vNext Phase 2a: the spoken replacement is a correction of the
+        # old product (negative) ...
+        vnext_confirmations.note_interaction(
+            storage, old, out.old_code, store, "later_correction",
+            product_name=out.old_name, note=f"replaced by {new}",
+        )
 
     reports = add_terms_to_cart(storage, {store: factory}, [PlanTerm(new, 1, "replace", old)],
                                 trigger="replace")
@@ -72,6 +79,11 @@ def replace_product(storage, factories: dict, store: str, old: str, new: str) ->
         out.new_name = result.item_name or new
         if out.new_code:
             storage.remember_choice(store, new, out.new_code, out.new_name, source="human")
+            # ... and an accepted substitution for the new one (positive).
+            vnext_confirmations.note_interaction(
+                storage, new, out.new_code, store, "accepted_substitution",
+                product_name=out.new_name, note=f"replaces {old}",
+            )
     else:
         out.detail = _first_failure(report)
         return out

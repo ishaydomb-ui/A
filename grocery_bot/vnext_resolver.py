@@ -200,17 +200,44 @@ def purchases_index(storage) -> dict[tuple[str, str], int]:
 
 
 def human_confirmations(storage, term: str) -> list[Candidate]:
+    """Positive confirmations for this term, as HUMAN_DECLARED candidates.
+
+    The newest row per (store, product) decides: a product corrected away
+    and later confirmed again is confirmed; the reverse is rejected.
+    """
     out = []
-    try:
-        rows = storage.list_vnext_product_confirmations()
-    except Exception:  # noqa: BLE001
-        rows = []
-    for row in rows:
-        if row.get("term") == term:
-            out.append(Candidate(store=row["store"], product_code=str(row["product_code"]),
+    for (store, code), row in _latest_by_product(storage, term).items():
+        if (row.get("polarity") or "positive") != "negative":
+            out.append(Candidate(store=store, product_code=code,
                                  product_name=row.get("product_name") or "",
                                  source=f"human_confirmation:{row.get('kind')}", origin=Origin.HUMAN_DECLARED))
     return out
+
+
+def human_rejections(storage, term: str) -> set:
+    """(store, code) pairs the household corrected *away* from for this term.
+
+    Phase 2a: "שנה" after a tap and the old product of a replacement are
+    recorded as negative confirmations; they must never be offered
+    again as human-confirmed, whatever the old `preferred_products` says.
+    """
+    return {key for key, row in _latest_by_product(storage, term).items()
+            if (row.get("polarity") or "positive") == "negative"}
+
+
+def _latest_by_product(storage, term: str) -> dict:
+    latest: dict = {}
+    for row in _confirmation_rows(storage, term):  # ordered by confirmed_at
+        latest[(row["store"], str(row["product_code"]))] = row
+    return latest
+
+
+def _confirmation_rows(storage, term: str) -> list[dict]:
+    try:
+        rows = storage.list_vnext_product_confirmations()
+    except Exception:  # noqa: BLE001
+        return []
+    return [r for r in rows if r.get("term") == term]
 
 
 # -- resolution ------------------------------------------------------------------------
@@ -255,6 +282,7 @@ def resolve(storage, term: str, evidence: list[Evidence], config: VNextConfig = 
     parsed = parse_term(raw_text)
     purchases_by_code = purchases_by_code if purchases_by_code is not None else purchases_index(storage)
     rejected = {(e.store, str(e.product_code)) for e in evidence if e.type == EvidenceType.explicit_rejection}
+    rejected |= human_rejections(storage, term)
 
     candidates = human_confirmations(storage, term)
     candidates += _candidates_from_evidence(term, evidence, purchases_by_code)

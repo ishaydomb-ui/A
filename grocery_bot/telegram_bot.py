@@ -21,7 +21,7 @@ from telegram.ext import (
     filters,
 )
 
-from . import ask, cardreminder, cartpause, hotdeals, threshold, waste
+from . import ask, cardreminder, cartpause, hotdeals, threshold, vnext_confirmations, waste
 from .adapters.base import StoreAdapter
 from .adapters.shufersal import ShufersalAdapter
 from .adapters.tivtaam import TivTaamAdapter
@@ -2199,6 +2199,13 @@ class GroceryBot:
             if prior and prior.get("product_code"):
                 self.storage.reject_product(store, term, prior["product_code"],
                                             prior.get("product_name", ""), source="human")
+                # vNext Phase 2a: the same act, as a negative confirmation.
+                vnext_confirmations.note_interaction(
+                    self.storage, term, prior["product_code"], store, "later_correction",
+                    product_name=prior.get("product_name", ""),
+                    confirmed_by=str(getattr(query.from_user, "id", "") or ""),
+                    note='"שנה" after a disambiguation tap',
+                )
             self.storage.forget_choice(store, term)
             removed = await asyncio.to_thread(self._undo_choice, store, term)
             note = ("הוסר מהעגלה. " if removed else
@@ -2600,6 +2607,18 @@ class GroceryBot:
                 product_name=chosen_label,
                 source="human",
             )
+
+        # vNext Phase 2a: the tap is the household's own word for this
+        # term -> product, recorded as HUMAN_DECLARED evidence for the
+        # shadow planner. Never raises; `preferred_products` above is
+        # untouched by this.
+        vnext_confirmations.note_interaction(
+            self.storage, pending["original_term"],
+            chosen_code or getattr(result, "product_code", "") or "", pending["store"],
+            "explicit_statement", product_name=chosen_label,
+            confirmed_by=str(getattr(query.from_user, "id", "") or ""),
+            note="disambiguation tap",
+        )
 
         # **A tap means one thing: this is the one.** Until 2026-09-11 the
         # same gesture meant choose, add another, and set a permanent

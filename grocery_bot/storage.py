@@ -453,7 +453,8 @@ CREATE TABLE IF NOT EXISTS vnext_product_confirmations (
     kind TEXT NOT NULL,            -- explicit_statement | accepted_substitution | kept_exception_choice | later_correction
     confirmed_by TEXT NOT NULL DEFAULT '',
     confirmed_at TEXT NOT NULL,
-    note TEXT NOT NULL DEFAULT ''
+    note TEXT NOT NULL DEFAULT '',
+    polarity TEXT NOT NULL DEFAULT 'positive'   -- positive: "this one" | negative: "not this one"
 );
 CREATE INDEX IF NOT EXISTS idx_vnext_confirmations_term
     ON vnext_product_confirmations(store, term);
@@ -473,6 +474,12 @@ PREFERENCE_RANK = {"search": 1, "inferred": 2, "purchase": 3, "human": 4}
 REJECTION_SOURCES = ("human", "order_removed")
 
 _ADDED_COLUMNS = {
+    # vNext Phase 2a: a confirmation can also be a *rejection* ("שנה" after
+    # a tap, the old product in a replace). Same table, same provenance,
+    # opposite sign -- the resolver reads negative rows as rejections.
+    "vnext_product_confirmations": {
+        "polarity": "TEXT NOT NULL DEFAULT 'positive'",
+    },
     # Provenance, added 2026-09-17 (Phase 8). Every remembered choice was
     # written as if it were the household's word; 410 of 782 were the
     # resolver's own guesses from one day. `source` ranks them —
@@ -2705,14 +2712,15 @@ class Storage:
 
     def add_vnext_product_confirmation(self, store: str, term: str, product_code: str,
                                        product_name: str, kind: str, confirmed_by: str = "",
-                                       note: str = "") -> int:
+                                       note: str = "", polarity: str = "positive") -> int:
         with closing(self._connect()) as conn:
             cursor = conn.execute(
                 "INSERT INTO vnext_product_confirmations "
-                "(store, term, product_code, product_name, kind, confirmed_by, confirmed_at, note) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "(store, term, product_code, product_name, kind, confirmed_by, confirmed_at, note, polarity) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (store, normalize_term(term), str(product_code), product_name or "", kind,
-                 confirmed_by or "", datetime.now(timezone.utc).isoformat(), note or ""),
+                 confirmed_by or "", datetime.now(timezone.utc).isoformat(), note or "",
+                 polarity or "positive"),
             )
             conn.commit()
             return int(cursor.lastrowid)
