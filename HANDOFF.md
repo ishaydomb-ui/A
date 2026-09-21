@@ -745,6 +745,20 @@ pitted prunes, single-variety cherry pack) via the new
 Tiv Taam cart untouched (has doubles: two salts, two olive oils, two
 silans, two granolas — Ishay's call).
 
+**FIRST REAL vNext RUN — 2026-09-21 09:27–09:40, by Ishay himself
+(run=16).** He paged through the review list (`vn:list:0..4`), confirmed,
+the compare screen had recommended all-in-Tiv-Taam, so only Tiv Taam was
+filled: requested 18 → **7 added+verified, 5 already there (guard
+worked), 2 not found (`הפטרוזיליה` — the resolver passed the term with
+its definite article; `אוכמניות טריות יחידה`), 1 ambiguous, 3 "click did
+not change the cart"** (unverified; item names to check in the journal),
+then he tapped "עבור לתשלום" (`vn:go`, a URL button). Tiv Taam cart after:
+28 lines, ₪583.06. Follow-ups: strip the ה-prefix before resolving;
+look at the 3 unverified clicks (possibly quantity bumps on lines the
+parser now sees — verify against the cart read). `/status` added the
+same morning (`site_status`): per chain browser mode / logged in / cart
+lines+total, exit node, last synced order.
+
 **GordonChrome on liran-aba-pc — built 2026-09-21 (`5be3bac`), NOT yet
 switched on.** Ishay approved (2026-09-21) running the store browsers in a
 dedicated Chrome on the household PC: one Chrome process per bot (a CDP
