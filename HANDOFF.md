@@ -6,7 +6,7 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-21 05:50 CEST — vNext Phase 1.5 done (shadow, 41→1 decisions, §2j); list watcher fully silent (§2i); OPEN: second poller on Gordon's Telegram token since 09-19 (§2j end)
+**Last anchored:** 2026-09-21 06:10 CEST — ROOT CAUSE: Gordon on Miri's Telegram token since 09-19 (fix needs Ishay, §2j end); Tiv Taam cart parser fixed; vNext 1.5 done (§2j)
 **Session:** https://claude.ai/code/session_01AR7esAYdoXQ71HXtqJPpQV
 **Branch:** `claude/gordon-work-mvp-cartpause`
 **Status is in `git log`, not hand-typed here.**
@@ -697,15 +697,27 @@ human-confirmed products; cadence coverage; lexicon needs a human
 sample of false rejections; cart unread; ~2 min plan build from an
 unindexed LIKE over `store_prices`).
 
-**SEPARATE, URGENT, NOT vNext — a second process is polling Gordon's
-Telegram token.** `telegram.error.Conflict: terminated by other
-getUpdates request` ~105×/hour continuously since **2026-09-19 14:34
-CEST** (one stray on 09-13). Only one local `grocery_bot.main`; restarts
-don't change it. Messages to Gordon are being split with an unknown
-second receiver. Asked Arthur (usage-audit) 21.09 ~05:45 to locate it
-by cross-session timeline; hypothesis only: a copy started 09-19
-afternoon elsewhere (Bob/liran-aba-pc? the `claude/gordon-work-mvp-deploy`
-branch?). Ishay informed. **Not resolved.**
+**SEPARATE, URGENT, NOT vNext — ROOT CAUSE FOUND 2026-09-21 06:00: Gordon
+has been running on MIRI's Telegram token since 2026-09-19 14:34.** The
+Bitwarden change added `EnvironmentFile=-%h/.config/familyos/secrets.env`
+*after* Gordon's `.env` in `grocery-bot.service`; that file also defines
+`TELEGRAM_BOT_TOKEN`, and later files win. Proof: `/proc/<pid>/environ`
+of the live bot carries the familyos token (md5 prefix `69df3a5c`), not
+Gordon's (`17d15a51`); the `Conflict` storm starts 6 s after that
+restart's "Grocery bot starting" line. Effects for ~40 h: Gordon and
+Miri both polled Miri's bot (updates split between two code bases),
+Gordon's proactive messages went out through Miri's bot (why Miri "saw"
+them), Gordon's own bot had no poller. Bob checked liran-aba-pc: clean.
+**Fix = swap the two `EnvironmentFile` lines + restart; systemd edits are
+classifier-blocked here, so Ishay was handed the one-liner (06:05).
+Verify after: token md5 prefix `17d15a51`, `BW_*` still present, no new
+`Conflict` lines.** Miri's session informed (fact only).
+
+Also found the same morning: **Tiv Taam "click did not change the cart"
+was the cart parser, not the site** — fixed in `1de12d9`, and the
+HANDOFF claim "Tiv Taam has no per-line remove" is wrong: every panel
+line has `button.delete` (`CART_LINE_REMOVE_SELECTOR` already names it);
+no `remove_item` is implemented for Tiv Taam yet.
 
 ## 3. Blocked, and on what
 
