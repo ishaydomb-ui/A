@@ -6,7 +6,7 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-21 06:45 CEST — vNext Phase 2a live (/plan, /readiness, confirmations, menu; §2j); Gordon on its own token + bw.env (§2j end); Tiv Taam cart parser fixed; vNext 1.5 done (§2j)
+**Last anchored:** 2026-09-21 ~08:00 CEST — vNext Phase 2b live in assisted mode (5-screen flow, §2j); Shufersal cart cleaned of 6 wrong picks; Gordon on its own token + bw.env (§2j end); Tiv Taam cart parser fixed; vNext 1.5 done (§2j)
 **Session:** https://claude.ai/code/session_01AR7esAYdoXQ71HXtqJPpQV
 **Branch:** `claude/gordon-work-mvp-cartpause`
 **Status is in `git log`, not hand-typed here.**
@@ -716,6 +716,34 @@ approval:** routing "מה חסר"/"צריך קניות" to the plan (an `nlu.py`
 prompt change). **2b (vNext driving the real fill, exception buttons →
 `kept_exception_choice`) not started — gate: Shufersal cart-read
 reliability + a first batch of real confirmations.**
+
+**Phase 2b — DONE 2026-09-21, commits `37ccc7a`..`70e7b28`, deployed at
+this anchor (assisted mode).** Report:
+[`docs/reports/2026-09-21-vnext-phase2b.md`](docs/reports/2026-09-21-vnext-phase2b.md)
++ rendered screens beside it. Ishay's mock (5 screens) is the spec:
+proactive nudge (from `cadence_check`, ≤1 per 3 days, 09–21 IL, never
+with a draft open, replaces the digest on days it fires), smart
+proposal (`/plan`), review & adjust (10/page, numbered buttons, spoken
+edits apply to the open draft), multi-store comparison (real
+`basket_optimizer`: per-chain prices incl. Tiv Taam order-line prices,
+delivery fees, split only if it saves ≥ ₪25), execution & confirmation.
+`vnext_flow.py` (renderers + draft model, table `vnext_drafts`),
+`vnext_handlers.py` (`vn:` callbacks). **Safety, pinned by tests:** the
+confirm button is the ONLY path into the cart engine
+(`add_terms_to_cart(guard_cart=True, trigger="vnext", identities=…)` —
+`identities` is the one additive orchestrator parameter, default
+unchanged); "עבור לתשלום" is a URL button to the chain's own cart page,
+no callback; no checkout/pay call anywhere. 1546 tests + the 4 known
+failures. **First real run not yet done** — watch the `identities` path
+on Tiv Taam codes (falls back to name search on a miss).
+
+**Same morning, real cart cleanup (Ishay: "תסיר", then "כן" to let this
+session run it):** removed from the live Shufersal cart the six wrong
+picks of the old resolver (shower gel, vacuum beet, pickles, cookies,
+pitted prunes, single-variety cherry pack) via the new
+`scripts/remove_cart_lines.py`; verified 15 → 9 lines, ₪233.06 → ₪145.06.
+Tiv Taam cart untouched (has doubles: two salts, two olive oils, two
+silans, two granolas — Ishay's call).
 
 **SEPARATE, URGENT, NOT vNext — ROOT CAUSE FOUND 2026-09-21 06:00: Gordon
 has been running on MIRI's Telegram token since 2026-09-19 14:34.** The
