@@ -166,14 +166,17 @@ class ViewText(Seeded):
 
 
 class OptimizerSeam(Seeded):
-    def test_phase1_optimizer_declares_itself_unimplemented(self):
+    def test_optimizer_is_implemented_and_read_only(self):
+        """Phase 2b: the seam is filled; without quotes it still answers
+        honestly (no split, no total) and never touches a cart."""
+        before = _dump(self.db)
         plan = shopping_plan.build_plan(self.storage, CFG, TODAY)
         result = basket_optimizer.optimize(basket_optimizer.OptimizerInput(
             plan=plan, chains=(basket_optimizer.ChainEconomics("tivtaam"), basket_optimizer.ChainEconomics("shufersal")),
         ))
-        self.assertFalse(result.implemented)
-        self.assertEqual(result.recommended_split, {})
+        self.assertTrue(result.implemented)
         self.assertEqual(result.inputs_summary["chains"], ["tivtaam", "shufersal"])
+        self.assertEqual(_dump(self.db), before)
 
 
 class CliCommands(Seeded):
