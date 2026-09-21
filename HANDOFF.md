@@ -770,10 +770,17 @@ Bob: own profile `…\AppData\Local\GordonChrome\profile`, portproxy on
 (`plan_for`, `exit_status`), adapters take `cdp_url` → default context,
 new tab, close only our tab, no proxy; unreachable → local launch +
 exit node with one WARNING. Docs: `docs/SITE_ACCESS_PLAYBOOK.md` §0b.
-**Waiting on:** a human logging in once to tivtaam.co.il and
-shufersal.co.il inside the GordonChrome window. Then `.env`:
-`GORDON_BROWSER_CDP_URL=http://100.64.121.81:9224`,
-`GORDON_BROWSER_CDP_STORES=tivtaam` first, both after a clean run.
+**SWITCHED ON for Tiv Taam 2026-09-21 ~11:00.** Both sites are logged in
+inside GordonChrome: Shufersal by Gordon itself over CDP (vault creds,
+`ensure_session`); Tiv Taam by this session on Ishay's "מלא"/"תתחבר עם
+ביטוורנט" — cookie wall accepted, form filled from the vault item
+"טיב טעם" (found by name; it has no URI — `bitwarden.password_for(url,
+name=)` fallback added, `687ed6b`), login pressed, **no captcha challenge
+appeared** on the residential Chrome profile. `.env` now has
+`GORDON_BROWSER_CDP_URL=http://100.64.121.81:9224` and
+`GORDON_BROWSER_CDP_STORES=tivtaam`; verified `plan_for` = tivtaam:cdp,
+shufersal:local, Tiv Taam cart read over CDP = 28 lines ₪583.06. Next:
+watch the first Tiv Taam run on CDP, then add shufersal to the list.
 Known leftover: `breaker.py:207` still probes the exit node mid-run —
 harmless on CDP.
 
