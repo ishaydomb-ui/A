@@ -27,8 +27,12 @@ SOURCE = Path("grocery_bot/telegram_bot.py").read_text(encoding="utf-8")
 # it's copied instead of derived.
 REGISTERED = set(re.findall(r'CommandHandler\("([a-z_]+)"', SOURCE))
 
-# Every command offered in the "/" autocomplete menu.
-MENU = set(re.findall(r'BotCommand\("([a-z_]+)"', SOURCE))
+# Every command offered in the "/" autocomplete menu. Since vNext Phase 2a
+# (2026-09-21) the menu is the COMMAND_MENU table, not inline BotCommand
+# literals, and it lists every registered command.
+from grocery_bot.telegram_bot import COMMAND_MENU  # noqa: E402
+
+MENU = {name for name, _ in COMMAND_MENU}
 
 # Commands shown as a literal "/word ..." example inside a string a
 # household member reads in chat (fallback prompts, help text) — checked
@@ -77,14 +81,14 @@ class RegisteredCommandsAreReachableTests(unittest.TestCase):
         self.assertIn("chaindeals", REGISTERED)
         self.assertIn("chaindeals", MENU)
 
-    def test_deliberately_unlisted_commands_still_work_when_typed(self):
-        # price / deals / refresh_prices are intentionally left off the
-        # menu (see _register_bot_metadata's own comment) so the menu
-        # stays short — but "unlisted" must never silently mean
-        # "unregistered". Typing them by hand must still dispatch.
-        for cmd in ("price", "deals", "refresh_prices"):
-            self.assertNotIn(cmd, MENU, f"/{cmd} was expected to stay off the menu")
-            self.assertIn(cmd, REGISTERED, f"/{cmd} is unlisted AND unregistered — dead command")
+    def test_no_command_is_unlisted_any_more(self):
+        # price / deals / refresh_prices were deliberately kept off the
+        # menu until 2026-09-21; the UX audit (gap #4: 21 commands, a
+        # menu of 15, help covering fewer than half) reversed that. Every
+        # registered command is now listed, and nothing listed is dead.
+        self.assertEqual(REGISTERED, MENU)
+        for cmd in ("price", "deals", "refresh_prices", "plan", "readiness"):
+            self.assertIn(cmd, MENU)
 
 
 if __name__ == "__main__":
