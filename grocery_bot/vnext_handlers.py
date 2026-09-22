@@ -283,6 +283,8 @@ class VNextFlow:
 
         if action == "nudge":
             return await self._on_nudge(update, context, query, args[0] if args else "yes")
+        if action == "var":
+            return await self._on_variety(update, context, query, args)
 
         draft = self.open_draft(chat_id)
         if draft is None:
@@ -633,3 +635,136 @@ class VNextFlow:
             await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=_keyboard(rows))
         import json as _json
         self._save(draft, status="done", result_json=_json.dumps(draft.result, ensure_ascii=False))
+
+    # -- variety / exploration requests ("הרבה ירקות שלא אוכלים בדרך כלל") ------------
+
+    VAR_KEY = "vnext_variety"
+
+    def _var_state(self, chat_id: int) -> dict | None:
+        import json as _json
+        raw = self.storage.get_state(f"{self.VAR_KEY}:{chat_id}", "")
+        if not raw:
+            return None
+        try:
+            return _json.loads(raw)
+        except ValueError:
+            return None
+
+    def _var_save(self, chat_id: int, state: dict | None) -> None:
+        import json as _json
+        self.storage.set_state(f"{self.VAR_KEY}:{chat_id}", _json.dumps(state, ensure_ascii=False) if state else "")
+
+    def variety_screen(self, state: dict) -> tuple[str, list]:
+        from . import variety
+        sugs = [variety.Suggestion(**d) for d in state["batch"]]
+        chosen = set(state.get("chosen") or [])
+        text = variety.render(state["category"], sugs, chosen)
+        rows = []
+        for i, sug in enumerate(sugs):
+            mark = "✅" if sug.key in chosen else "⬜"
+            rows.append([(f"{mark} {sug.name[:30]}", vnext_flow.cb("var", "t", i))])
+        n = len(chosen)
+        rows.append([("הצג עוד", vnext_flow.cb("var", "more")),
+                     (f"הוסף את המסומנים ({n})" if n else "הוסף את המסומנים", vnext_flow.cb("var", "add"))])
+        rows.append([("ביטול", vnext_flow.cb("var", "no"))])
+        return text, rows
+
+    async def start_variety(self, update, context, category_words: str, count: int = 6,
+                            requested_by: str = "", query=None) -> bool:
+        """Open the suggestion screen for a category phrase. False if the
+        phrase names no known category (caller says so)."""
+        from . import variety
+        category = variety.category_for(category_words)
+        if category is None:
+            return False
+        chat_id = update.effective_chat.id
+        target = query.message if query is not None and query.message else None
+        if target is not None:
+            try:
+                await query.edit_message_text("מכין הצעות…")
+            except Exception:  # noqa: BLE001
+                target = None
+        if target is None:
+            target = await context.bot.send_message(chat_id=chat_id, text="מכין הצעות…")
+        cfg = self.config
+        days = int(getattr(cfg, "variety_exclude_recent_days", 60) or 60)
+        batch = await asyncio.to_thread(variety.suggest, self.storage, category, days, count, cfg, 0)
+        state = {"category": category, "words": category_words, "count": count, "offset": 0,
+                 "days": days, "batch": [b.to_dict() for b in batch], "chosen": [],
+                 "chosen_names": {}, "by": requested_by, "message_id": target.message_id}
+        self._var_save(chat_id, state)
+        text, rows = self.variety_screen(state)
+        await target.edit_text(text, reply_markup=_keyboard(rows))
+        return True
+
+    async def _on_variety(self, update, context, query, args) -> None:
+        from . import variety
+        chat_id = update.effective_chat.id
+        state = self._var_state(chat_id)
+        sub = args[0] if args else ""
+        if state is None:
+            await query.edit_message_text("ההצעות האלה כבר לא פתוחות — בקשו שוב (למשל 'תציע לי ירקות').")
+            return
+        if sub == "t":
+            idx = int(args[1]) if len(args) > 1 else -1
+            batch = state["batch"]
+            if 0 <= idx < len(batch):
+                sug = variety.Suggestion(**batch[idx])
+                chosen = set(state.get("chosen") or [])
+                if sug.key in chosen:
+                    chosen.discard(sug.key)
+                    state["chosen_names"].pop(sug.key, None)
+                else:
+                    chosen.add(sug.key)
+                    state["chosen_names"][sug.key] = batch[idx]
+                state["chosen"] = sorted(chosen)
+            self._var_save(chat_id, state)
+            text, rows = self.variety_screen(state)
+            await query.edit_message_text(text, reply_markup=_keyboard(rows))
+            return
+        if sub == "more":
+            state["offset"] = int(state.get("offset", 0)) + int(state.get("count", 6))
+            batch = await asyncio.to_thread(variety.suggest, self.storage, state["category"], state["days"],
+                                            state["count"], self.config, state["offset"])
+            if not batch:
+                await query.answer("אין עוד הצעות")
+                return
+            state["batch"] = [b.to_dict() for b in batch]
+            self._var_save(chat_id, state)
+            text, rows = self.variety_screen(state)
+            await query.edit_message_text(text, reply_markup=_keyboard(rows))
+            return
+        if sub == "no":
+            self._var_save(chat_id, None)
+            await query.edit_message_text("בוטל — כלום לא נוסף.")
+            return
+        if sub == "add":
+            picked = list((state.get("chosen_names") or {}).values())
+            if not picked:
+                await query.answer("לא סימנתם כלום")
+                return
+            by = state.get("by") or ""
+            draft = self.open_draft(chat_id)
+            added = []
+            for d in picked:
+                name = d["name"]
+                # The list, exactly like a spoken "תוסיף X". Never the cart.
+                self.storage.add_adhoc_request(text=name, requested_by=by or "variety")
+                if draft is not None and draft.status in ("draft", "confirmed"):
+                    draft.add_item(name, 1.0)
+                # A tick on a concrete product is a human choice for that
+                # product -- recorded, so the resolver trusts it next time.
+                for store, chain in (d.get("chains") or {}).items():
+                    if chain.get("code"):
+                        vnext_confirmations.note_interaction(
+                            self.storage, name, str(chain["code"]), store, "kept_exception_choice",
+                            product_name=name, confirmed_by=by, note="variety suggestion accepted")
+                added.append(name)
+            if draft is not None and draft.status in ("draft", "confirmed"):
+                self._save(draft)
+            self._var_save(chat_id, None)
+            where = " וגם להצעת הקנייה הפתוחה" if draft is not None and draft.status in ("draft", "confirmed") else ""
+            await query.edit_message_text(
+                "✅ נוסף לרשימה" + where + ":\n• " + "\n• ".join(added)
+                + "\n\nלא נגעתי בעגלה — זה ייכנס במחזור הבא או ב'אשר והכן עגלה'."
+            )

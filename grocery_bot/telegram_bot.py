@@ -1037,6 +1037,7 @@ class GroceryBot:
             "deals": self._do_deals,
             "show_list": self._do_show_list,
             "last_orders": self._do_last_orders,
+            "variety_request": self._do_variety_request,
             "recipe": self._do_recipe,
             "meal_plan": self._do_meal_plan,
             "start_order": self._do_start_order,
@@ -1811,9 +1812,14 @@ class GroceryBot:
         aisles = [i.name for i in parsed.items if vnext_semantics.category_only(i.name)]
         parsed.items = [i for i in parsed.items if not vnext_semantics.category_only(i.name)]
         if aisles:
+            # A whole aisle is a request for suggestions, like a recipe.
+            # One tap opens the variety screen for it; nothing is listed.
+            phrase = " ו".join(aisles) if len(aisles) > 1 else aisles[0]
+            self.storage.set_state(f"variety_offer:{update.effective_chat.id}", phrase)
             await update.message.reply_text(
                 "🥦 " + ", ".join(aisles) + " — זו קטגוריה, לא מוצר, אז לא הוספתי אותה לרשימה. "
-                "אם רוצים מגוון: כתבו למשל 'תציע לי ירקות שלא קנינו לאחרונה' ואכין הצעה לבחירה."
+                "רוצה שאציע כמה דברים כאלה שלא קניתם לאחרונה?",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("תציע לי", callback_data="varoffer:go")]]),
             )
             if not parsed.items:
                 return
@@ -1895,6 +1901,34 @@ class GroceryBot:
             return
         found = await asyncio.to_thread(find_deals_for_base_list, self.storage, items)
         await update.message.reply_text(format_deals_report(found), parse_mode="HTML")
+
+    async def _do_variety_request(self, update, context, parsed, requested_by: str) -> None:
+        """"הרבה ירקות ופירות שאנחנו לא אוכלים בדרך כלל" — suggestions to tick,
+        never items. Set by Ishay 2026-09-22: "מבחינתי זה כמו להגיד מתכון"."""
+        from . import variety
+        words = (parsed.query or "").strip() or " ".join(i.name for i in (parsed.items or []))
+        count = int(getattr(self.vnext.config, "variety_default_count", 6) or 6)
+        if not words or variety.category_for(words) is None:
+            await update.message.reply_text(
+                "איזו קטגוריה? למשל 'תציע לי ירקות', 'פירות שלא קנינו לאחרונה', 'בשר מגוון'."
+            )
+            return
+        await self.vnext.start_variety(update, context, words, count=count, requested_by=requested_by)
+
+    async def on_variety_offer(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """The "תציע לי" button under an aisle word the household typed."""
+        query = update.callback_query
+        await query.answer()
+        if not _authorized(self.config, update):
+            return
+        phrase = self.storage.get_state(f"variety_offer:{update.effective_chat.id}", "")
+        if not phrase:
+            await query.edit_message_text("פג תוקף — כתבו למשל 'תציע לי ירקות'.")
+            return
+        by = update.effective_user.full_name if update.effective_user else ""
+        ok = await self.vnext.start_variety(update, context, phrase, requested_by=by, query=query)
+        if not ok:
+            await query.edit_message_text("לא זיהיתי את הקטגוריה — כתבו למשל 'תציע לי ירקות'.")
 
     async def _do_last_orders(self, update, context, parsed=None, requested_by: str = "") -> None:
         """"מתי עשינו קניות פעם אחרונה?" — per chain, from real order history.
@@ -3452,6 +3486,9 @@ def build_application(config: Config, storage: Storage) -> Application:
     )
     application.add_handler(
         CallbackQueryHandler(bot.on_recipe_button, pattern=r"^(rcpall|rcpmiss|rcpno|rcpdraft):")
+    )
+    application.add_handler(
+        CallbackQueryHandler(bot.on_variety_offer, pattern=r"^varoffer:")
     )
     application.add_handler(
         CallbackQueryHandler(bot.on_chain_deals_button, pattern=r"^chaindeals$")

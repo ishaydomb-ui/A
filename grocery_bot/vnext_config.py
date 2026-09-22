@@ -151,6 +151,10 @@ class VNextConfig:
     nudge_on_prepare_soon: bool = True
     # An open draft is abandoned after this long; a button on it then says so.
     draft_ttl_hours: float = 36.0
+    # Variety suggestions: "not bought in the last N days" is the bar for
+    # "something we don't usually eat".
+    variety_exclude_recent_days: int = 60
+    variety_default_count: int = 6
     # Review screen pagination.
     review_page_size: int = 10
     # Multi-store: delivery fee / minimum per chain (₪). Defaults are what
