@@ -5,12 +5,17 @@ that function does a live page-load of the actual cart, exactly the kind
 of concurrent live-session touch a Work benchmark must avoid (2026-09-18
 review, section D2). This module does not import plancontext at all.
 
-Every field here comes from Gordon's own preference/intent tables, not
-from a retailer's page text -- so untrusted.flatten() is not needed on
-this path (nothing here is copied from a page the retailer controls); if
-a future field ever draws from page-sourced text, it must go through
-untrusted.flatten() first, the same way plancontext already does for
-_read_carts.
+Every field here is read from Gordon's own preference/intent tables --
+but that is not the same as the *values* being ours: a `product_name`
+in `preferred_products` is the string the retailer's page carried, kept
+verbatim so it can be matched again. Corrected 2026-09-22, when the
+cross-bot injection spec put the axis where it belongs -- who consumes
+the output, not which table it came from. This payload is read into
+another agent's prompt, so `build_projection` returns it through
+`untrusted.safe_payload`, which flattens every string and drops any that
+claims authority. The earlier wording here ("untrusted.flatten() is not
+needed on this path") was wrong about why, and is kept named rather than
+quietly deleted.
 
 Every read goes through Storage's own public methods -- list_pending_adhoc,
 list_preferences, list_rejections, list_stock_items -- never a direct SQL
@@ -101,4 +106,10 @@ def build_projection(storage, store: str) -> dict:
     except Exception:  # noqa: BLE001
         projection["promotions"] = []
 
-    return projection
+    # Everything below leaves this project: Work reads it into another
+    # model's prompt, where none of our validators apply. The values are
+    # ours only in the sense that we stored them -- product names inside
+    # them were written by the retailer. See `untrusted.safe_payload`.
+    from .untrusted import safe_payload
+
+    return safe_payload(projection)

@@ -88,7 +88,11 @@ def build_export(storage, store: str) -> dict:
         export["repeat_cart_failures"] = []
 
     export["retailer_context"] = _retailer_context(store)
-    return export
+    # Leaves the project -- cleaned wholesale on the way out. See
+    # `untrusted.safe_payload`.
+    from .untrusted import safe_payload
+
+    return safe_payload(export)
 
 
 def _metadata(storage, store: str) -> dict:

@@ -559,6 +559,25 @@ race and is not claimed to be the boundary — it is depth behind the
 user-id check. Full write-up:
 `docs/reports/2026-09-22-injection-authority-claim.md`.
 
+**v2 delta the same night (23.09 00:04, Ishay via Arthur):** the axis is
+*who consumes the output*, not internal/external. Checked three things.
+(a) Connectors are account-level — every project's `mcpServers` in
+`~/.claude.json` is `{}`, while `claudeAiMcpEverConnected` lists Calendar,
+Drive, Spotify, Gmail, Claude Docs — but they belong to the **dev
+session**, not to the service: `agentconvo` runs with `tools=[]`,
+`setting_sources=[]` and an `allowed_tools` list generated from
+`planner.TOOLS`. (b) Gordon never writes `site_capabilities.json` (zero
+references in the repo) and its only file write outside SQLite is
+`data/backup_doctor_state.json` (condition keys, read by nobody else);
+inbound from Miri is a parsed timestamp only. The real gap was the three
+Work export modules — `product_name`/`raw_name`/`rejected_product_name`
+are strings the *retailer* wrote, handed to another agent's prompt — now
+cleaned wholesale by `untrusted.safe_payload` at `build_projection`,
+`build_snapshot` and `build_export`. (c) No new friction added on cart
+writes, deliberately: the user-id gate, `CartGuard`, the per-line report
+and agentconvo's cart-tool rule already stand there, there is no checkout
+to gate, and Ishay shops from a phone. His call if he wants it anyway.
+
 ## 2h. Family Runtime MVP, Bitwarden, and the Work-safe export (2026-09-18/20)
 
 **Branch for all of this: `claude/gordon-work-mvp-cartpause`** — a

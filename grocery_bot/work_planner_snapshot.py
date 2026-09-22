@@ -80,7 +80,11 @@ def build_snapshot(storage, store: str) -> dict:
             "has synced' rather than 'never bought'.",
         ],
     }
-    return snapshot
+    # Leaves the project -- cleaned wholesale on the way out. See
+    # `untrusted.safe_payload`.
+    from .untrusted import safe_payload
+
+    return safe_payload(snapshot)
 
 
 def _household_needs(storage, store: str) -> list[dict]:

@@ -157,3 +157,43 @@ def safe_all(values, limit: int = MAX_VALUE_CHARS) -> list[str]:
     """`safe` across a sequence, dropping whatever empties out."""
     out = [safe(value, limit) for value in values or ()]
     return [value for value in out if value]
+
+
+# --- Leaving the project ----------------------------------------------
+#
+# Added 2026-09-22 with the spec's v2 delta: the axis that matters is
+# *who consumes the output*, not "internal vs external". Gordon's Work
+# export modules were written as pure reads of Gordon's own tables, and
+# their docstrings said as much -- but the *values* in those tables
+# include product names the retailer wrote (`raw_name`,
+# `product_display_name`, `rejected_product_name`), stored during
+# identity resolution and order sync. Handing those to another agent's
+# prompt is the same vector as handing them to our own, one hop further
+# away, where none of our validators apply.
+#
+# So payloads that leave this project are walked and cleaned wholesale:
+# every string value flattened and authority-claim-checked, whatever the
+# field is called. A whitelist of "the fields that hold names" would go
+# stale the first time someone adds one.
+
+# Larger than MAX_VALUE_CHARS: an export field may legitimately hold a
+# sentence (a reason, a note), and truncating those would corrupt data
+# rather than protect anyone. Newlines still collapse and the
+# authority-claim check still runs -- those are the parts that matter
+# outside a single prompt line.
+MAX_EXPORT_CHARS = 400
+
+
+def safe_payload(value, limit: int = MAX_EXPORT_CHARS):
+    """Every string inside a nested payload, cleaned. Keys are left alone.
+
+    Keys are ours -- we write them in the export modules -- and renaming
+    one would break the contract the consumer reads by.
+    """
+    if isinstance(value, str):
+        return safe(value, limit)
+    if isinstance(value, dict):
+        return {k: safe_payload(v, limit) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [safe_payload(v, limit) for v in value]
+    return value
