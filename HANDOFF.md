@@ -790,8 +790,13 @@ today for delivery tomorrow, Shufersal only — he has a coupon).**
   `everything` (every product bought in a year) while a normal Shufersal
   order is ~41 items. Ishay's named items are all in (שמיר, פטרוזיליה,
   גבינה לבנה, produce, the XPO gel deal ₪34.90, שוקולית for Liran).
-  **Open: awaiting his choice** — trim to core (share ≥0.35), to full
-  (≥0.15), or leave it. A trim is ~100 browser removals, 20-30 min.
+  **Closed without a trim**: Ishay finished the shop himself (relayed by
+  boss-6e, 22.09 ~16:05, "סיימתי את הקנייה בשופרסל"); the cart read back
+  as 1 line / ₪50.80, i.e. checked out. Recorded with
+  `execution.mark_shopped(storage, "shufersal")` and the post-checkout
+  snapshot dropped on purpose (`clear_shopped_snapshot`) — snapshotting an
+  already-emptied cart would have logged ~150 phantom removals. **No
+  refill was run**, deliberately: the default list is `everything`.
   **Lesson to fold into the vNext plan: a manual rebuild must default to
   the `core`/`full` list, not `everything`.**
 
