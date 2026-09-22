@@ -141,9 +141,34 @@ Read it under **Users → Audit log**, filtered by action or actor.
 | `/readyz` | open | Readiness: database reachable and schema applied. 503 otherwise. |
 | `/api/admin/status` | admin | Editorial workload, open findings, active sessions, last import. |
 
-Point an uptime monitor at `/readyz`. Logs are structured JSON on stdout, with
-credentials, tokens and MFA secrets redacted; collect them with whatever you
-already use.
+Point an uptime monitor at `/readyz`, not at the site's front page. The front
+page is static and keeps being served long after the database behind it has
+stopped answering, so a monitor watching it reports green through exactly the
+outage that matters. `/readyz` checks the database and the schema, and answers
+503 when either is wrong.
+
+Without such a monitor there is no record that an outage happened at all. The
+container list shows only the current run: after a reboot every service reads
+as freshly started, which looks identical whether the site was down for a
+minute or for a day.
+
+Any external checker will do. With UptimeRobot's free tier:
+
+1. Add New Monitor → type **HTTP(s)**.
+2. URL `https://<your hostname>/readyz`, interval 5 minutes.
+3. Add an email alert contact — or install their app for a push, which is what
+   actually reaches you out of hours.
+
+Keep the status page private. This catalogue is served with
+`X-Robots-Tag: noindex` precisely so it is not advertised, and a public status
+page undoes that.
+
+A checker aimed at the hostname also catches the failures that have nothing to
+do with the containers: an expired certificate, or a dynamic-DNS name that has
+lapsed. Both look the same to a clinician — the site does not open.
+
+Logs are structured JSON on stdout, with credentials, tokens and MFA secrets
+redacted; collect them with whatever you already use.
 
 Watch for:
 
