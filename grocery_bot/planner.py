@@ -136,6 +136,10 @@ TOOLS: dict[str, Tool] = {
     "last_orders": Tool(
         name="last_orders", description="מתי הייתה הקנייה/ההזמנה האחרונה בכל רשת", args={},
     ),
+    "suggest_variety": Tool(
+        name="suggest_variety", description="הצעות למוצרים מקטגוריה שלא קנו לאחרונה (ירקות, פירות, בשר…)",
+        args={"category": "מילות הקטגוריה"}, required=("category",),
+    ),
     "recipe": Tool(
         name="recipe", description="פירוק מנה למצרכים",
         args={"dish": "שם המנה", "servings": "מספר סועדים אם נאמר"},

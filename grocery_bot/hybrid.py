@@ -52,6 +52,7 @@ TOOL_TO_INTENT = {
     "show_deals": "deals",
     "show_list": "show_list",
     "last_orders": "last_orders",
+    "suggest_variety": "variety_request",
     "recipe": "recipe",
     "meal_plan": "meal_plan",
     "report_waste": "report_waste",
@@ -65,6 +66,7 @@ _ITEM_ARG = {
     "show_deals": "item",
     "recipe": "dish",
     "report_waste": "item",
+    "suggest_variety": "category",
 }
 
 
@@ -106,7 +108,7 @@ def reconsider(text: str, storage, factories: dict | None = None):
             continue
         name = step.args.get(_ITEM_ARG.get(step.tool, ""), "")
         items = []
-        if name and step.tool not in ("price_check", "recipe", "show_deals"):
+        if name and step.tool not in ("price_check", "recipe", "show_deals", "suggest_variety"):
             items = [ParsedItem(
                 name=name,
                 amount=step.args.get("amount"),

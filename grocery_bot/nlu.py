@@ -82,6 +82,10 @@ INTENTS = {
     # 2026-09-22: "מתי עשינו קניות פעם אחרונה?" fell through three passes
     # to unclear, and the loop pass then *invented* a command to type.
     "last_orders",
+    # 2026-09-22: a category with a variety qualifier ("הרבה ירקות ופירות
+    # שאנחנו לא אוכלים בדרך כלל") is a request for suggestions, like a
+    # recipe -- never a product to add.
+    "variety_request",
     "smalltalk",
     "unclear",
 }
@@ -89,7 +93,7 @@ INTENTS = {
 _SYSTEM_PROMPT = """אתה מנתח הודעות של בוט קניות משפחתי בעברית. החזר JSON בלבד, בלי טקסט נוסף ובלי הסברים.
 
 שדות:
-- intent: אחד מ- add_item | remove_item | price_query | deals | show_list | recipe | meal_plan | start_order | add_to_cart | report_waste | shopped | last_orders | change_quantity | replace_item | smalltalk | unclear
+- intent: אחד מ- add_item | remove_item | price_query | deals | show_list | recipe | meal_plan | start_order | add_to_cart | report_waste | shopped | last_orders | variety_request | change_quantity | replace_item | smalltalk | unclear
 - items: מערך של {"name","amount","unit","brand"} — רק שם המוצר עצמו, בלי פעלים כמו "תוסיף"/"תוריד"/"צריך".
   amount = מספר או null. unit = "גרם"/"קילו"/"יחידות"/"ליטר" או null. brand = שם יצרן אם צוין, אחרת null.
 - query: מחרוזת חיפוש (ל-price_query, ל-recipe שם המנה, ל-meal_plan תיאור)
@@ -110,6 +114,7 @@ _SYSTEM_PROMPT = """אתה מנתח הודעות של בוט קניות משפח
 - "כמה עולה X" / "מחיר של X" / "יש מבצע על X" => price_query.
 - "מה יש במבצע" => deals. "מה יש ברשימה" / "תראה לי את הרשימה" => show_list.
 - "מתי קנינו/עשינו קניות פעם אחרונה" / "מה ההזמנה האחרונה" / "מתי הזמנו" => last_orders (שאלה על העבר, לא דיווח).
+- בקשה לקטגוריה שלמה עם מגוון/חידוש — "הרבה ירקות ופירות שאנחנו לא אוכלים בדרך כלל", "תציע לי ירקות חדשים", "פירות שלא קנינו לאחרונה", "בשר מגוון לשבוע", וגם מילת קטגוריה לבדה ("ירקות") => intent=variety_request, query=מילות הקטגוריה (למשל "ירקות ופירות"), items ריק. זו בקשה להצעות, לא פריט. אם באותה הודעה יש גם מוצר ספציפי (למשל "שוקו אבקה") — הוא add_item נפרד ב-actions.
 - **הבחנה חשובה בין "רשימה" ל"עגלה/סל"**:
   - "רשימה" = הרשימה הפנימית של הבוט, שממתינה למחזור הבא.
   - "עגלה" / "סל" = הסל האמיתי באתר שופרסל.
