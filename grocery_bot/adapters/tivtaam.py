@@ -630,7 +630,11 @@ class TivTaamAdapter(StoreAdapter):
             ).first
             if not line.count():
                 return False
+            # Lines below the panel's fold need scrolling first; without it
+            # the hover lands nowhere and the click times out (2026-09-22).
+            line.scroll_into_view_if_needed(timeout=5_000)
             line.hover(timeout=5_000)
+            self._page.wait_for_timeout(400)  # the hover action fades in
             line.locator(CART_LINE_REMOVE_SELECTOR).first.click(timeout=10_000)
             for _ in range(10):
                 self._page.wait_for_timeout(500)
