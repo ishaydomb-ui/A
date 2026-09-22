@@ -1807,6 +1807,16 @@ class GroceryBot:
             await update.message.reply_text("מה להוסיף?")
             return
         added = []
+        from . import vnext_semantics
+        aisles = [i.name for i in parsed.items if vnext_semantics.category_only(i.name)]
+        parsed.items = [i for i in parsed.items if not vnext_semantics.category_only(i.name)]
+        if aisles:
+            await update.message.reply_text(
+                "🥦 " + ", ".join(aisles) + " — זו קטגוריה, לא מוצר, אז לא הוספתי אותה לרשימה. "
+                "אם רוצים מגוון: כתבו למשל 'תציע לי ירקות שלא קנינו לאחרונה' ואכין הצעה לבחירה."
+            )
+            if not parsed.items:
+                return
         for item in parsed.items:
             self.storage.add_adhoc_request(
                 text=item.name,

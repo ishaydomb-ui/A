@@ -13,7 +13,7 @@ import logging
 import time
 from datetime import datetime, timezone
 
-from . import breaker, cartpause, identity
+from . import breaker, cartpause, identity, vnext_semantics
 from typing import Callable
 
 from . import dealfill
@@ -299,7 +299,7 @@ class CartGuard:
         since the last fill will not be re-added on this pass — the
         conservative direction, and one pass only.
         """
-        from . import standingcart
+        from . import standingcart, vnext_semantics
 
         present: dict = {}
         try:
@@ -725,6 +725,17 @@ def add_terms_to_cart(
                         ))
                         continue
                     # absent → fall through and add
+                if vnext_semantics.category_only(pt.term):
+                    # An aisle, not a product ("ירקות"): nothing to search for,
+                    # and searching it is how frozen soup mix got into a real
+                    # cart on 2026-09-22. Left for the household to specify.
+                    storage.update_run_item(item_id, outcome="unresolved_ambiguity",
+                                            evidence="category word, not a product")
+                    report.record(CartAddResult(
+                        item_name=pt.term, store=store, status="ambiguous",
+                        detail="קטגוריה ולא מוצר — צריך לבחור מה בדיוק", failure_kind="ambiguous",
+                    ))
+                    continue
                 ident = (identities or {}).get((store, pt.term)) or identity.resolve(storage, store, pt)
                 if ident and storage.is_rejected(store, pt.term, ident.product_code):
                     # The household said "not that one" for this term;

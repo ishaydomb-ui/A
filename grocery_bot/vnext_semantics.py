@@ -537,3 +537,28 @@ def search_key(term: ParsedTerm) -> str:
     if stem != head and len(stem) >= 4:
         return stem[:-1]
     return head
+
+
+# Words that name a whole aisle, not a product. "ירקות" is not a thing a
+# cart can hold, and the old resolver turned it into frozen soup mix and
+# a dried-fruit tray on 2026-09-22 ("הרבה ירקות ופירות שאנחנו לא אוכלים
+# בדרך כלל" was meant like a recipe: suggest, don't add).
+CATEGORY_WORDS = {
+    "ירקות", "ירק", "פירות", "פרי", "בשר", "בשרים", "דגים", "גבינות", "גבינה", "מוצרי חלב",
+    "חטיפים", "ממתקים", "שתייה", "משקאות", "קטניות", "תבלינים", "קפואים", "מאפים",
+    "ניקיון", "מוצרי ניקיון", "טואלטיקה", "פירות וירקות", "ירקות ופירות",
+}
+
+
+def category_only(raw: str) -> bool:
+    """True when the whole term is an aisle name with no product in it."""
+    text = _norm(raw)
+    if not text:
+        return False
+    if text in CATEGORY_WORDS:
+        return True
+    words = [w for w in _tokens(text) if w not in _STOPWORDS and w not in _QUANTITY_WORDS]
+    return bool(words) and all(w in CATEGORY_WORDS for w in words)
+
+
+_QUANTITY_WORDS = ("הרבה", "קצת", "מעט", "עוד", "כמה", "מלא", "המון", "שונים", "שונות", "מגוון", "חדשים", "חדשות")
