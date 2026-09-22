@@ -112,7 +112,13 @@ add_item | remove_item | price_query | deals | show_list | recipe | meal_plan | 
 
 
 def _context_lines(names) -> str:
-    names = [str(n).strip() for n in names if str(n or "").strip()]
+    # `safe`, not `str.strip`: a standing-list entry can carry the name a
+    # chain's search returned, so it is fetched text on its way into a
+    # prompt -- one line each, and a value claiming authority dropped.
+    # See `untrusted.py`.
+    from .untrusted import safe_all
+
+    names = safe_all(names)
     if not names:
         return "(ריק)"
     return ", ".join(names[:_MAX_CONTEXT_ITEMS])

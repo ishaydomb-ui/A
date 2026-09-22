@@ -179,7 +179,7 @@ def describe(context: dict) -> str:
     # results, so it is fetched text and gets the same flattening as the
     # planner's context — a newline in it would otherwise break this out
     # of its own line in the prompt. See `untrusted.py`.
-    from .untrusted import flatten
+    from .untrusted import safe as flatten
 
     subject = flatten(context.get("subject") or context.get("last_subject") or "")
     if not subject:

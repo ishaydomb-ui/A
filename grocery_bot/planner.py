@@ -241,13 +241,15 @@ def describe_context(context: dict) -> str:
     """
     if not context:
         return ""
-    from .untrusted import flatten, flatten_all
+    from .untrusted import safe as flatten, safe_all as flatten_all
 
     # Every interpolated value is flattened, because several of them are
     # not ours: cart item names come from the chain's own page or API, and
     # a newline inside one turns a context line into a free-standing
     # prompt line. See `untrusted.py` — the vector was demonstrated here,
     # and newlines inside Tiv Taam product names are real data.
+    # `safe` is `flatten` plus the authority-claim drop added 2026-09-22;
+    # the alias keeps the call sites below reading as they did.
     lines = []
     if context.get("transcript"):
         # The exchange first: a correction refers to what was *said*, and
