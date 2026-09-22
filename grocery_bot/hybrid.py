@@ -51,6 +51,7 @@ TOOL_TO_INTENT = {
     "price_check": "price_query",
     "show_deals": "deals",
     "show_list": "show_list",
+    "last_orders": "last_orders",
     "recipe": "recipe",
     "meal_plan": "meal_plan",
     "report_waste": "report_waste",

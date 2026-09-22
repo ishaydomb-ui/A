@@ -133,6 +133,9 @@ TOOLS: dict[str, Tool] = {
     "show_cart": Tool(
         name="show_cart", description="מה יש עכשיו בעגלה", args={},
     ),
+    "last_orders": Tool(
+        name="last_orders", description="מתי הייתה הקנייה/ההזמנה האחרונה בכל רשת", args={},
+    ),
     "recipe": Tool(
         name="recipe", description="פירוק מנה למצרכים",
         args={"dish": "שם המנה", "servings": "מספר סועדים אם נאמר"},

@@ -255,6 +255,43 @@ def _authorized(config: Config, update: Update) -> bool:
     return user is not None and user.id in config.allowed_telegram_user_ids
 
 
+def last_orders_text(storage) -> str:
+    from datetime import date, datetime
+
+    from . import standingcart
+    from .chains import CART_CAPABLE, display_name
+
+    today = date.today()
+
+    def _ago(day: str) -> str:
+        try:
+            d = datetime.fromisoformat(day[:19]).date()
+        except ValueError:
+            return ""
+        n = (today - d).days
+        return "היום" if n == 0 else ("אתמול" if n == 1 else f"לפני {n} ימים")
+
+    reported = standingcart._last_shop_by_store(storage)  # noqa: SLF001
+    lines = ["🧾 הקנייה האחרונה"]
+    for store in sorted(CART_CAPABLE):
+        orders = storage.list_orders(store, limit=1)
+        if orders:
+            o = orders[0]
+            when = str(o.get("placed_at") or "")[:10]
+            bits = [f"{when} ({_ago(when)})"]
+            if o.get("item_count"):
+                bits.append(f"{o['item_count']} פריטים")
+            if o.get("total"):
+                bits.append(f"₪{float(o['total']):,.2f}")
+            lines.append(f"• {display_name(store)}: " + " · ".join(bits))
+        else:
+            lines.append(f"• {display_name(store)}: אין הזמנה בהיסטוריה שסונכרנה")
+        rep = reported.get(store)
+        if rep and (not orders or rep > str(orders[0].get("placed_at") or "")[:10]):
+            lines.append(f"   דיווחת על קנייה ב-{rep} ({_ago(rep)}) — עוד לא מופיעה בהיסטוריית החנות")
+    return "\n".join(lines)
+
+
 class GroceryBot:
     def __init__(self, config: Config, storage: Storage):
         self.config = config
@@ -999,6 +1036,7 @@ class GroceryBot:
             "price_query": self._do_price,
             "deals": self._do_deals,
             "show_list": self._do_show_list,
+            "last_orders": self._do_last_orders,
             "recipe": self._do_recipe,
             "meal_plan": self._do_meal_plan,
             "start_order": self._do_start_order,
@@ -1847,6 +1885,21 @@ class GroceryBot:
             return
         found = await asyncio.to_thread(find_deals_for_base_list, self.storage, items)
         await update.message.reply_text(format_deals_report(found), parse_mode="HTML")
+
+    async def _do_last_orders(self, update, context, parsed=None, requested_by: str = "") -> None:
+        """"מתי עשינו קניות פעם אחרונה?" — per chain, from real order history.
+
+        Two different facts, both shown and labelled: the last order the
+        chain's own history holds (`order_log`, synced nightly) and the
+        last shop the household *reported* (`/done` or "סיימתי"), which
+        can be newer (Shufersal's history lags ~36 h) or a test marker.
+        """
+        await update.message.reply_text(last_orders_text(self.storage))
+
+    async def last_orders_cmd(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not _authorized(self.config, update):
+            return
+        await self._do_last_orders(update, context)
 
     async def _do_show_list(self, update, context, parsed, requested_by: str) -> None:
         await update.message.reply_text(
@@ -3139,6 +3192,7 @@ COMMAND_MENU: list[tuple[str, str]] = [
     ("plan", "הצעת קנייה — לבדוק, לערוך ולאשר לפני שנוגעים בעגלה"),
     ("readiness", "האם כדאי להכין קנייה עכשיו"),
     ("status", "מצב החיבור לאתרים והעגלות"),
+    ("lastorders", "מתי קנינו פעם אחרונה בכל רשת"),
     ("price", "מחיר נוכחי בסניף + מבצע אם יש"),
     ("deals", "מבצעים אמיתיים על מה שאתם קונים"),
     ("stockup", "שווה לאגור — מבצעים חריגים לקנייה מראש"),
@@ -3381,6 +3435,7 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CallbackQueryHandler(bot.vnext.on_callback, pattern=r"^vn:"))
     application.add_handler(CommandHandler("readiness", bot.vnext_readiness))
     application.add_handler(CommandHandler("status", bot.site_status))
+    application.add_handler(CommandHandler("lastorders", bot.last_orders_cmd))
     application.add_handler(CallbackQueryHandler(bot.resolve_ambiguity, pattern=r"^(resolve|skip):"))
     application.add_handler(
         CallbackQueryHandler(bot.on_proposal_button, pattern=r"^(ptoggle|pall|pnone|pconfirm):")

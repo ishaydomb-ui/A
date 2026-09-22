@@ -79,6 +79,9 @@ INTENTS = {
     # של הקוטג' ל-2".
     "change_quantity",
     "replace_item",
+    # 2026-09-22: "מתי עשינו קניות פעם אחרונה?" fell through three passes
+    # to unclear, and the loop pass then *invented* a command to type.
+    "last_orders",
     "smalltalk",
     "unclear",
 }
@@ -86,7 +89,7 @@ INTENTS = {
 _SYSTEM_PROMPT = """אתה מנתח הודעות של בוט קניות משפחתי בעברית. החזר JSON בלבד, בלי טקסט נוסף ובלי הסברים.
 
 שדות:
-- intent: אחד מ- add_item | remove_item | price_query | deals | show_list | recipe | meal_plan | start_order | add_to_cart | report_waste | shopped | smalltalk | unclear
+- intent: אחד מ- add_item | remove_item | price_query | deals | show_list | recipe | meal_plan | start_order | add_to_cart | report_waste | shopped | last_orders | change_quantity | replace_item | smalltalk | unclear
 - items: מערך של {"name","amount","unit","brand"} — רק שם המוצר עצמו, בלי פעלים כמו "תוסיף"/"תוריד"/"צריך".
   amount = מספר או null. unit = "גרם"/"קילו"/"יחידות"/"ליטר" או null. brand = שם יצרן אם צוין, אחרת null.
 - query: מחרוזת חיפוש (ל-price_query, ל-recipe שם המנה, ל-meal_plan תיאור)
@@ -106,6 +109,7 @@ _SYSTEM_PROMPT = """אתה מנתח הודעות של בוט קניות משפח
 - מילה בודדת חסרת הקשר או הודעה לא מובנת (למשל "מה") => intent=unclear. עדיף unclear מאשר לנחש.
 - "כמה עולה X" / "מחיר של X" / "יש מבצע על X" => price_query.
 - "מה יש במבצע" => deals. "מה יש ברשימה" / "תראה לי את הרשימה" => show_list.
+- "מתי קנינו/עשינו קניות פעם אחרונה" / "מה ההזמנה האחרונה" / "מתי הזמנו" => last_orders (שאלה על העבר, לא דיווח).
 - **הבחנה חשובה בין "רשימה" ל"עגלה/סל"**:
   - "רשימה" = הרשימה הפנימית של הבוט, שממתינה למחזור הבא.
   - "עגלה" / "סל" = הסל האמיתי באתר שופרסל.
