@@ -772,6 +772,29 @@ re-ran through GordonChrome instead; and Shufersal serves its mobile
 layout below ~1024px, hiding the remove icons — the CDP tab now sets a
 1280×900 viewport. Tiv Taam per-line remove now exists (`remove_line`).
 
+**2026-09-22, live work on the real Shufersal cart (Ishay is shopping
+today for delivery tomorrow, Shufersal only — he has a coupon).**
+- Morning: an aisle-word bug put frozen soup mix / frozen mixed veg /
+  dried-fruit tray into both carts (see the category guard below); the
+  three lines were removed.
+- 09:53 Ishay: "תכין שוב עגלה בשופרסל הכל נמחק" — the cart had dropped to
+  25 lines. **Three parties were on that Shufersal account this morning**
+  (recorded by boss-6e in its locks.md): Gordon (cart runs), Miri (an SMS
+  code → account reset, 09:56) and Ishay by hand. Treat concurrent
+  account use as the likely cause of vanished lines, not a bug, until
+  shown otherwise. GordonChrome (9224) covers Tiv Taam only; Shufersal
+  still runs on the local browser + exit node.
+- `scripts/rebuild_cart.py shufersal "<extras>"` (new) rebuilt it with
+  `guard_cart=False`: 130 added, 16 ambiguous, 3 not found, 1 error →
+  **~155 lines / ₪1,823**, because `standingcart.DEFAULT_LIST` is
+  `everything` (every product bought in a year) while a normal Shufersal
+  order is ~41 items. Ishay's named items are all in (שמיר, פטרוזיליה,
+  גבינה לבנה, produce, the XPO gel deal ₪34.90, שוקולית for Liran).
+  **Open: awaiting his choice** — trim to core (share ≥0.35), to full
+  (≥0.15), or leave it. A trim is ~100 browser removals, 20-30 min.
+  **Lesson to fold into the vNext plan: a manual rebuild must default to
+  the `core`/`full` list, not `everything`.**
+
 **GordonChrome on liran-aba-pc — built 2026-09-21 (`5be3bac`), NOT yet
 switched on.** Ishay approved (2026-09-21) running the store browsers in a
 dedicated Chrome on the household PC: one Chrome process per bot (a CDP
