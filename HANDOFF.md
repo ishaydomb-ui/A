@@ -759,7 +759,7 @@ parser now sees — verify against the cart read). `/status` added the
 same morning (`site_status`): per chain browser mode / logged in / cart
 lines+total, exit node, last synced order.
 
-**TEST STATE set 2026-09-21 ~11:40 on Ishay's request ("אני רוצה לעשות
+**TEST STATE — the fake 'shopped 2026-09-21' markers were REVERTED 2026-09-22 07:05 to the real order dates (Shufersal 09-07, Tiv Taam 09-17) and the shopped snapshots cleared, on Ishay's instruction that they were a reset only; a real shop is happening 2026-09-22 for the 23rd. Also: a full `/start_order` refill ran 21.09 22:47 (run 17, 37+29 lines), so both carts are full again. Original note:** set 2026-09-21 ~11:40 on Ishay's request ("אני רוצה לעשות
 טסטים מול הבוט… למחוק את העגלה ולשנות כאילו אני אחרי קנייה"):** both real
 carts emptied via `scripts/clear_cart.py` (Shufersal 9 lines, Tiv Taam
 28 lines — verified 0/₪0 each), `execution.mark_shopped(storage, "all")`
