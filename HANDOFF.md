@@ -6,7 +6,7 @@ in the progress log in [`GOALS.md`](./GOALS.md); this file answers one
 question only — *if someone picked this up right now, what would they
 need to know?*
 
-**Last anchored:** 2026-09-21 ~10:30 CEST — GordonChrome/CDP support deployed but off, awaiting the one-time login (§2j); vNext 2b live; Shufersal cart cleaned; Tiv Taam cart parser fixed; vNext 1.5 done (§2j)
+**Last anchored:** 2026-09-22 16:10 CEST — live Shufersal rebuild awaiting Ishay's trim choice (§2j); category guard + variety flow shipped; Tiv Taam on GordonChrome
 **Session:** https://claude.ai/code/session_01AR7esAYdoXQ71HXtqJPpQV
 **Branch:** `claude/gordon-work-mvp-cartpause`
 **Status is in `git log`, not hand-typed here.**
