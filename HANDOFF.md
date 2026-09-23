@@ -578,6 +578,20 @@ writes, deliberately: the user-id gate, `CartGuard`, the per-line report
 and agentconvo's cart-tool rule already stand there, there is no checkout
 to gate, and Ishay shops from a phone. His call if he wants it anyway.
 
+**Drive: there IS a live Gordon→Drive flow, and it is not in this repo.**
+Written down 2026-09-23 because a peer's `grep` over the repo concluded
+there wasn't one and nearly acted on it. On **2026-09-20T19:41:53Z**
+Ishay said "שמור הכל בדרייב", and the UX audit pack went up through
+**`mcp__claude_ai_Google_Drive__create_file`** — 11 calls: the folder
+"Gordon UX Audit (2026-09-20)", the eight audit deliverables inside it,
+and later the two vNext reports. Not the service account, not a bundle
+script: a session driving an MCP connector on request. `HANDOFF.md`'s
+"no bundle mechanism exists here" and the `familyos-sa@` service account
+for `CURRENT.json` are both true and both about something else. So a
+blanket deny on the Drive MCP tools would break a thing Ishay asked for,
+and the repo cannot show that — the flow lives in the transcript
+(`~/.claude/projects/-home-codex-grocery-automation/79a55825-…jsonl`).
+
 ## 2h. Family Runtime MVP, Bitwarden, and the Work-safe export (2026-09-18/20)
 
 **Branch for all of this: `claude/gordon-work-mvp-cartpause`** — a
