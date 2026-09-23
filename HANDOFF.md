@@ -7,9 +7,24 @@ question only — *if someone picked this up right now, what would they
 need to know?*
 
 **Last anchored:** 2026-09-22 16:10 CEST — live Shufersal rebuild awaiting Ishay's trim choice (§2j); category guard + variety flow shipped; Tiv Taam on GordonChrome
-**Session:** https://claude.ai/code/session_01AR7esAYdoXQ71HXtqJPpQV
+**Session:** https://claude.ai/code/session_01QPAkuGgkSRRdHts66Hw2ps — new session 2026-09-23 ~13:30 CEST after the prior Remote Control session hung overnight (העברה re-raised the tmux session). No work was lost: git was clean at pickup, and nothing below this line was in flight.
 **Branch:** `claude/gordon-work-mvp-cartpause`
 **Status is in `git log`, not hand-typed here.**
+
+**Pickup verification, 2026-09-23 ~13:30 CEST (no anchor triggered — nothing changed, this is a handover-procedure check per §4):**
+`grocery-bot.service` active, PID 340576, running the code at `d3a7190`
+(the HEAD commit already at pickup). `grocery-prices.service` shows one
+failed run at 12:24 CEST — a transient timeout fetching the portal's
+listing pages, not a code fault; `catalog_meta` shows a successful
+Shufersal refresh at 04:16 UTC the same morning (5,820 products), and
+`alert_gate.py` correctly held the Telegram alert (1 failure in 6h,
+below its threshold of 2) — the timer retries at 18:17 CEST on its own.
+`cart_paused:tivtaam` is `false`, no Shufersal pause key exists (never
+paused). Exit node is the iPhone (Netanya, real IL residential IP,
+verified live); `liran-aba-pc`/בוב is online and idle, available as
+priority fallback per `exitnode.py`. The two system-scope stray units
+from §4b are still failing hourly/nightly — unchanged, still needs
+Ishay's sudo, not re-flagging each pickup.
 
 **Since the last anchor (`c178749`):** the **FINAL RELIABILITY + AGENT UX
 BUILD** (Ishay's mandate of 2026-09-17), phases 0–12 done and deployed.
