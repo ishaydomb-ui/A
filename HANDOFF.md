@@ -1354,6 +1354,18 @@ the same result whether or not the thing is true is not evidence.**
      person. (Ishay 2026-09-04: shared household purse — "מה ששלי שלה",
      everything goes to the joint household — so `holder` is about *who
      can physically redeem*, not whose money it is.)
+  3. **NEW 2026-09-23, relayed by portfolio-strategy (Rob), its last
+     handover before that project closed — his HANDOFF §5 (pre-update)
+     is the source.** Nationwide geocoding of all 6,136 harvested branch
+     addresses costs **~$30**. Checked against this repo before writing
+     it down: `data/benefits/geocode_cache.json` holds exactly **419**
+     entries today, all Tel Aviv — matching Ishay's own 2026-09-10 scope
+     call ("לא נתחיל מכל הארץ. נתחיל מתל אביב", `docs/MIRI_INTEGRATION.md`
+     §benefits-area). So `areas.chains_near`/`benefits-area` answer
+     correctly for Tel Aviv only; every other city is invisible to it,
+     not broken. **This is a spend decision, Ishay's alone** (per the
+     authority table) — not decided here, not decided by the relaying
+     session either. Flagging, not closing.
 
   The success criterion is now settled (Ishay 2026-09-04): know in real
   time, at a moment of intent (a place/category/store), where a discount
