@@ -197,3 +197,34 @@ def safe_payload(value, limit: int = MAX_EXPORT_CHARS):
     if isinstance(value, (list, tuple)):
         return [safe_payload(v, limit) for v in value]
     return value
+
+
+def safe_block(text, limit: int = MAX_EXPORT_CHARS) -> str:
+    """A multi-line block on its way *back* to a model, line by line.
+
+    For tool results in `agentconvo`: a price or deals answer is our own
+    formatted text, several lines long, with retailer-written product
+    names inside it. `safe` is wrong here -- it would collapse the block
+    to one truncated line and destroy a legitimate answer. So the block
+    keeps its structure (the structure is ours) and each line is checked
+    on its own; a line claiming authority is replaced, the rest stand.
+
+    The residue, stated rather than papered over: a product name that
+    contains a newline can still split one line of a tool result into
+    two. Inside a block the model already reads as tool output that buys
+    an attacker a line that looks like more tool output -- and if that
+    line tries to grant permission, this check is what it meets.
+    """
+    block = str(text or "")
+    if not block:
+        return ""
+    out = []
+    for line in block.splitlines():
+        if claims_authority(line):
+            logger.warning("untrusted: dropped a tool-result line claiming authority: %r", line)
+            out.append(REDACTED)
+        elif len(line) > limit:
+            out.append(line[: limit - 1].rstrip() + "…")
+        else:
+            out.append(line)
+    return "\n".join(out)

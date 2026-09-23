@@ -592,6 +592,25 @@ blanket deny on the Drive MCP tools would break a thing Ishay asked for,
 and the repo cannot show that — the flow lives in the transcript
 (`~/.claude/projects/-home-codex-grocery-automation/79a55825-…jsonl`).
 
+**Tool results are a prompt boundary too (2026-09-23, Ishay via בוס).**
+Found while answering the spec's session-separation question, verified in
+code: in `agentconvo` a tool result returns to the conversation as text
+(`_make_handler`), and `price_check`/`show_deals`/`show_cart` answers are
+built from strings the retailer wrote — while `_can_use_tool` opens the
+cart tools for any turn whose message names a store, and `_mentions_cart`
+counts "שופרסל". Cart values in `describe_context` were guarded since
+§2g; these were not. Every tool result now returns through
+`untrusted.safe_block`, which keeps the block's structure (ours) and
+replaces only a line that claims authority — `safe` would flatten a
+legitimate multi-line deals answer into one truncated line. Residue,
+stated: a product name containing a newline can still split one line of a
+tool result in two; inside a block already read as tool output that buys
+a line that looks like more tool output, and that line meets this check.
+`agentconvo` is off (`GORDON_CONVO_BACKEND` unset), so this hardens the
+path before it is switched on. **Not implemented, waiting on Ishay:**
+withholding cart tools in a turn that ran a price/deals query — it
+changes behaviour he would see.
+
 ## 2h. Family Runtime MVP, Bitwarden, and the Work-safe export (2026-09-18/20)
 
 **Branch for all of this: `claude/gordon-work-mvp-cartpause`** — a

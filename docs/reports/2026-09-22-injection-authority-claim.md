@@ -153,3 +153,44 @@ store. Adding a confirmation step on top would trade a real cost (Ishay
 shops from a phone and has repeatedly asked for fewer questions) against
 an attack that has no reachable payoff. Reported as a judgement, not
 implemented — if Ishay wants the stop anyway, it is his call and one flag.
+
+---
+
+# Build step: tool results are a prompt boundary too (2026-09-23)
+
+Authority: Ishay, 23.09, in בוס's session ("מה השלב הבא?" → proceed).
+Scope given: **only** the first of the two things I proposed. The second
+(withholding cart tools in a turn that ran a price/deals query) changes
+behaviour Ishay would notice and is not implemented — it waits on him.
+
+**The vector, found while answering the spec's session-separation
+question and verified in code, not reasoned about.** In `agentconvo` a
+tool result returns to the conversation as text (`_make_handler`), and
+`price_check` / `show_deals` / `show_cart` answers are built from strings
+the retailer wrote. The cart gate (`_can_use_tool`) is checked against
+the household's *current message*, and `_mentions_cart` counts
+"שופרסל" — so "מה יש במבצע בשופרסל?" opens the cart tools for that turn
+*and* pulls store-written text into the same conversation. The values
+reaching `describe_context` were guarded since §2g; these were not.
+
+**Fix:** every tool result now returns through `untrusted.safe_block`.
+Not `safe`: a deals answer is legitimately several lines long and
+flattening it would destroy the answer. `safe_block` keeps the block's
+structure (the structure is ours), checks each line on its own, and
+replaces only a line that claims authority.
+
+**Residue, stated rather than papered over:** a product name containing a
+newline can still split one line of a tool result in two. Inside a block
+the model already reads as tool output, that buys an attacker a line that
+looks like more tool output — and if that line tries to grant permission,
+this check is what it meets.
+
+**Reach today:** `agentconvo` is off (`GORDON_CONVO_BACKEND` is unset in
+`.env`, so the classifier chain is what the household talks to). This
+hardens the path before it is switched on, which is the cheap moment to
+do it.
+
+Tests (`tests/test_agentconvo.py::ToolResultsAreAPromptBoundaryTests`): a
+claim inside a price answer and inside a deals answer is replaced, an
+ordinary multi-line answer comes back byte-identical, and only the
+offending line is touched.

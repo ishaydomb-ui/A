@@ -65,7 +65,7 @@ from claude_agent_sdk import (
     tool as sdk_tool,
 )
 
-from . import planner
+from . import planner, untrusted
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +190,16 @@ def _make_handler(tool: planner.Tool, dispatch: Dispatch):
         except Exception:  # noqa: BLE001
             logger.exception("agentconvo: tool %s failed", tool.name)
             text = "הפעולה נכשלה בצד השרת — דווח כשגיאה, לא כהצלחה."
-        return {"content": [{"type": "text", "text": text}]}
+        # A tool result goes straight back into the conversation, so this
+        # is a prompt boundary like any other -- and price_check /
+        # show_deals / show_cart answers are built from strings the
+        # retailer wrote. Found 2026-09-23 while answering the injection
+        # spec's session-separation question: the cart values reaching
+        # `describe_context` were guarded and these were not, although a
+        # message naming a store opens the cart tools in the same turn.
+        # `safe_block`, not `safe`: these answers are legitimately several
+        # lines long and flattening one would destroy the answer.
+        return {"content": [{"type": "text", "text": untrusted.safe_block(text)}]}
 
     return handler
 
