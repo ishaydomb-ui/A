@@ -898,6 +898,23 @@ today for delivery tomorrow, Shufersal only — he has a coupon).**
   **Lesson to fold into the vNext plan: a manual rebuild must default to
   the `core`/`full` list, not `everything`.**
 
+  **Still pending 2026-09-24 — the trap this created.** Order confirmed
+  real (Shufersal #05239208, placed 22.09 13:19, 48 items, delivery
+  window 23.09 15:00–17:00 per the confirmation email; matches Ishay
+  saying it arrived). But because `execution.mark_shopped(storage,
+  "shufersal")` was called directly that day instead of through `/done`,
+  it also advanced `standing_cart_last_shop_by_store["shufersal"]` to
+  the order's own date — so `shops_detected_since_refill`'s check
+  (`newest[:10] <= last`) reads them as equal and will **never** fire
+  the nightly backstop refill for this shop. The cart has sat at ~1
+  line since checkout and nothing will fill it on its own. **A call to
+  `mark_shopped` outside `/done` silently disables the one mechanism
+  built to catch exactly that gap — worth remembering before doing it
+  again.** Fix for right now: Ishay taps `/done` (or "סיימתי בשופרסל")
+  in Telegram — that's still the correct, designed path (`/done` is
+  deliberately a told signal, not something this session should trigger
+  on his behalf) and will record + refill both carts as usual, ~2.5h.
+
 **GordonChrome on liran-aba-pc — built 2026-09-21 (`5be3bac`), NOT yet
 switched on.** Ishay approved (2026-09-21) running the store browsers in a
 dedicated Chrome on the household PC: one Chrome process per bot (a CDP
