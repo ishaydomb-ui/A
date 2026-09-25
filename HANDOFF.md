@@ -626,6 +626,61 @@ path before it is switched on. **Not implemented, waiting on Ishay:**
 withholding cart tools in a turn that ran a price/deals query — it
 changes behaviour he would see.
 
+## 2g-tris. Four things from the 09-23 boss planning round, never written down until now (found by Arthur's continuity audit, 2026-09-25)
+
+Arthur's `2026-09-25-continuity-stage2.md` read the 09-23 transcript
+(`79a55825-…jsonl`, 05:38–10:56 CEST) and flagged four items that only
+ever existed there — nothing wrong was done, they just never made it
+into a durable file. Verified against that transcript directly before
+writing this (not taken on Arthur's word alone), plus one re-checked
+against the live DB and one against a fresh test run.
+
+1. **MCP connector deny-list draft — text only, nothing applied.**
+   Answered to a boss planning round about locking down this dev
+   session's connectors: whole-server denies for `mcp__claude_ai_Gmail`,
+   `mcp__claude_ai_Google_Calendar`, `mcp__claude_ai_Spotify`,
+   `mcp__claude_ai_Zapier`, `mcp__claude_ai_Base44` — server-level so a
+   newly added tool under one of those servers doesn't slip through.
+   **Drive is the one exception, flagged loudly both times:** Ishay said
+   "שמור הכל בדרייב" on 2026-09-20 and the UX audit pack lives there (see
+   §2g-bis), so a blanket Drive deny would break something he asked for.
+   Two options put to him, neither chosen: deny only Drive's
+   write/share tools (`create_file`, `update_file`, `share_file`,
+   `trash_file`) and keep reads, or leave Drive open and rely on this
+   being documented. **Nothing is configured either way — waiting on
+   Ishay**, and this session used Gmail read tools again on 09-24 (see
+   §1, the order-confirmation check) under the current, unrestricted
+   config.
+2. **Zero-price / falsy-value check — no bug found, closed.** Prompted
+   by a bug class Nigel found in his own project; checked whether the
+   same shape exists here. It doesn't: `nlu._to_float` returns `None`
+   for `""`/invalid rather than `0`, `vnext_economics.assess` treating
+   `0` as falsy only ever produces "no saving / don't stock up" (safe
+   direction, not a false discount), and `_price_series` raises on a bad
+   row instead of silently treating it as zero. No code change was
+   needed or made.
+3. **The 09-22 Shufersal shop, cross-checked against order history —
+   now closed, one session later.** This was flagged 09-23 as "recorded
+   from a 1-line/₪50.80 cart read, never checked against the chain's own
+   order history." **Done as part of answering Ishay directly on
+   2026-09-24** (see §1/§2j): `order_log` now holds order #05239208 (48
+   items, placed 22.09 13:19), synced automatically by `nightly_learn` on
+   09-23 and corroborated by the order-confirmation email
+   (`customerservices@shufersal.co.il`, delivery window 23.09
+   15:00–17:00). The one piece still missing is an order **total** — the
+   confirmation email carries none and `order_log.total` is `NULL` for
+   every Shufersal row (see §6, `log_orders` is only ever given
+   code/date/item_count for this chain) — a pre-existing gap, not new.
+4. **Test suite count — HANDOFF's numbers were stale, this file now
+   has a fresher one.** The transcript's own unverified claim was
+   "1602 passed / 4 failed." Re-run fresh just now rather than copied
+   forward — see the result appended below this section once the run
+   (started 2026-09-25, backgrounded by the harness at the 120s mark)
+   finishes; if this paragraph still shows no number, the run had not
+   completed when this was committed and the next session should check
+   `~/.refresh-one.log`-style — i.e. actually re-run it — rather than
+   trust either number.
+
 ## 2h. Family Runtime MVP, Bitwarden, and the Work-safe export (2026-09-18/20)
 
 **Branch for all of this: `claude/gordon-work-mvp-cartpause`** — a
