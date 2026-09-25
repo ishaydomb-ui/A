@@ -59,10 +59,10 @@ class Config:
 
     @staticmethod
     def from_env() -> "Config":
-        token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+        token = os.environ.get("GROCERY_TELEGRAM_BOT_TOKEN", "")
         if not token:
             raise RuntimeError(
-                "TELEGRAM_BOT_TOKEN is not set. Create a bot via @BotFather and "
+                "GROCERY_TELEGRAM_BOT_TOKEN is not set. Create a bot via @BotFather and "
                 "set it in the environment (see .env.example)."
             )
         allowed_ids_raw = os.environ.get("ALLOWED_TELEGRAM_USER_IDS", "")

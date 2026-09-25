@@ -80,7 +80,7 @@ class IntegrationContractTests(unittest.TestCase):
         """
         result = _run(["build-stock"], self.db)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("TELEGRAM_BOT_TOKEN", result.stderr + result.stdout)
+        self.assertIn("GROCERY_TELEGRAM_BOT_TOKEN", result.stderr + result.stdout)
 
 
 if __name__ == "__main__":
@@ -143,7 +143,7 @@ class RecipeContractTests(unittest.TestCase):
         """Same boundary as add-item: no secret crosses to the other bot."""
         for argv in (["recipe"], ["recipe-text"], ["meal-plan", "--preview"]):
             result = _run(argv, self.db)
-            self.assertNotIn("TELEGRAM_BOT_TOKEN", result.stdout + result.stderr, argv)
+            self.assertNotIn("GROCERY_TELEGRAM_BOT_TOKEN", result.stdout + result.stderr, argv)
 
 
 class CartCommandContractTest(unittest.TestCase):
@@ -250,12 +250,12 @@ class PriceAndDealsContractTest(unittest.TestCase):
     def test_price_runs_without_a_telegram_token(self) -> None:
         result = _run(["price", "קוטג"], self.db)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertNotIn("TELEGRAM_BOT_TOKEN", result.stderr)
+        self.assertNotIn("GROCERY_TELEGRAM_BOT_TOKEN", result.stderr)
 
     def test_deals_runs_without_a_telegram_token(self) -> None:
         result = _run(["deals"], self.db)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertNotIn("TELEGRAM_BOT_TOKEN", result.stderr)
+        self.assertNotIn("GROCERY_TELEGRAM_BOT_TOKEN", result.stderr)
 
     def test_an_empty_catalog_answers_rather_than_crashing(self) -> None:
         # The other bot may call this before the first refresh-prices.

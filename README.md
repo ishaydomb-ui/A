@@ -66,14 +66,14 @@ claude   # אם Claude Code כבר מותקן שם מפרויקטים קודמי
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 playwright install chromium
-cp .env.example .env   # ואז למלא TELEGRAM_BOT_TOKEN
+cp .env.example .env   # ואז למלא GROCERY_TELEGRAM_BOT_TOKEN
 ```
 
 ### שלב חד-פעמי 1: יצירת בוט טלגרם
 
 1. פותחים שיחה עם [@BotFather](https://t.me/BotFather) בטלגרם.
 2. `/newbot`, נותנים שם (למשל "קניות הבית").
-3. מעתיקים את הטוקן שמתקבל ל-`TELEGRAM_BOT_TOKEN` בקובץ `.env`.
+3. מעתיקים את הטוקן שמתקבל ל-`GROCERY_TELEGRAM_BOT_TOKEN` בקובץ `.env`.
 4. שולחים הודעה כלשהי לבוט כדי לקבל את ה-`user_id` שלכם (למשל דרך
    [@userinfobot](https://t.me/userinfobot)) ומכניסים את שני ה-ID-ים
    (שלך ושל לירן) ל-`ALLOWED_TELEGRAM_USER_IDS` (מופרד בפסיקים).

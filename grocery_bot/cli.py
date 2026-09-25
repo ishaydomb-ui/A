@@ -132,7 +132,7 @@ def main(argv: list[str] | None = None) -> int:
     command, rest = args[0], args[1:]
 
     # Commands that only touch the local database are dispatched before
-    # Config.from_env(), which demands TELEGRAM_BOT_TOKEN. The household's
+    # Config.from_env(), which demands GROCERY_TELEGRAM_BOT_TOKEN. The household's
     # other bot calls `add-item` to put groceries on the list, and making
     # that require this bot's Telegram secret would force an unrelated
     # project to hold a credential it has no use for — a boundary worth

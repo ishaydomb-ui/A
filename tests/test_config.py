@@ -3,7 +3,7 @@ from unittest import mock
 
 from grocery_bot.config import Config
 
-BASE_ENV = {"TELEGRAM_BOT_TOKEN": "t"}
+BASE_ENV = {"GROCERY_TELEGRAM_BOT_TOKEN": "t"}
 
 
 class ShufersalCredentialSourceTests(unittest.TestCase):

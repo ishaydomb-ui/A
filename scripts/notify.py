@@ -5,7 +5,7 @@ Shared by the systemd OnFailure= handler and the backup doctor. Kept
 separate from the bot itself on purpose: an alert about the bot being
 down cannot be delivered by the bot.
 
-Reads TELEGRAM_BOT_TOKEN and ALLOWED_TELEGRAM_USER_IDS from the
+Reads GROCERY_TELEGRAM_BOT_TOKEN and ALLOWED_TELEGRAM_USER_IDS from the
 environment, which systemd supplies through the same EnvironmentFile the
 other units already use.
 """
@@ -27,9 +27,9 @@ def recipients() -> list[str]:
 
 def send(text: str) -> int:
     """Send to every allowed user. Returns how many sends succeeded."""
-    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    token = os.environ.get("GROCERY_TELEGRAM_BOT_TOKEN", "").strip()
     if not token:
-        print("TELEGRAM_BOT_TOKEN is unset; cannot notify", file=sys.stderr)
+        print("GROCERY_TELEGRAM_BOT_TOKEN is unset; cannot notify", file=sys.stderr)
         return 0
 
     sent = 0

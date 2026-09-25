@@ -3266,7 +3266,12 @@ async def _register_bot_metadata(application: Application) -> None:
     handlers. Until Phase 2a (2026-09-21) only 15 of 21 commands were
     listed and a failure here would have stopped startup; now every
     command is listed and a Telegram hiccup is logged, not fatal.
+
+    Also logs which bot this process is polling as. From 09-19 to 09-21
+    Gordon silently ran on Miri's token (a shared EnvironmentFile won);
+    one line naming the account makes that visible in the journal.
     """
+    logger.info("Polling as Telegram bot @%s", application.bot.username)
     try:
         await application.bot.set_my_commands(
             [BotCommand(name, text) for name, text in COMMAND_MENU]

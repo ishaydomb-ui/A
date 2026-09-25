@@ -220,7 +220,7 @@ class FactoryTests(unittest.TestCase):
 
 class ConfigTests(unittest.TestCase):
     def test_env_round_trip(self):
-        env = {"TELEGRAM_BOT_TOKEN": "t", "GORDON_BROWSER_CDP_URL": " http://100.64.121.81:9224 ",
+        env = {"GROCERY_TELEGRAM_BOT_TOKEN": "t", "GORDON_BROWSER_CDP_URL": " http://100.64.121.81:9224 ",
                "GORDON_BROWSER_CDP_STORES": "tivtaam"}
         with mock.patch.dict("os.environ", env, clear=False), \
              mock.patch("grocery_bot.config._shufersal_credentials", return_value=("", "", "env")):
@@ -229,7 +229,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(cfg.browser_cdp_stores, ["tivtaam"])
 
     def test_default_is_local_for_both(self):
-        env = {"TELEGRAM_BOT_TOKEN": "t"}
+        env = {"GROCERY_TELEGRAM_BOT_TOKEN": "t"}
         with mock.patch.dict("os.environ", env, clear=True), \
              mock.patch("grocery_bot.config._shufersal_credentials", return_value=("", "", "env")):
             cfg = Config.from_env()

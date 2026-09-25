@@ -11,6 +11,18 @@ need to know?*
 **Branch:** `claude/gordon-work-mvp-cartpause`
 **Status is in `git log`, not hand-typed here.**
 
+**Token rename, 2026-09-25 ~23:00 CEST (Ishay directly, DEC-005 / DS-031):**
+the bot token env var is now `GROCERY_TELEGRAM_BOT_TOKEN` — in `.env`,
+`config.py`, `scripts/notify.py` (alerts/doctor), `.env.example`, README,
+tests. The old name is no longer read anywhere. `grocery-bot.service`
+already had no `familyos/secrets.env` line (removed 09-21); its
+EnvironmentFiles are `bitwarden/bw.env` + Gordon's `.env`. Deleted, with
+Ishay's approval: `grocery-bot.service.bak`, `.bak-2026-09-21b`. Startup
+now logs `Polling as Telegram bot @<username>`; verified
+`@ClaudeGroceriesBot`, 0 Conflict. Not touched: `grocery-nudge.service`
+still loads `familyos/secrets.env`, but it runs Miri's
+`~/familyos/scripts/grocery_nudge.py` — her unit despite the name.
+
 **Pickup verification, 2026-09-23 ~13:30 CEST (no anchor triggered — nothing changed, this is a handover-procedure check per §4):**
 `grocery-bot.service` active, PID 340576, running the code at `d3a7190`
 (the HEAD commit already at pickup). `grocery-prices.service` shows one
