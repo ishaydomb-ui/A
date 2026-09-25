@@ -671,15 +671,27 @@ against the live DB and one against a fresh test run.
    confirmation email carries none and `order_log.total` is `NULL` for
    every Shufersal row (see §6, `log_orders` is only ever given
    code/date/item_count for this chain) — a pre-existing gap, not new.
-4. **Test suite count — HANDOFF's numbers were stale, this file now
-   has a fresher one.** The transcript's own unverified claim was
-   "1602 passed / 4 failed." Re-run fresh just now rather than copied
-   forward — see the result appended below this section once the run
-   (started 2026-09-25, backgrounded by the harness at the 120s mark)
-   finishes; if this paragraph still shows no number, the run had not
-   completed when this was committed and the next session should check
-   `~/.refresh-one.log`-style — i.e. actually re-run it — rather than
-   trust either number.
+4. **Test suite count — run fresh twice, not copied from the
+   transcript.** First full run (2026-09-25): **5 failed, 1601 passed**
+   (1606 collected) — one more failure than any HANDOFF entry had ever
+   recorded. Investigated rather than assumed stale-count noise:
+   `tests/test_cli_contract.py::CartCommandContractTest::test_add_to_cart_is_advertised_in_the_help`
+   asserted `"add-to-cart" in cli.py's text[:2000]` — a fixed byte slice
+   that drifted stale as the module docstring grew past 6,500 chars
+   (vNext, the Work exports); `add-to-cart` is still fully wired
+   (`cli.py:53,1637`) and was never actually missing from the help text,
+   just pushed past the slice. **Fixed**, `tests/test_cli_contract.py`:
+   reads the real module docstring via `ast.get_docstring` instead of
+   guessing a length. Second full run after the fix: **4 failed, 1602
+   passed, 507→368s** — the number every recent HANDOFF entry already
+   cited. The 4 remaining are the ones already named elsewhere in this
+   file: 2× `test_mdtext.py` + 1× `test_multibuy.py` (the paused
+   Markdown→HTML migration, §2 above) and
+   `test_browser_mode.py::ExitProbeTests::test_telegram_wrapper_routes_through_the_plan`,
+   which is `breaker.py:207` still probing the exit node on an
+   all-CDP run — previously only described in prose (§2h/§2j, "known
+   leftover... harmless on CDP"), now the test that encodes that
+   promise is confirmed actually red, not just theoretically so.
 
 ## 2h. Family Runtime MVP, Bitwarden, and the Work-safe export (2026-09-18/20)
 

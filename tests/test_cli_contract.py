@@ -150,12 +150,16 @@ class CartCommandContractTest(unittest.TestCase):
     """The second bot's cart surface, and the boundary around it."""
 
     def test_add_to_cart_is_advertised_in_the_help(self):
-        # The other bot's authors read this to discover the surface.
+        # The other bot's authors read this to discover the surface. A
+        # fixed byte slice drifted stale as the docstring grew (vNext,
+        # the Work exports) and pushed add-to-cart past it — read the
+        # whole module docstring instead of guessing how long it is.
+        import ast
         import pathlib
 
-        self.assertIn(
-            "add-to-cart", pathlib.Path("grocery_bot/cli.py").read_text()[:2000]
-        )
+        source = pathlib.Path("grocery_bot/cli.py").read_text()
+        doc = ast.get_docstring(ast.parse(source)) or ""
+        self.assertIn("add-to-cart", doc)
 
     def test_add_to_cart_is_not_on_the_token_free_path(self):
         # It needs the store session and the Israeli exit, so listing it
