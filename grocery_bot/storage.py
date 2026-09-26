@@ -1368,6 +1368,16 @@ class Storage:
                 (str(order_code),),
             ).fetchone() is not None
 
+    def tivtaam_order_names(self) -> set[str]:
+        """Every product name a real Tiv Taam order has carried.
+
+        The deletion count uses it to tell "deleted" from "named
+        differently" on manifest lines that have no product code.
+        """
+        with closing(self._connect()) as conn:
+            rows = conn.execute("SELECT DISTINCT raw_name FROM tivtaam_order_lines").fetchall()
+        return {" ".join(str(r[0] or "").split()) for r in rows} - {""}
+
     def record_tivtaam_order_lines(self, order_code: str, order_date: str, lines: list[dict]) -> int:
         """Store real per-line purchase evidence for one Tiv Taam order.
 

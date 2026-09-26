@@ -110,6 +110,22 @@ def summarise_order(order: dict) -> dict:
     }
 
 
+def ordered_lines(order: dict) -> list[dict]:
+    """Every product the household put in the order, delivered or not.
+
+    For deletions, not for purchases: a line the chain substituted or
+    failed to deliver was still *kept* in the cart by a person, and
+    `order_lines` (which drops those) would count it as deleted.
+    """
+    lines = []
+    for raw in order.get("lines") or []:
+        name = _clean_name(raw.get("name"))
+        if not _is_product(name):
+            continue
+        lines.append({"code": str(raw.get("productId") or ""), "name": name})
+    return lines
+
+
 def order_lines(order: dict) -> list[dict]:
     """The products actually delivered, one entry each.
 

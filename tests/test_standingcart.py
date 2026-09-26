@@ -8,7 +8,7 @@ buying something the household needs.
 """
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from grocery_bot import standingcart
@@ -520,3 +520,61 @@ class RemovalsFromOrderTests(unittest.TestCase):
         gone = standingcart.removals_from_order(
             self.storage, "tivtaam", [{"code": "", "name": "חלב"}], "2026-09-12")
         self.assertEqual([r["name"] for r in gone], ["קורנפלקס"])
+
+
+class ShopComparisonTest(unittest.TestCase):
+    """The deletion metric (Basics in Order §3.2, 2026-09-26).
+
+    What matters is that nothing is counted that was not really deleted:
+    an unrecognisable name, an order from before the fill, or a snapshot
+    that cannot be placed in time are all "no answer", never "deleted".
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.storage = Storage(str(Path(self._tmp.name) / "t.sqlite3"))
+
+    def _fill_and_shop(self, store, pairs, filled=datetime(2026, 9, 20, 10, tzinfo=timezone.utc),
+                       shop=date(2026, 9, 22)):
+        from grocery_bot.models import CartAddResult, OrderCycleReport
+
+        report = OrderCycleReport(store=store)
+        for code, name in pairs:
+            report.record(CartAddResult(item_name=name, store=store, status="added", product_code=code))
+        standingcart.record_manifest(self.storage, {store: report}, at=filled)
+        standingcart.mark_shopped(self.storage, shop, store=store)
+
+    def test_rate_counts_only_what_was_really_deleted(self):
+        self._fill_and_shop("shufersal", [("P_1", "חלב"), ("P_2", "לחם"), ("P_3", "גבינה"), ("P_4", "ביצים")])
+        row = standingcart.record_shop_outcome(
+            self.storage, "shufersal",
+            [{"code": "P_1", "name": "x"}, {"code": "P_3", "name": "y"}, {"code": "P_9", "name": "z"}],
+            "2026-09-22T12:00:00", order_code="05239208")
+        self.assertEqual((row["added"], row["identifiable"], row["removed"], row["rate"]), (4, 4, 2, 0.5))
+        self.assertEqual(standingcart.pending_snapshot_stores(self.storage), [])
+        self.assertEqual(len(standingcart.shop_stats(self.storage)), 1)
+
+    def test_an_unrecognisable_name_is_not_a_deletion(self):
+        self._fill_and_shop("tivtaam", [("", "חלב 1% קרטון 1 ליטר"), ("", "קורנפלקס"), ("123", "אננס")])
+        row = standingcart.record_shop_outcome(
+            self.storage, "tivtaam", [{"code": "555", "name": "חלב 1% קרטון - בפיקוח"}],
+            "2026-09-22T10:00:00", known_names={"קורנפלקס"})
+        # קורנפלקס is a real order name and absent -> deleted; אננס has a
+        # code and is absent -> deleted; the milk line cannot be judged.
+        self.assertEqual((row["identifiable"], row["removed"]), (2, 2))
+
+    def test_an_order_before_the_fill_is_not_compared_and_the_snapshot_waits(self):
+        self._fill_and_shop("shufersal", [("P_1", "חלב")])
+        self.assertIsNone(standingcart.record_shop_outcome(
+            self.storage, "shufersal", [{"code": "P_9", "name": "z"}], "2026-09-19T09:00:00"))
+        self.assertEqual(standingcart.pending_snapshot_stores(self.storage), ["shufersal"])
+
+    def test_a_legacy_snapshot_is_dropped_not_compared(self):
+        import json as _json
+        self.storage.set_state("standing_cart_shopped_snapshot", _json.dumps(
+            {"shufersal": {"at": "2026-09-24", "items": [{"code": "P_53", "name": "קישואים"}]}}))
+        self.assertIsNone(standingcart.record_shop_outcome(
+            self.storage, "shufersal", [{"code": "P_9", "name": "z"}], "2026-09-24T09:00:00"))
+        self.assertEqual(standingcart.pending_snapshot_stores(self.storage), [])
+        self.assertEqual(standingcart.shop_stats(self.storage), [])

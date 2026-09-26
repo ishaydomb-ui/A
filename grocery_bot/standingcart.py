@@ -227,11 +227,14 @@ SNAPSHOT_MATCH_DAYS = 2
 
 def _snapshot_shopped_cart(storage, store: str, day: str) -> None:
     """Keep this chain's manifest as it stood when the shop finished."""
-    items = _manifest(storage).get("stores", {}).get(store) or []
+    manifest = _manifest(storage)
+    items = manifest.get("stores", {}).get(store) or []
     if not items:
         return
     snapshots = _shopped_snapshots(storage)
-    snapshots[store] = {"at": day, "items": items}
+    # `manifest_at` is when these lines went in. An order placed before
+    # that cannot be judged against them — see `shop_comparison`.
+    snapshots[store] = {"at": day, "manifest_at": manifest.get("at", ""), "items": items}
     storage.set_state(
         _SHOPPED_SNAPSHOT_KEY, json.dumps(snapshots, ensure_ascii=False)
     )
@@ -246,6 +249,133 @@ def _shopped_snapshots(storage) -> dict:
     except ValueError:
         return {}
     return loaded if isinstance(loaded, dict) else {}
+
+
+def shop_comparison(storage, store: str, order_items, placed_at: str = "",
+                    known_names=None) -> dict | None:
+    """Compare the shopped snapshot with its order; None when not comparable.
+
+    Returns {"removed": rows, "added": n, "identifiable": n}. `added` is
+    what the bot put in; `identifiable` is how many of those a missing
+    line could honestly be judged for.
+
+    **A line the order could not recognise is not a deletion.** Tiv Taam
+    manifests are mostly name-only, and the name is often the list's
+    wording ("חלב 1% קרטון 1 ליטר") rather than the site's ("חלב 1% קרטון
+    - בפיקוח") — measured 2026-09-26, 75 of 146 names matched any order
+    ever placed. Counting every unmatched name as deleted would report a
+    ~50% deletion rate made of spelling. So when `known_names` is given
+    (names this chain's orders have really carried), a name-only line
+    counts only if its name is one of them; the rest are left out of
+    both the numerator and the denominator. None keeps the old behaviour
+    of trusting every name, for callers that have no such list.
+
+    Not comparable: no snapshot, no order lines, an order too far from
+    the shop, or an order placed before the snapshot's lines went in
+    (the 2026-09-24 case: a snapshot of an old manifest against the
+    22.09 order would have logged ~70 phantom deletions). A snapshot
+    written before `manifest_at` existed cannot be placed in time and is
+    treated as not comparable too.
+    """
+    snapshot = _shopped_snapshots(storage).get(store) or {}
+    items = snapshot.get("items") or []
+    if not items or not order_items:
+        return None
+    manifest_at = str(snapshot.get("manifest_at") or "")
+    if not manifest_at:
+        return None
+    if placed_at:
+        try:
+            ordered = date.fromisoformat(str(placed_at)[:10])
+            filled = date.fromisoformat(manifest_at[:10])
+        except ValueError:
+            return None
+        if ordered < filled:
+            return None
+        if snapshot.get("at"):
+            try:
+                shopped = date.fromisoformat(str(snapshot["at"])[:10])
+            except ValueError:
+                return None
+            if abs((ordered - shopped).days) > SNAPSHOT_MATCH_DAYS:
+                return None
+
+    bought_codes = {str(item.get("code") or "") for item in order_items} - {""}
+    bought_names = {(item.get("name") or "").strip() for item in order_items} - {""}
+    known = None if known_names is None else ({n.strip() for n in known_names} | bought_names)
+    removed, identifiable = [], 0
+    for row in items:
+        code = str(row.get("code") or "")
+        name = (row.get("name") or "").strip()
+        if (code and code in bought_codes) or (name and name in bought_names):
+            identifiable += 1
+            continue
+        if code or known is None or name in known:
+            identifiable += 1
+            removed.append(row)
+    return {"removed": removed, "added": len(items), "identifiable": identifiable}
+
+
+_SHOP_STATS_KEY = "standing_cart_shop_stats"
+
+
+def record_shop_outcome(storage, store: str, order_items, placed_at: str = "",
+                        order_code: str = "", known_names=None) -> dict | None:
+    """Compare, log the deletions, keep one stats row, clear the snapshot.
+
+    The one entry point for both chains. The per-shop stats row is the
+    metric (how much of what the bot put in was deleted); the item log
+    stays what it was, the input to the monthly note. Returns the stats
+    row, or None when this order says nothing about the snapshot — in
+    which case the snapshot is kept for a later order, unless it can
+    never be compared (no `manifest_at`, or an order already past the
+    match window), when it is dropped so it cannot misfire later.
+    """
+    snapshot = _shopped_snapshots(storage).get(store) or {}
+    if not snapshot:
+        return None
+    result = shop_comparison(storage, store, order_items, placed_at, known_names)
+    if result is None:
+        if not snapshot.get("manifest_at"):
+            clear_shopped_snapshot(storage, store)
+        elif placed_at and snapshot.get("at"):
+            try:
+                late = (date.fromisoformat(str(placed_at)[:10])
+                        - date.fromisoformat(str(snapshot["at"])[:10])).days > SNAPSHOT_MATCH_DAYS
+            except ValueError:
+                late = False
+            if late:
+                clear_shopped_snapshot(storage, store)
+        return None
+    log_removals(storage, store, result["removed"])
+    row = {
+        "store": store,
+        "shop": str(snapshot.get("at") or ""),
+        "order": str(order_code or ""),
+        "placed_at": str(placed_at or ""),
+        "added": result["added"],
+        "identifiable": result["identifiable"],
+        "removed": len(result["removed"]),
+        "rate": round(len(result["removed"]) / result["identifiable"], 3)
+        if result["identifiable"] else None,
+    }
+    stats = shop_stats(storage)
+    stats.append(row)
+    storage.set_state(_SHOP_STATS_KEY, json.dumps(stats[-200:], ensure_ascii=False))
+    clear_shopped_snapshot(storage, store)
+    return row
+
+
+def shop_stats(storage) -> list[dict]:
+    """Every compared shop, oldest first. Never cleared by the monthly note."""
+    raw = storage.get_state(_SHOP_STATS_KEY)
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, list) else []
+    except ValueError:
+        return []
 
 
 def removals_from_order(storage, store: str, order_items, placed_at: str = "") -> list:

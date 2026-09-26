@@ -59,6 +59,8 @@ def sync_from_orders(storage, adapter, store: str = "shufersal") -> dict:
         store=store,
     )
 
+    removals = record_shufersal_removals(storage, orders, store)
+
     items = build_from_orders(orders)
     storage.replace_stock_items(store, items)
     remembered = seed_product_memory(storage, summarise(orders), store=store)
@@ -69,9 +71,44 @@ def sync_from_orders(storage, adapter, store: str = "shufersal") -> dict:
         "new_orders": logged,
         "stock_items": len(items),
         "remembered": remembered,
+        "removals": removals,
     }
     logger.info("Learn sync: %s", report)
     return report
+
+
+def record_shufersal_removals(storage, orders, store: str = "shufersal"):
+    """What the household deleted from the filled cart before paying.
+
+    Here, not in `execution.log_removals_from_orders`, because this pass
+    is the one that already holds a logged-in page and the orders' line
+    items; the other pass would need a browser of its own. Shufersal
+    lines carry product codes on both sides (`P_…`), so every line is
+    identifiable. Returns the stats row, or None when there was nothing
+    to compare. Never raises: learning must not fail on it.
+    """
+    from . import standingcart
+
+    try:
+        dated = [o for o in orders if o.get("created")]
+        if not dated:
+            return None
+        newest = max(dated, key=lambda o: o["created"])
+        lines = []
+        for entry in newest.get("entries") or []:
+            product = entry.get("product") or {}
+            if product.get("code"):
+                lines.append({"code": str(product["code"]), "name": product.get("name") or ""})
+        row = standingcart.record_shop_outcome(
+            storage, store, lines, newest["created"].isoformat(),
+            order_code=str(newest.get("code") or ""),
+        )
+        if row:
+            logger.info("REMOVALS %s", row)
+        return row
+    except Exception:
+        logger.exception("Could not record Shufersal removals")
+        return None
 
 
 def typical_gap_days(storage, store: str = "shufersal") -> float:

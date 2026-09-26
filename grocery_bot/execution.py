@@ -97,23 +97,21 @@ def log_removals_from_orders(storage) -> dict:
                 if not orders:
                     continue
                 newest = orders[0]
-                lines = tivtaamhistory.order_lines(api.order(int(newest["code"])))
-                placed = newest["placed_at"]
+                lines = tivtaamhistory.ordered_lines(api.order(int(newest["code"])))
+                row = standingcart.record_shop_outcome(
+                    storage, store, lines, newest["placed_at"],
+                    order_code=str(newest["code"]),
+                    known_names=storage.tivtaam_order_names(),
+                )
             else:
                 # Shufersal's line items need a logged-in browser page,
-                # which this pass does not hold. The snapshot simply
-                # waits, and waiting is correct — not wrong, only not
-                # yet answered.
+                # which this pass does not hold. The nightly learn sync
+                # has one and records Shufersal there
+                # (`learn.record_shufersal_removals`).
                 continue
-
-            gone = standingcart.removals_from_order(storage, store, lines, placed)
-            if gone:
-                standingcart.log_removals(storage, store, gone)
-                logged[store] = len(gone)
-            # Cleared either way: the order for this shop has been seen,
-            # so the snapshot has served its purpose. Keeping it would
-            # compare the next order against a stale cart.
-            standingcart.clear_shopped_snapshot(storage, store)
+            if row:
+                logger.info("REMOVALS %s", row)
+                logged[store] = row["removed"]
         except Exception:
             logger.exception("Could not read %s's order for removals", store)
     return logged
