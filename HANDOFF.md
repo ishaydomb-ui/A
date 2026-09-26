@@ -8,8 +8,19 @@ need to know?*
 
 **Last anchored:** 2026-09-22 16:10 CEST — live Shufersal rebuild awaiting Ishay's trim choice (§2j); category guard + variety flow shipped; Tiv Taam on GordonChrome
 **Session:** https://claude.ai/code/session_01QPAkuGgkSRRdHts66Hw2ps — new session 2026-09-23 ~13:30 CEST after the prior Remote Control session hung overnight (העברה re-raised the tmux session). No work was lost: git was clean at pickup, and nothing below this line was in flight.
-**Branch:** `claude/gordon-work-mvp-cartpause`
+**Branch:** `claude/online-grocery-automation-b7pq4g` (fast-forwarded from `claude/gordon-work-mvp-cartpause` 26.09, Basics in Order §3; production checkout is on it)
 **Status is in `git log`, not hand-typed here.**
+
+**Basics in Order, 2026-09-26 (Ishay approved the plan 26.09 via Boss, Mandate 1; plan: `~/boss/projects/basics-in-order.md`).**
+- **Nothing was paused.** Boss read the branch name `cartpause` as a pause; all `cart_paused:*` are `false`. Carts were quiet since 24.09 only for lack of a trigger.
+- **Deletions recorded** (`0bfd724`): `standingcart.record_shop_outcome` → per-shop row in `app_state standing_cart_shop_stats` (added/identifiable/removed/rate). Shufersal is compared in the nightly learn sync; Tiv Taam counts only identifiable lines (code, or a name its orders have carried — 75/146 names matched). No number yet: needs the next shop + its order. The 24.09 Shufersal snapshot has no `manifest_at` and will be dropped, not compared.
+- **`state/health.json`** (`0dae3fc`, `8273a95`): health/v1, every scheduled job writes its line; expiries `tivtaam-session`, `behatsdaa`. Units `grocery-bot`/`grocery-prices` got `state/` in `ReadWritePaths`. A bot restart is needed for health.py changes to reach the 3-min writer.
+- **Exit node** (`fbc119b`): liran-aba-pc primary, iPhone backup — `ensure_israeli_exit(prefer_primary=True)` at run start only. Live on liran-aba-pc (Bezeq) since 15:22.
+- **Path C deals** (`5904d9f`): auto-added deals also judged vs the 90-day median via `vnext_economics.price_reference`. Fixed an inverted `inflated` condition in vNext's `assess`. No change to today's 20 picks.
+- **Cart review** (`81f16bf`): `/review` + once per filled cart right after the cadence nudge/digest. Side findings, not fixed: `/lastdeals` is stale (refill does not write `last_deal_picks`); a novel deal let baby spinach past the perishable guard.
+- **Tiv Taam `localBarcode`** (`2d8143b`): identity resolves barcode → the site's own name/id via the Self-Point API; the feed name matched the site on only 7/39. Verified live on 3 exact dropdown hits.
+- **GordonChrome is DOWN since the 24.09 17:40 reboot of liran-aba-pc** (Windows Update): Bob found no `chrome.exe` at all; 9224 closed. Tiv Taam runs fall back to the local browser (the 24.09 timeouts). Restarting it needs someone at that machine — browser ownership is Ishay's, outside the plan.
+- **Merge**: the grocery main line was fast-forwarded; the repo default `claude/simple-calculator-gCOVs` (a February calculator, shared repo with other projects' PRs) was **not** touched — pending Ishay if he meant that.
 
 **Token rename, 2026-09-25 ~23:00 CEST (Ishay directly, DEC-005 / DS-031):**
 the bot token env var is now `GROCERY_TELEGRAM_BOT_TOKEN` — in `.env`,
