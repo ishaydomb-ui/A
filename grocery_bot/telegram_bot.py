@@ -3431,6 +3431,53 @@ async def _on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.exception("Could not report the error to the chat")
 
 
+def _with_health(name: str, job, verdict=None):
+    """Run a scheduled job, then write its line to state/health.json.
+
+    An exception is `failed`; otherwise `verdict()` decides, because most
+    of these jobs catch their own errors and return normally — the
+    silent-success case the file exists for.
+    """
+    from . import health
+
+    job_id = f"grocery-bot:{name}"
+
+    async def run(context) -> None:
+        try:
+            await job(context)
+        except Exception as exc:
+            await asyncio.to_thread(
+                health.safe_update, job_id, "failed", f"{type(exc).__name__}: {exc}"
+            )
+            raise
+        status, detail = verdict() if verdict else ("ok", "")
+        await asyncio.to_thread(health.safe_update, job_id, status, detail)
+
+    run.__name__ = name
+    return run
+
+
+def _learn_verdict(storage: Storage):
+    """nightly_learn swallows its failures; `last_learn_sync` says if it synced."""
+    import datetime as _dt
+
+    def verdict():
+        raw = storage.get_state("last_learn_sync") or ""
+        try:
+            last = _dt.datetime.fromisoformat(raw)
+        except ValueError:
+            return "failed", "Shufersal order sync has never completed"
+        age = _dt.datetime.now(_dt.timezone.utc) - last
+        if age > _dt.timedelta(hours=1):
+            return "failed", (
+                f"Shufersal order sync did not complete this run (last success {raw[:16]}Z); "
+                "exit node down or session rejected — see journal"
+            )
+        return "ok", ""
+
+    return verdict
+
+
 def build_application(config: Config, storage: Storage) -> Application:
     bot = GroceryBot(config, storage)
     # concurrent_updates matters more than it looks: python-telegram-bot
@@ -3526,7 +3573,7 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bot.handle_message))
     if application.job_queue is not None:
         application.job_queue.run_repeating(
-            bot.drain_deferred_cycle,
+            _with_health("drain_deferred_cycle", bot.drain_deferred_cycle),
             interval=EXIT_POLL_SECONDS,
             first=EXIT_POLL_SECONDS,
             name="drain_deferred_cycle",
@@ -3535,7 +3582,7 @@ def build_application(config: Config, storage: Storage) -> Application:
         # is the announcement latency; the cart run waits for the burst to
         # settle on top of that (listwatch.QUIET_MINUTES).
         application.job_queue.run_repeating(
-            bot.watch_list,
+            _with_health("watch_list", bot.watch_list),
             interval=180,
             first=60,
             name="watch_list",
@@ -3543,7 +3590,7 @@ def build_application(config: Config, storage: Storage) -> Application:
         # Phase 7: once, shortly after start — a run the previous process
         # left `running` is resumed under its own id. Before the watcher's
         # first tick on purpose, so its cooldown cannot shadow this.
-        application.job_queue.run_once(bot.resume_runs, when=30, name="resume_runs")
+        application.job_queue.run_once(_with_health("resume_runs", bot.resume_runs), when=30, name="resume_runs")
         import datetime as _dt
         import zoneinfo as _zi
 
@@ -3551,12 +3598,12 @@ def build_application(config: Config, storage: Storage) -> Application:
         # Early evening: late enough that the day's plans are known, early
         # enough to order before the delivery slots fill.
         application.job_queue.run_daily(
-            bot.cadence_check, time=_dt.time(18, 40, tzinfo=israel), name="cadence_check"
+            _with_health("cadence_check", bot.cadence_check), time=_dt.time(18, 40, tzinfo=israel), name="cadence_check"
         )
         # Long after midnight: the store's order history has settled and
         # nobody is shopping. Failure just waits for tomorrow.
         application.job_queue.run_daily(
-            bot.nightly_learn, time=_dt.time(3, 40, tzinfo=israel), name="nightly_learn"
+            _with_health("nightly_learn", bot.nightly_learn, _learn_verdict(storage)), time=_dt.time(3, 40, tzinfo=israel), name="nightly_learn"
         )
     else:  # pragma: no cover - depends on optional PTB extra
         logger.warning(

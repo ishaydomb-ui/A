@@ -105,6 +105,13 @@ def main() -> int:
         print(f"sent {action}")
 
     watchdog.save_state(STATE, health.keys)
+    from grocery_bot import health as health_file  # noqa: E402
+
+    health_file.safe_update(
+        "grocery-doctor",
+        "failed" if health.problems else "ok",
+        "; ".join(f"{p.key}: {p.message}" for p in health.problems),
+    )
     return 1 if health.problems else 0
 
 

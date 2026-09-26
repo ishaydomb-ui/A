@@ -149,23 +149,13 @@ def main(argv: list[str] | None = None) -> int:
     storage = Storage(config.db_path)
 
     if command == "refresh-prices":
-        meta = refresh_catalog(storage, config.shufersal_price_store_id)
-        print(
-            f"branch {meta.get('branch')}: {meta.get('product_count')} products "
-            f"from {meta.get('price_file')}"
-        )
-        # Every other chain, from the shared portal. This used to be
-        # Shufersal-only, which is why the audit on 2026-09-06 found the
-        # portal chains five days stale while Shufersal's own feed was
-        # hours old: `refresh_all_portal_chains` existed, was tested, and
-        # had no caller anywhere. A cross-chain comparison is only as
-        # honest as its stalest side, so the scheduler refreshes all of
-        # them or the comparison should not be offered.
-        from .chains import format_refresh, refresh_all_portal_chains
+        from . import health
 
-        results = refresh_all_portal_chains(storage, proxy=config.playwright_proxy or None)
-        print(format_refresh(results))
-        return 0
+        try:
+            return _refresh_prices(config, storage)
+        except Exception as exc:
+            health.safe_update("grocery-prices", "failed", f"{type(exc).__name__}: {exc}")
+            raise
 
     if command == "import-base-list":
         if not rest:
@@ -181,6 +171,63 @@ def main(argv: list[str] | None = None) -> int:
         return _build_stock(config, storage, rest)
 
     return _usage()
+
+
+# Chains whose feed is refused on purpose (HANDOFF §1: Yohananof's feed
+# was 600+ days stale when checked). A skip here is a decision, not a fault.
+_FEEDS_SKIPPED_BY_DESIGN = {"yohananof"}
+
+
+def _refresh_prices(config: Config, storage: Storage) -> int:
+    """Every chain's feed, then one honest line in state/health.json.
+
+    Partial failure is `failed`, not `ok`: the process still exits 0 (one
+    broken third-party feed must not mark the unit red for a day), which
+    is exactly the case the health file exists to surface.
+    """
+    from . import health
+
+    meta = refresh_catalog(storage, config.shufersal_price_store_id)
+    print(
+        f"branch {meta.get('branch')}: {meta.get('product_count')} products "
+        f"from {meta.get('price_file')}"
+    )
+    # Every other chain, from the shared portal. This used to be
+    # Shufersal-only, which is why the audit on 2026-09-06 found the
+    # portal chains five days stale while Shufersal's own feed was
+    # hours old: `refresh_all_portal_chains` existed, was tested, and
+    # had no caller anywhere. A cross-chain comparison is only as
+    # honest as its stalest side, so the scheduler refreshes all of
+    # them or the comparison should not be offered.
+    from .chains import format_refresh, refresh_all_portal_chains
+
+    results = refresh_all_portal_chains(storage, proxy=config.playwright_proxy or None)
+    print(format_refresh(results))
+
+    sources = {"shufersal-feed": {
+        "last_data_at": health._iso(meta.get("price_published_at")),
+        "status": "ok" if int(meta.get("product_count") or 0) else "failed",
+    }}
+    broken = []
+    for result in results:
+        if result.used:
+            status = "ok"
+        elif result.chain in _FEEDS_SKIPPED_BY_DESIGN:
+            status = "skipped-by-design"
+        else:
+            status = "failed"
+            broken.append(f"{result.chain}: {result.skipped_reason}")
+        sources[f"{result.chain}-feed"] = {
+            "last_data_at": health._iso(storage.latest_store_price_date(result.chain)),
+            "status": status,
+        }
+    if not int(meta.get("product_count") or 0):
+        broken.insert(0, "shufersal: no products")
+    health.safe_update(
+        "grocery-prices", "failed" if broken else "ok", "; ".join(broken),
+        sources=sources,
+    )
+    return 0
 
 
 def _import_history(config: Config, storage: Storage, args: list[str]) -> int:

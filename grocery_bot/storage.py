@@ -1703,6 +1703,14 @@ class Storage:
             ).fetchone()
         return dict(row) if row else None
 
+    def latest_store_price_date(self, store: str) -> str | None:
+        """The newest feed date recorded for a chain (for state/health.json)."""
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                "SELECT MAX(observed_at) FROM store_prices WHERE store = ?", (store,)
+            ).fetchone()
+        return row[0] if row else None
+
     def latest_store_prices(self, store: str) -> dict[str, dict]:
         """Newest price per barcode at one chain, keyed by barcode."""
         with closing(self._connect()) as conn:

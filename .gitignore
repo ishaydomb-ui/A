@@ -43,3 +43,4 @@ data/backups/
 # working as intended, not a leak -- this just stops it recurring.
 docs/reports/*.docx
 docs/reports/*.pdf
+state/

@@ -109,6 +109,21 @@ backup_db() {
 }
 backup_db || true
 
+# state/health.json (Basics in Order §1.1): one line per run, written on
+# every exit path — including a failed fetch/push, which `set -e` turns
+# into an early exit that the heartbeat above never sees.
+report_health() {
+    local code=$?
+    local status=ok detail=""
+    if [ "$code" -ne 0 ]; then
+        status=failed; detail="git fetch/push failed (exit $code)"
+    elif [ -n "$db_backup_failing_since" ]; then
+        status=failed; detail="DB copy to Drive failing since $db_backup_failing_since"
+    fi
+    python3 -m grocery_bot.health grocery-backup "$status" "$detail" || true
+}
+trap report_health EXIT
+
 branch=$(git rev-parse --abbrev-ref HEAD)
 git fetch --quiet origin "$branch"
 
