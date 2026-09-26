@@ -55,7 +55,7 @@ class Identity:
     product_code: str
     name: str
     barcode: str = ""
-    basis: str = ""  # barcode | stock_code | cross_chain
+    basis: str = ""  # barcode_site | barcode | stock_code | cross_chain
 
 
 def enabled() -> bool:
@@ -78,6 +78,33 @@ def _words(text) -> set:
     return {w for w in normalize_term(text).split() if len(w) >= MIN_WORD}
 
 
+_SITE_CACHE: dict[tuple[str, str], dict | None] = {}
+
+
+def site_product(store: str, barcode: str) -> dict | None:
+    """{"id", "name"} as the chain's own site shows it, or None.
+
+    Only for Self-Point chains; one API call per barcode per process,
+    misses cached too. Never raises: identity must degrade to the feed
+    name, not fail the add.
+    """
+    from .adapters.selfpoint import RETAILERS
+
+    if store not in RETAILERS or not str(barcode).strip():
+        return None
+    key = (store, str(barcode).strip())
+    if key not in _SITE_CACHE:
+        try:
+            from .adapters.selfpoint import SelfPointPrices
+
+            found = SelfPointPrices(store, timeout=20).prices_by_barcode([key[1]])
+            _SITE_CACHE[key] = found.get(key[1])
+        except Exception:  # noqa: BLE001
+            logger.warning("Self-Point lookup failed for %s/%s; using the feed name", store, key[1])
+            return None
+    return _SITE_CACHE[key]
+
+
 def resolve(storage, store: str, plan_term) -> Identity | None:
     """The retailer product for this need at this store, or None.
 
@@ -97,6 +124,18 @@ def resolve(storage, store: str, plan_term) -> Identity | None:
         return None
     barcode = str(row.get("barcode") or "").strip()
     stock_name = (row.get("product_name") or "").strip()
+
+    # A Self-Point chain names the product on its site differently from
+    # its own price feed — measured 26.09.2026: 7 of 39 Tiv Taam stock
+    # barcodes carry the same name in both. The adapter accepts only an
+    # exact dropdown match, so the feed name sent almost every identity
+    # add back to the free-text search it exists to avoid. The site's
+    # own name comes from the Self-Point API by `localBarcode` (Basics in
+    # Order §3); on any failure the feed name below is used as before.
+    if barcode:
+        site = site_product(store, barcode)
+        if site and site.get("name"):
+            return Identity(store, site.get("id") or code, site["name"], barcode, "barcode_site")
 
     # The feed's own row is the canonical retailer product: its exact
     # name is what the store's search will match on the first hit.

@@ -49,6 +49,10 @@ class Base(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         self.storage = Storage(str(Path(self._tmp.name) / "t.sqlite3"))
+        # Never the live Self-Point API from a test; SiteNameTests opt in.
+        patcher = mock.patch("grocery_bot.identity.site_product", return_value=None)
+        self.site = patcher.start()
+        self.addCleanup(patcher.stop)
 
     def _feed(self, store, barcode, name, price=9.9):
         with closing(self.storage._connect()) as conn:  # noqa: SLF001
@@ -98,6 +102,31 @@ class ResolveTests(Base):
         self._feed("tivtaam", "7290000000002", "חלב")
         with mock.patch.dict("os.environ", {"GORDON_IDENTITY": "name"}):
             self.assertIsNone(identity.resolve(self.storage, "tivtaam", PlanTerm("חלב", 1, "stock", "1")))
+
+
+class SiteNameTests(Base):
+    """Tiv Taam's site names its products differently from its feed (7/39 agree, 26.09)."""
+
+    def test_the_sites_own_name_and_id_win(self):
+        self._stock("tivtaam", "10297185", "שמן חמניות 3ל", "7290015888301")
+        self._feed("tivtaam", "7290015888301", "שמן חמניות 3ל")
+        self.site.return_value = {"id": "10297185", "name": "שוקחה שמן חמניות מזוכך 3 ליטר"}
+        ident = identity.resolve(self.storage, "tivtaam", PlanTerm("שמן", 1, "stock", "10297185"))
+        self.assertEqual((ident.basis, ident.name), ("barcode_site", "שוקחה שמן חמניות מזוכך 3 ליטר"))
+
+    def test_an_api_failure_keeps_the_feed_name(self):
+        self._stock("tivtaam", "1", "חלב", "7290000000002")
+        self._feed("tivtaam", "7290000000002", "חלב 1%")
+        self.site.return_value = None
+        ident = identity.resolve(self.storage, "tivtaam", PlanTerm("חלב", 1, "stock", "1"))
+        self.assertEqual((ident.basis, ident.name), ("barcode", "חלב 1%"))
+
+    def test_site_product_is_only_for_self_point_chains_and_never_raises(self):
+        mock.patch.stopall()
+        self.assertIsNone(identity.site_product("shufersal", "7290000000002"))
+        with mock.patch("grocery_bot.adapters.selfpoint.SelfPointPrices", side_effect=RuntimeError("no proxy")):
+            identity._SITE_CACHE.clear()
+            self.assertIsNone(identity.site_product("tivtaam", "7290000000003"))
 
 
 class ChainLocalityTests(Base):

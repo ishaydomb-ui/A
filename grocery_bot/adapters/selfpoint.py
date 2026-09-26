@@ -140,6 +140,7 @@ class SelfPointPrices:
                 continue
             results[barcode] = {
                 "barcode": barcode,
+                "id": str(product.get("id") or ""),
                 "name": _name_of(product),
                 "price": float(price),
                 "store": self.retailer.key,
