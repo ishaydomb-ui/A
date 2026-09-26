@@ -29,11 +29,32 @@ class PlanTests(unittest.TestCase):
             "shufersal", [("P_1", "2026-09-01"), ("P_2", "2026-08-01")]
         )
 
-    def test_it_fills_from_the_broad_list_not_the_curated_one(self):
-        """A rare product (8% of orders) belongs in a standing cart —
-        that is the whole difference from the order cycle's base list."""
+    def test_it_fills_from_core_and_the_broad_list_stays_available(self):
+        """`core` since 26.09 (the `everything` refills grew the Tiv Taam
+        cart to 281 lines): a rare product (8% of orders) is left out by
+        default, and still there when the broad list is asked for."""
         plan = standingcart.plan_refill(self.storage, "shufersal")
-        self.assertIn("אורז בסמטי", [t.term for t in plan.terms])
+        self.assertNotIn("אורז בסמטי", [t.term for t in plan.terms])
+        broad = standingcart.plan_refill(self.storage, "shufersal", "everything")
+        self.assertIn("אורז בסמטי", [t.term for t in broad.terms])
+
+    def test_refilling_one_chain_keeps_the_other_chains_manifest(self):
+        from datetime import datetime, timezone
+        from grocery_bot.models import CartAddResult, OrderCycleReport
+
+        def report(store, name):
+            r = OrderCycleReport(store=store)
+            r.record(CartAddResult(item_name=name, store=store, status="added", product_code="c"))
+            return r
+
+        standingcart.record_manifest(self.storage, {"tivtaam": report("tivtaam", "א")},
+                                     at=datetime(2026, 9, 17, tzinfo=timezone.utc))
+        standingcart.record_manifest(self.storage, {"shufersal": report("shufersal", "ב")},
+                                     at=datetime(2026, 9, 24, tzinfo=timezone.utc))
+        self.assertEqual(standingcart.cart_contents(self.storage) and
+                         sorted(standingcart._manifest(self.storage)["stores"]), ["shufersal", "tivtaam"])
+        self.assertTrue(standingcart.manifest_at(self.storage, "tivtaam").startswith("2026-09-17"))
+        self.assertTrue(standingcart.manifest_at(self.storage, "shufersal").startswith("2026-09-24"))
 
     def test_a_product_not_bought_for_over_a_year_is_left_out(self):
         # A separate store, because record_last_purchase deliberately

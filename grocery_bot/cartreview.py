@@ -74,11 +74,16 @@ def build(storage) -> tuple[str, list[tuple[str, str]]]:
     stores = {s: rows for s, rows in (manifest.get("stores") or {}).items() if rows}
     if not stores:
         return "", []
-    fill_at = str(manifest.get("at") or "")
-    lines = [bold("🧾 לפני שנכנסים לעגלה"), f"מולאה ב-{escape(fill_at[:10])}; ייתכן שכבר שינית משהו."]
+    from .standingcart import manifest_at
+
+    at_by_store = {s: manifest_at(storage, s) for s in stores}
+    # The earliest fill still in the cart bounds what "since the fill" means.
+    fill_at = min((a for a in at_by_store.values() if a), default=str(manifest.get("at") or ""))
+    lines = [bold("🧾 לפני שנכנסים לעגלה"), "ייתכן שכבר שינית משהו מאז המילוי."]
 
     for store, rows in sorted(stores.items()):
-        lines.append(f"• {escape(display_name(store))}: {len(rows)} שורות הוכנסו")
+        lines.append(f"• {escape(display_name(store))}: {len(rows)} שורות הוכנסו"
+                     f" ({escape(at_by_store[store][:10])})")
 
     deals: dict[str, list[str]] = {}
     for row in storage.run_items_since(fill_at[:10], ("verified",)):

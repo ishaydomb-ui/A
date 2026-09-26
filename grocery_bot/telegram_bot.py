@@ -296,6 +296,8 @@ class GroceryBot:
     def __init__(self, config: Config, storage: Storage):
         self.config = config
         self.storage = storage
+        # The chain the last /done resolved to ("" unknown, "all" both).
+        self._last_done_store = ""
         # One persistent agent session per chat, created lazily. Only
         # populated when GORDON_CONVO_BACKEND=agent — see agentconvo.py.
         self._agent_sessions: dict = {}
@@ -493,6 +495,21 @@ class GroceryBot:
             )
             return
 
+        # Only the chain that was shopped (Ishay via Boss, 26.09.2026: the
+        # Tiv Taam cart reached 281 lines because every /done refilled
+        # every chain, so a Shufersal shop kept topping up a Tiv Taam cart
+        # nobody had paid for since 17.09). An unknown chain refills
+        # nothing; the nightly order check refills per chain.
+        shopped = self._last_done_store
+        if shopped != "all":
+            factories = {s: f for s, f in factories.items() if s == shopped}
+        if not factories:
+            await update.message.reply_text(
+                "לא מילאתי מחדש — לא ידוע באיזו רשת הקנייה. "
+                "כשההזמנה תופיע אצל הרשת, אמלא את העגלה שלה."
+            )
+            return
+
         # Read what survived the shop *before* refilling wipes the
         # evidence. This is the only moment the question is answerable:
         # the manifest says what went in, the cart says what was left,
@@ -549,6 +566,7 @@ class GroceryBot:
         # only say "a cart was emptied somewhere", which on 2026-09-15
         # meant describing 120 Shufersal items as gone, or one Tiv Taam
         # item as still waiting.
+        self._last_done_store = store
         return await asyncio.to_thread(execution.mark_shopped, self.storage, store)
 
     async def on_shopped_store(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

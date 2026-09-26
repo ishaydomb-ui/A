@@ -44,7 +44,11 @@ from .listbuilder import available_lists, build as build_list
 
 # Which list shape refills the cart. See the docstring: expected to move
 # down as the household sees how much deleting it actually costs them.
-DEFAULT_LIST = "everything"
+# `core` since 26.09.2026 (Ishay, via Boss: "שגורדון יתקן" on a Tiv Taam
+# cart grown to 281 lines / ₪5,688.88). Measured that day: core + deals
+# is 34 lines at Tiv Taam and 44 at Shufersal, against real orders of 37
+# and 48; `full` would be 65 / 97 and `everything` 285 / 181.
+DEFAULT_LIST = "core"
 
 _MANIFEST_KEY = "standing_cart_manifest"
 _LAST_SHOP_KEY = "standing_cart_last_shop"
@@ -153,22 +157,38 @@ def record_manifest(storage, reports, at: datetime | None = None) -> None:
     manifest *before* a shop. That ordering is the whole of
     `manifest_is_stale` and it cannot be reproduced with a wall clock.
     """
-    manifest = {}
+    # Merged per chain, with a time per chain: since 26.09 a refill fills
+    # only the chain that was shopped, and overwriting the whole manifest
+    # would erase the other chain's record of what the bot put in.
+    stamp = (at or datetime.now(timezone.utc)).isoformat()
+    previous = _manifest(storage)
+    manifest = dict(previous.get("stores") or {})
+    at_by_store = dict(previous.get("at_by_store") or {})
+    for store in manifest:
+        at_by_store.setdefault(store, previous.get("at", ""))
     for store, report in (reports or {}).items():
         manifest[store] = [
             {"code": r.product_code, "name": r.item_name}
             for r in report.added
         ]
+        at_by_store[store] = stamp
     storage.set_state(
         _MANIFEST_KEY,
         json.dumps(
             {
-                "at": (at or datetime.now(timezone.utc)).isoformat(),
+                "at": stamp,
+                "at_by_store": at_by_store,
                 "stores": manifest,
             },
             ensure_ascii=False,
         ),
     )
+
+
+def manifest_at(storage, store: str) -> str:
+    """When this chain's manifest was written ("" if never)."""
+    data = _manifest(storage)
+    return str((data.get("at_by_store") or {}).get(store) or data.get("at") or "")
 
 
 def _manifest(storage) -> dict:
@@ -234,7 +254,7 @@ def _snapshot_shopped_cart(storage, store: str, day: str) -> None:
     snapshots = _shopped_snapshots(storage)
     # `manifest_at` is when these lines went in. An order placed before
     # that cannot be judged against them — see `shop_comparison`.
-    snapshots[store] = {"at": day, "manifest_at": manifest.get("at", ""), "items": items}
+    snapshots[store] = {"at": day, "manifest_at": manifest_at(storage, store), "items": items}
     storage.set_state(
         _SHOPPED_SNAPSHOT_KEY, json.dumps(snapshots, ensure_ascii=False)
     )
@@ -531,7 +551,7 @@ def manifest_is_stale(storage, store: str) -> bool:
     Scoped per chain because that message was wrong about exactly one of
     the two: the 120 Shufersal items really were still in the cart.
     """
-    at = str(_manifest(storage).get("at") or "")[:10]
+    at = manifest_at(storage, store)[:10]
     last = last_shop(storage, store)
     if not at or not last:
         return False
