@@ -50,6 +50,7 @@ EXPECTED_EVERY_H = {
     "grocery-bot:cadence_check": 24,
     "grocery-bot:nightly_learn": 24,
     "grocery-bot:resume_runs": 720,  # once per bot start, not periodic
+    "gordonchrome": 1,  # probed on every write (every ~3 min while the bot runs)
 }
 _EXPECTED_BY_SUFFIX = {"-orders": 336, "-cart": 336, "-feed": 24}
 
@@ -170,6 +171,37 @@ def derived(db_path: Path = DB_PATH, sessions: Path = SESSIONS) -> tuple[dict, d
     return sources, expiries
 
 
+def browser_probe(timeout: float = 3.0) -> tuple[str, dict] | None:
+    """("gordonchrome", job line) from the same check the bot runs before a cart run.
+
+    Boss's report sees only MiriChrome through Fleet, so GordonChrome's
+    state lives here (Boss, 26.09). It is the bot's own question —
+    `browser.cdp_reachable`, restated in the standard library because
+    the doctor runs under the system python — so red here means exactly
+    "Tiv Taam is falling back to the local browser". None when no remote
+    browser is configured.
+    """
+    import urllib.request
+
+    url = (os.environ.get("GORDON_BROWSER_CDP_URL") or "").strip()
+    if not url:
+        return None
+    try:
+        with urllib.request.urlopen(url.rstrip("/") + "/json/version", timeout=timeout) as resp:
+            payload = json.loads(resp.read().decode("utf-8", "replace") or "{}")
+        up = bool(payload.get("Browser") or payload.get("webSocketDebuggerUrl"))
+    except Exception:  # noqa: BLE001 - unreachable is the answer, not an error
+        up = False
+    stores = os.environ.get("GORDON_BROWSER_CDP_STORES", "")
+    line = {"status": "ok" if up else "failed", "last_run": now()}
+    if not up:
+        line["detail"] = (f"GordonChrome {url} not answering; {stores or 'its stores'} fall back to the "
+                          "local browser + exit node. Down since the 24.09 17:40 reboot of liran-aba-pc "
+                          "(Bob: no chrome.exe running)")
+        line["owner_action"] = "someone at liran-aba-pc restarts GordonChrome; ownership is Ishay's call"
+    return "gordonchrome", line
+
+
 def update(job: str, status: str, detail: str = "", owner_action: str = "",
            sources: dict | None = None, expiries: dict | None = None,
            path: Path | None = None, include_derived: bool = True) -> dict:
@@ -180,6 +212,7 @@ def update(job: str, status: str, detail: str = "", owner_action: str = "",
         detail = "no detail given"
     path = path or HEALTH_PATH
     extra_sources, extra_expiries = derived() if include_derived else ({}, {})
+    probe = browser_probe() if include_derived else None
     lock = _lock(path)
     try:
         data = _load(path)
@@ -192,6 +225,8 @@ def update(job: str, status: str, detail: str = "", owner_action: str = "",
         if owner_action:
             line["owner_action"] = owner_action
         data.setdefault("jobs", {})[job] = line
+        if probe:
+            data["jobs"][probe[0]] = probe[1]
         data.setdefault("sources", {}).update(extra_sources)
         data["sources"].update(sources or {})
         data.setdefault("expiries", {}).update(extra_expiries)

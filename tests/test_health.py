@@ -48,5 +48,21 @@ class ExpectedEveryTest(unittest.TestCase):
             data = json.loads(path.read_text())
         self.assertEqual(data["jobs"]["grocery-prices"]["expected_every_h"], 12)
         self.assertEqual(data["sources"]["shufersal-orders"]["expected_every_h"], 336)
+
+
+class BrowserProbeTest(unittest.TestCase):
+    def test_unconfigured_is_silent(self):
+        from unittest import mock
+        with mock.patch.dict("os.environ", {"GORDON_BROWSER_CDP_URL": ""}):
+            self.assertIsNone(health.browser_probe())
+
+    def test_a_closed_port_is_failed_with_an_owner_action(self):
+        from unittest import mock
+        with mock.patch.dict("os.environ", {"GORDON_BROWSER_CDP_URL": "http://127.0.0.1:9"}):
+            name, line = health.browser_probe(timeout=0.5)
+        self.assertEqual((name, line["status"]), ("gordonchrome", "failed"))
+        self.assertTrue(line["detail"] and line["owner_action"])
+
+
 if __name__ == "__main__":
     unittest.main()
