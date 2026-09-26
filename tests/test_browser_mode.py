@@ -237,5 +237,42 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(browser.plan_for(cfg), {"shufersal": "local"})
 
 
+
+class ShufersalFallbackTests(unittest.TestCase):
+    """Local primary, GordonChrome while the exit node is down (Ishay, 26.09)."""
+
+    def _cfg(self):
+        import dataclasses
+        return dataclasses.replace(_config(["shufersal", "tivtaam"], cdp_stores=["tivtaam"]),
+                                   browser_cdp_fallback_stores=["shufersal"])
+
+    def tearDown(self):
+        browser._FALLBACK_ACTIVE.clear()
+
+    def test_a_working_exit_keeps_shufersal_local(self):
+        with mock.patch("grocery_bot.exitnode.ensure_israeli_exit", return_value=ExitStatus(True, "ok", "IL")):
+            self.assertTrue(browser.exit_status(self._cfg(), probe=lambda url: True).available)
+        self.assertEqual(browser.cdp_url_for(self._cfg(), "shufersal"), "")
+
+    def test_a_dead_exit_moves_shufersal_to_the_remote_chrome(self):
+        with mock.patch("grocery_bot.exitnode.ensure_israeli_exit", return_value=ExitStatus(False, "down")):
+            status = browser.exit_status(self._cfg(), probe=lambda url: True)
+        self.assertTrue(status.available)
+        self.assertEqual(browser.cdp_url_for(self._cfg(), "shufersal"), CDP)
+
+    def test_no_fallback_when_the_remote_chrome_is_down_too(self):
+        with mock.patch("grocery_bot.exitnode.ensure_israeli_exit", return_value=ExitStatus(False, "down")):
+            # tivtaam's own probe and the fallback probe both fail
+            self.assertFalse(browser.exit_status(self._cfg(), probe=lambda url: False).available)
+        self.assertEqual(browser.cdp_url_for(self._cfg(), "shufersal"), "")
+
+    def test_the_fallback_ends_when_the_exit_returns(self):
+        with mock.patch("grocery_bot.exitnode.ensure_israeli_exit", return_value=ExitStatus(False, "down")):
+            browser.exit_status(self._cfg(), probe=lambda url: True)
+        with mock.patch("grocery_bot.exitnode.ensure_israeli_exit", return_value=ExitStatus(True, "ok", "IL")):
+            browser.exit_status(self._cfg(), probe=lambda url: True)
+        self.assertEqual(browser.cdp_url_for(self._cfg(), "shufersal"), "")
+
+
 if __name__ == "__main__":
     unittest.main()

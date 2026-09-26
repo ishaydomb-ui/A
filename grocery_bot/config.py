@@ -56,6 +56,9 @@ class Config:
     # fragile one). Unreachable CDP falls back to local automatically.
     browser_cdp_url: str = ""
     browser_cdp_stores: list[str] = field(default_factory=lambda: ["shufersal", "tivtaam"])
+    # Stores that use the remote Chrome only while the exit node is down
+    # (browser.exit_status). GORDON_BROWSER_CDP_FALLBACK_STORES.
+    browser_cdp_fallback_stores: list[str] = field(default_factory=list)
 
     @staticmethod
     def from_env() -> "Config":
@@ -90,6 +93,9 @@ class Config:
             browser_cdp_url=os.environ.get("GORDON_BROWSER_CDP_URL", "").strip(),
             browser_cdp_stores=_split_csv(
                 os.environ.get("GORDON_BROWSER_CDP_STORES", "shufersal,tivtaam")
+            ),
+            browser_cdp_fallback_stores=_split_csv(
+                os.environ.get("GORDON_BROWSER_CDP_FALLBACK_STORES", "")
             ),
         )
 

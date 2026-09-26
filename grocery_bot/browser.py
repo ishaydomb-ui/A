@@ -42,11 +42,24 @@ def cdp_reachable(url: str, timeout: float = PROBE_TIMEOUT_SECONDS) -> bool:
         return False
 
 
+# Stores whose primary channel is local + exit node, with the remote
+# Chrome as the fallback while the exit node is down (Ishay, 26.09.2026:
+# "שופרסל דרך הערוץ שהכי מצליח ובמידה ולא מצליח ערוץ חלופי" — local had
+# the record: 50 verified adds / 2 errors since 17.09, GordonChrome none).
+# Set by `exit_status` at run start; read when an adapter is created.
+_FALLBACK_ACTIVE: set[str] = set()
+
+
 def cdp_url_for(config, store: str) -> str:
-    """The CDP URL this store is configured to use, or "" for local."""
+    """The CDP URL this store should use right now, or "" for local."""
     url = getattr(config, "browser_cdp_url", "") or ""
-    stores = getattr(config, "browser_cdp_stores", None) or []
-    return url if url and store in stores else ""
+    if not url:
+        return ""
+    if store in (getattr(config, "browser_cdp_stores", None) or []):
+        return url
+    if store in (getattr(config, "browser_cdp_fallback_stores", None) or []) and store in _FALLBACK_ACTIVE:
+        return url
+    return ""
 
 
 def plan_for(config, probe=cdp_reachable) -> dict[str, str]:
@@ -81,5 +94,24 @@ def exit_status(config, probe=cdp_reachable) -> ExitStatus:
 
     plan = plan_for(config, probe=probe)
     if plan and all(mode == CDP for mode in plan.values()):
+        _FALLBACK_ACTIVE.clear()
         return ExitStatus(True, "remote browser; exit node not needed", "IL")
-    return ensure_israeli_exit(getattr(config, "playwright_proxy", ""), prefer_primary=True)
+    status = ensure_israeli_exit(getattr(config, "playwright_proxy", ""), prefer_primary=True)
+    fallback = [s for s in getattr(config, "browser_cdp_fallback_stores", None) or []
+                if plan.get(s) == LOCAL]
+    if status.available or not fallback:
+        _FALLBACK_ACTIVE.clear()
+        return status
+    url = getattr(config, "browser_cdp_url", "") or ""
+    if not (url and probe(url)):
+        _FALLBACK_ACTIVE.clear()
+        return status
+    _FALLBACK_ACTIVE.clear()
+    _FALLBACK_ACTIVE.update(fallback)
+    logger.warning("Exit node down (%s); %s falls back to the remote Chrome", status.detail, ", ".join(fallback))
+    still_local = [s for s, mode in plan.items() if mode == LOCAL and s not in _FALLBACK_ACTIVE]
+    if still_local:
+        # Another store still needs the exit node; the run is only partly
+        # possible, and saying "available" would send it into the dead route.
+        return status
+    return ExitStatus(True, f"exit node down; {', '.join(fallback)} via remote Chrome", "IL")

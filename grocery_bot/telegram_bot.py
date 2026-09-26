@@ -177,9 +177,11 @@ def _build_adapter_factories(config: Config):
             if store == "shufersal"
             else {}
         )
-        cdp_url = browser_mode.cdp_url_for(config, store)
-        factories[store] = lambda cls=adapter_cls, path=state_path, creds=credentials, cdp=cdp_url: cls(
-            path, headless=config.headless, proxy=config.playwright_proxy, cdp_url=cdp, **creds
+        # The channel is read when the adapter is created, not here: the
+        # exit check that decides a fallback runs after the factories exist.
+        factories[store] = lambda cls=adapter_cls, path=state_path, creds=credentials, st=store: cls(
+            path, headless=config.headless, proxy=config.playwright_proxy,
+            cdp_url=browser_mode.cdp_url_for(config, st), **creds
         )
     return factories
 
