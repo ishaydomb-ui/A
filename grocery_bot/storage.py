@@ -1097,6 +1097,18 @@ class Storage:
             )
             conn.commit()
 
+    def run_items_since(self, day: str, outcomes) -> list[dict]:
+        """Run items attempted on or after `day` with one of `outcomes`, oldest first."""
+        outcomes = list(outcomes)
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT store, term, outcome, source_kind, attempted_at FROM run_items "
+                f"WHERE attempted_at >= ? AND outcome IN ({','.join('?' * len(outcomes))}) "
+                "ORDER BY attempted_at",
+                (day, *outcomes),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
     def run_items_for(self, run_id: int) -> list[dict]:
         with closing(self._connect()) as conn:
             rows = conn.execute(

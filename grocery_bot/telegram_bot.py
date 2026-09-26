@@ -620,6 +620,30 @@ class GroceryBot:
             return
         await _send_markdown(context, update.effective_chat.id, text)
 
+    async def review(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/review — the cart as filled, before opening the store's site."""
+        if not _authorized(self.config, update):
+            return
+        sent = await self._send_cart_review(update.effective_chat.id, context, force=True)
+        if not sent:
+            await update.message.reply_text("אין כרגע עגלה שמילאתי.")
+
+    async def _send_cart_review(self, chat_id: int, context, force: bool = False) -> bool:
+        """Send the review once per filled cart (or now, when asked)."""
+        from . import cartreview
+
+        if not force and not await asyncio.to_thread(cartreview.due, self.storage):
+            return False
+        text, buttons = await asyncio.to_thread(cartreview.build, self.storage)
+        if not text:
+            return False
+        markup = InlineKeyboardMarkup(
+            [[InlineKeyboardButton(label, url=url)] for label, url in buttons]
+        ) if buttons else None
+        await _send_html(context, chat_id, text, reply_markup=markup)
+        await asyncio.to_thread(cartreview.mark_sent, self.storage)
+        return True
+
     async def last_deals(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/lastdeals — what the last cycle put in the cart on its own."""
         if not _authorized(self.config, update):
@@ -1185,6 +1209,7 @@ class GroceryBot:
         # not fire is logged (vnext_flow.nudge_suppression).
         try:
             if await self.vnext.maybe_nudge(context, int(chat_id)):
+                await self._review_after_nudge(int(chat_id), context)
                 return
         except Exception:  # noqa: BLE001
             logger.exception("vNext nudge failed; falling back to the digest")
@@ -1194,6 +1219,18 @@ class GroceryBot:
             return
         logger.info("Digest due: %s", reason)
         await self._send_digest(int(chat_id), context)
+        await self._review_after_nudge(int(chat_id), context)
+
+    async def _review_after_nudge(self, chat_id: int, context) -> None:
+        """The cart review rides on the day the household is told to shop.
+
+        Never its own schedule (Ishay, 20.09: no repeated cart pings), and
+        a failure here must not undo the nudge that was already sent.
+        """
+        try:
+            await self._send_cart_review(chat_id, context)
+        except Exception:  # noqa: BLE001
+            logger.exception("Cart review failed; the nudge was sent")
 
     def _sync_tivtaam_orders(self) -> dict | None:
         """Read Tiv Taam's order history into `order_log`. Blocking.
@@ -3244,6 +3281,7 @@ COMMAND_MENU: list[tuple[str, str]] = [
     ("alldeals", "כל המבצעים, גם מה שלא ברשימה"),
     ("basket", "הסל שלי בכל רשת — כולל חוסרים ותחליפים"),
     ("lastdeals", "אילו מבצעים נוספו לעגלה לבד"),
+    ("review", "סקירת העגלה לפני שנכנסים לאתר"),
     ("cheaper", "השוואת ₪ לק\"ג — יש חלופה זולה יותר?"),
     ("failures", "פריטים שנכשלו — ומה לשנות"),
     ("questions", "שאלות בחירה שממתינות — לענות כשנוח"),
@@ -3510,6 +3548,7 @@ def build_application(config: Config, storage: Storage) -> Application:
     application.add_handler(CommandHandler("chaindeals", bot.chain_deals))
     application.add_handler(CommandHandler("basket", bot.basket))
     application.add_handler(CommandHandler("lastdeals", bot.last_deals))
+    application.add_handler(CommandHandler("review", bot.review))
     application.add_handler(CommandHandler("failures", bot.failures))
     application.add_handler(CommandHandler("done", bot.done_shopping))
     application.add_handler(CommandHandler("refresh_prices", bot.refresh_prices))
