@@ -11,6 +11,10 @@ need to know?*
 **Branch:** `claude/online-grocery-automation-b7pq4g` (fast-forwarded from `claude/gordon-work-mvp-cartpause` 26.09, Basics in Order §3; production checkout is on it)
 **Status is in `git log`, not hand-typed here.**
 
+**Ownership (D5, source of truth `~/boss/locks.md`, Ishay 26.09):** Gordon owns **Shufersal, Tiv Taam, behatsdaa, Victory** and the browser **GordonChrome 9224**. One owner per account/browser; a new account gets an owner before use; anything missing or disputed → report to Boss, don't guess. Audit 26.09: no code path uses 9222/9223/9226 (only a comment in `browser.py:15`); `scripts/harvest_max.py:45` reads MAX's *public* catalogue, no login (MAX account is Nigel's). **Capability to flag:** `~/.config/bitwarden/bw.env` + `grocery_bot/bitwarden.py:87-143` can read any item in the shared vault; the code only asks for Shufersal (`config.py:109-110`) and "טיב טעם". `grocery-nudge.service` loads `familyos/secrets.env` but runs Miri's script — her unit.
+
+**Refill fix 26.09 (`660434b`):** `core` list, `/done` refills only the shopped chain, per-chain manifest. **Live Tiv Taam trim NOT done** — blocked by the permission classifier; plan (184 of 281 lines, bot-added only) in `docs/reports/2026-09-26-tivtaam-cart-trim-plan.md`, waiting for Ishay.
+
 **Basics in Order, 2026-09-26 (Ishay approved the plan 26.09 via Boss, Mandate 1; plan: `~/boss/projects/basics-in-order.md`).**
 - **Nothing was paused.** Boss read the branch name `cartpause` as a pause; all `cart_paused:*` are `false`. Carts were quiet since 24.09 only for lack of a trigger.
 - **Deletions recorded** (`0bfd724`): `standingcart.record_shop_outcome` → per-shop row in `app_state standing_cart_shop_stats` (added/identifiable/removed/rate). Shufersal is compared in the nightly learn sync; Tiv Taam counts only identifiable lines (code, or a name its orders have carried — 75/146 names matched). No number yet: needs the next shop + its order. The 24.09 Shufersal snapshot has no `manifest_at` and will be dropped, not compared.
