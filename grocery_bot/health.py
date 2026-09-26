@@ -37,6 +37,31 @@ ISRAEL = ZoneInfo("Asia/Jerusalem")
 
 STATUSES = ("ok", "failed", "skipped-by-design")
 
+# health/v1 rule 6 (Boss, 26.09): the report calls an entry stale only
+# after 2x this; without it, after 48 h. Values are the real schedules
+# (systemd timers, the bot's job_queue); event-driven sources — carts and
+# orders move only when the household shops — get two weeks.
+EXPECTED_EVERY_H = {
+    "grocery-prices": 12,          # 06/12/18:15 — the longest gap is overnight
+    "grocery-backup": 0.5,
+    "grocery-doctor": 1,
+    "grocery-bot:watch_list": 0.05,
+    "grocery-bot:drain_deferred_cycle": 0.04,
+    "grocery-bot:cadence_check": 24,
+    "grocery-bot:nightly_learn": 24,
+    "grocery-bot:resume_runs": 720,  # once per bot start, not periodic
+}
+_EXPECTED_BY_SUFFIX = {"-orders": 336, "-cart": 336, "-feed": 24}
+
+
+def _expected(key: str) -> float | None:
+    if key in EXPECTED_EVERY_H:
+        return EXPECTED_EVERY_H[key]
+    for suffix, hours in _EXPECTED_BY_SUFFIX.items():
+        if key.endswith(suffix):
+            return hours
+    return None
+
 
 def now() -> str:
     return datetime.now(ISRAEL).replace(microsecond=0).isoformat()
@@ -171,6 +196,11 @@ def update(job: str, status: str, detail: str = "", owner_action: str = "",
         data["sources"].update(sources or {})
         data.setdefault("expiries", {}).update(extra_expiries)
         data["expiries"].update(expiries or {})
+        for section in ("jobs", "sources"):
+            for key, entry in data[section].items():
+                hours = _expected(key)
+                if hours is not None and isinstance(entry, dict):
+                    entry["expected_every_h"] = hours
         _write(path, data)
         return data
     finally:

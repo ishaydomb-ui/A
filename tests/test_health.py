@@ -38,5 +38,15 @@ class HealthFileTest(unittest.TestCase):
         self.assertIn("expired", expiries["behatsdaa"]["note"])
 
 
+
+class ExpectedEveryTest(unittest.TestCase):
+    def test_event_sources_and_jobs_carry_their_cadence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "health.json"
+            health.update("grocery-prices", "ok", path=path, include_derived=False,
+                          sources={"shufersal-orders": {"last_data_at": None, "status": "ok"}})
+            data = json.loads(path.read_text())
+        self.assertEqual(data["jobs"]["grocery-prices"]["expected_every_h"], 12)
+        self.assertEqual(data["sources"]["shufersal-orders"]["expected_every_h"], 336)
 if __name__ == "__main__":
     unittest.main()
