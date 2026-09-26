@@ -87,7 +87,7 @@ class ExitProbeTests(unittest.TestCase):
                 _config(["shufersal", "tivtaam"], cdp_stores=["tivtaam"]), probe=lambda url: True
             )
         self.assertFalse(status.available)
-        probe.assert_called_once_with("socks5://localhost:1055")
+        probe.assert_called_once_with("socks5://localhost:1055", prefer_primary=True)
 
     def test_probe_kept_when_the_pc_is_off(self):
         with mock.patch("grocery_bot.exitnode.ensure_israeli_exit",

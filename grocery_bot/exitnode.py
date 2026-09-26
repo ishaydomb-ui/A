@@ -142,13 +142,63 @@ def select_exit_node(node: ExitNode) -> bool:
     return True
 
 
-def ensure_israeli_exit(proxy: str):
+def current_exit_id() -> str:
+    """Tailscale's ID for the exit node in use now, or "" if none/unknown."""
+    try:
+        result = _run(["status", "--json"])
+        if result.returncode != 0:
+            return ""
+        return str((json.loads(result.stdout).get("ExitNodeStatus") or {}).get("ID") or "")
+    except Exception:
+        logger.exception("Could not read the current exit node")
+        return ""
+
+
+def _return_to_primary(proxy: str):
+    """Move back to liran-aba-pc when it is online and we are elsewhere.
+
+    Basics in Order §3 (Ishay, 26.09.2026, via Boss under Mandate 1):
+    "exit node ב-liran-aba-pc עם האייפון כגיבוי". Failover alone never
+    comes back: once on the iPhone it stayed there while the PC sat idle
+    and online (found 26.09 — the iPhone route then failed the Tiv Taam
+    feed). Returns the probe on the primary if it works; otherwise puts
+    the previous node back and returns None.
+    """
+    nodes = [n for n in list_exit_nodes() if n.online]
+    primary = next((n for n in nodes if _priority(n) == 0), None)
+    if primary is None:
+        return None
+    current = current_exit_id()
+    if current and current == primary.node_id:
+        return None
+    if not select_exit_node(primary):
+        return None
+    probed = check_israeli_exit(proxy)
+    if probed.available:
+        logger.info("Returned to primary exit node %s", primary.hostname)
+        return probed
+    logger.info("Primary exit %s not usable (%s); staying on backup", primary.hostname, probed.detail)
+    previous = next((n for n in nodes if n.node_id == current), None)
+    if previous is not None:
+        select_exit_node(previous)
+    return None
+
+
+def ensure_israeli_exit(proxy: str, prefer_primary: bool = False):
     """Return a usable Israeli exit, switching nodes if the current one is down.
 
     Tries the currently selected node first so a healthy setup costs one
     probe and no reconfiguration. Only if that fails does it walk the
     other candidates, keeping the first that genuinely reaches Israel.
+
+    `prefer_primary` (run starts only, never the mid-run breaker probe —
+    switching routes under a live browser session is its own failure)
+    first moves back to liran-aba-pc if it is online and not in use.
     """
+    if prefer_primary:
+        back = _return_to_primary(proxy)
+        if back is not None:
+            return back
     status = check_israeli_exit(proxy)
     if status.available:
         return status

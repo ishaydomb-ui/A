@@ -82,4 +82,4 @@ def exit_status(config, probe=cdp_reachable) -> ExitStatus:
     plan = plan_for(config, probe=probe)
     if plan and all(mode == CDP for mode in plan.values()):
         return ExitStatus(True, "remote browser; exit node not needed", "IL")
-    return ensure_israeli_exit(getattr(config, "playwright_proxy", ""))
+    return ensure_israeli_exit(getattr(config, "playwright_proxy", ""), prefer_primary=True)

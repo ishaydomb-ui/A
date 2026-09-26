@@ -222,3 +222,42 @@ class OfflineNodesAreNeverSelected(unittest.TestCase):
         self._patch(nodes, reachable=set())
         self.exitnode.ensure_israeli_exit("socks5://localhost:1055")
         self.assertEqual(self.selected, [])
+
+
+class PrimaryPreferenceTests(unittest.TestCase):
+    """liran-aba-pc primary, iPhone backup (Basics in Order §3, 26.09)."""
+
+    PC = ExitNode("pc", "liran-aba-pc", "100.64.121.81", True)
+    PHONE = ExitNode("ph", "iphone171", "100.104.190.86", True)
+
+    def _patch(self, current, probes):
+        return (
+            mock.patch("grocery_bot.exitnode.list_exit_nodes", return_value=[self.PC, self.PHONE]),
+            mock.patch("grocery_bot.exitnode.current_exit_id", return_value=current),
+            mock.patch("grocery_bot.exitnode.check_israeli_exit", side_effect=probes),
+            mock.patch("grocery_bot.exitnode.select_exit_node", return_value=True),
+        )
+
+    def test_moves_back_to_the_pc_when_it_works(self):
+        a, b, c, d = self._patch("ph", [ExitStatus(True, "ok", "IL")])
+        with a, b, c, d as switch:
+            self.assertTrue(ensure_israeli_exit("socks5://x", prefer_primary=True).available)
+            switch.assert_called_once_with(self.PC)
+
+    def test_a_failing_pc_puts_the_phone_back(self):
+        a, b, c, d = self._patch("ph", [ExitStatus(False, "down"), ExitStatus(True, "ok", "IL")])
+        with a, b, c, d as switch:
+            self.assertTrue(ensure_israeli_exit("socks5://x", prefer_primary=True).available)
+            self.assertEqual([call.args[0] for call in switch.call_args_list], [self.PC, self.PHONE])
+
+    def test_already_on_the_pc_changes_nothing(self):
+        a, b, c, d = self._patch("pc", [ExitStatus(True, "ok", "IL")])
+        with a, b, c, d as switch:
+            self.assertTrue(ensure_israeli_exit("socks5://x", prefer_primary=True).available)
+            switch.assert_not_called()
+
+    def test_the_default_never_moves_a_working_route(self):
+        a, b, c, d = self._patch("ph", [ExitStatus(True, "ok", "IL")])
+        with a, b, c, d as switch:
+            ensure_israeli_exit("socks5://x")
+            switch.assert_not_called()
