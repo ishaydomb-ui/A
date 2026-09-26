@@ -310,6 +310,25 @@ def _condition_note(description: str) -> str:
     return " · ".join(notes)
 
 
+def _history_says_cheap(storage, store: str, name: str, barcode: str | None,
+                        shelf_price: float, deal_price: float, bar: float) -> bool:
+    """Path C (Basics in Order §3, Ishay 26.09.2026): judge by the 90-day median.
+
+    A flat "25% off today's shelf" let a promotion that runs half the
+    year into the cart as if it were rare, and let an inflated shelf
+    price manufacture a discount. This asks the same question vNext's
+    stock-up economics asks, through the same helper: measured against
+    the product's own recent median (or today's shelf, when that is
+    inflated above the median), is the saving still at least `bar`, and
+    is this price not simply the usual one? With no recorded history the
+    reference falls back to the shelf price — the old rule, and no worse.
+    """
+    from .vnext_economics import price_reference
+
+    ref = price_reference(storage, store, name, barcode, shelf_price, deal_price)
+    return ref["real_discount"] >= bar and not ref["routine"]
+
+
 def _barcode_picks(
     storage,
     store: str,
@@ -373,6 +392,8 @@ def _barcode_picks(
         folded = _normalise(name)
         if any(folded == s or folded in s or s in folded for s in skip):
             continue
+        if not _history_says_cheap(storage, store, name, barcode, shelf_price, deal_price, min_discount):
+            continue
         picks.append(
             DealPick(
                 term=name,
@@ -417,6 +438,9 @@ def _novel_shufersal_picks(
         if getattr(product, "is_weighted", False):
             continue
         if not _plausible_novel(product.name, product.price, discount):
+            continue
+        if not _history_says_cheap(storage, "shufersal", product.name, None,
+                                   product.price, promo.discounted_price, min_discount):
             continue
         picks.append(
             DealPick(
@@ -498,6 +522,9 @@ def picks_for(
         term = deal.bought_name
         folded = _normalise(term)
         if any(folded == s or folded in s or s in folded for s in skip):
+            continue
+        if not _history_says_cheap(storage, store, deal.catalog_name, None,
+                                   deal.shelf_price, deal.deal_price, MIN_DISCOUNT):
             continue
         familiar.append(
             DealPick(

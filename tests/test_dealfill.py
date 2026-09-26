@@ -512,3 +512,54 @@ class MultiBuyPickTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PathCHistoryTests(unittest.TestCase):
+    """Auto-added deals are judged by the 90-day median (Basics in Order §3, 26.09)."""
+
+    def setUp(self) -> None:
+        from datetime import date, timedelta
+
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        self.storage = Storage(str(Path(self._tmpdir.name) / "t.sqlite3"))
+        self.storage.record_store_prices("tivtaam", [
+            {"barcode": "111", "name": "ברוקולי קפוא 800 גר", "price": 24.9,
+             "observed_at": "2026-08-01", "source": "order"},
+        ])
+        self.days = [(date.today() - timedelta(days=i)).isoformat() for i in range(1, 21)]
+
+    def _history(self, prices) -> None:
+        self.storage.record_store_prices("tivtaam", [
+            {"barcode": "111", "name": "ברוקולי קפוא 800 גר", "price": p,
+             "observed_at": d, "source": "feed"} for d, p in zip(self.days, prices)
+        ])
+
+    def _promo(self, price) -> None:
+        self.storage.replace_store_promotions("tivtaam", [
+            {"barcode": "111", "promotion_id": "a", "description": "מבצע",
+             "discounted_price": price, "min_qty": 1,
+             "starts_at": "2000-01-01T00:00:00", "ends_at": "2099-01-01T00:00:00",
+             "observed_at": "2026-09-06"},
+        ])
+
+    def _familiar(self):
+        return [p.catalog_name for p in dealfill.picks_for(self.storage, "tivtaam", novel_limit=0) if p.familiar]
+
+    def test_a_rare_deal_against_a_steady_price_goes_in(self) -> None:
+        self._history([24.9] * 20)
+        self._promo(12.45)
+        self.assertEqual(self._familiar(), ["ברוקולי קפוא 800 גר"])
+
+    def test_a_routine_promotion_stays_out(self) -> None:
+        # At the "deal" price on half the recorded days: that is its price.
+        self._history([24.9] + [12.45] * 12 + [24.9] * 7)  # at 12.45 on 12 of 21 days
+        self._promo(12.45)
+        self.assertEqual(self._familiar(), [])
+
+    def test_an_inflated_shelf_does_not_manufacture_a_discount(self) -> None:
+        # Usually 16; today's shelf 24.90 makes 13.90 look like -44%, but
+        # against the median it is 13% off — below the bar.
+        self._history([24.9] + [16.0] * 19)  # days[0] is yesterday: today's shelf
+        self._promo(13.9)
+        self.assertEqual(self._familiar(), [])

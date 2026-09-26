@@ -73,6 +73,44 @@ def _price_series(storage, store: str, product_name: str, barcode: str | None, d
     return [], [], f"store_prices:{store}:none"
 
 
+def price_reference(storage, store: str, name: str, barcode: str | None,
+                    shelf: float, deal: float, config: VNextConfig = DEFAULT) -> dict:
+    """The history half of `assess`: is `deal` really cheap for this product?
+
+    Shared with `dealfill` (Basics in Order §3, 26.09.2026: the deals the
+    bot puts in the cart by itself are judged against the 90-day median,
+    not today's shelf price) so the two cannot drift apart.
+    """
+    prices, _promos, source = _price_series(storage, store, name, barcode, config.economics_lookback_days)
+    history_days = len(prices)
+    median = statistics.median(prices) if prices else None
+    best = min(prices) if prices else None
+    at_or_below = sum(1 for p in prices if deal and p <= deal * 1.02)
+    routine_share = (at_or_below / history_days) if history_days else None
+    inflated = bool(median and shelf and shelf > median * config.economics_inflated_reference_factor)
+    # The shelf price is the reference unless it is inflated above the
+    # median, in which case the median is. This read `not inflated` until
+    # 26.09.2026 — the exact inverse of the reason text in `assess` and of
+    # the Phase 1.5 report — so an inflated shelf was *kept* as the
+    # reference and manufactured the discount it was meant to discard.
+    reference = median if (median and inflated) else shelf
+    per_unit_saving = max(0.0, (reference or 0) - deal) if deal else 0.0
+    return {
+        "source": source,
+        "history_days": history_days,
+        "median": median,
+        "best": best,
+        "routine_share": routine_share,
+        "routine": bool(routine_share is not None and routine_share >= config.economics_routine_promo_share),
+        "inflated": inflated,
+        "unusual": bool(best is not None and deal and deal <= best * 1.02
+                        and history_days >= config.economics_min_history_days),
+        "reference": reference,
+        "per_unit_saving": per_unit_saving,
+        "real_discount": (per_unit_saving / reference) if reference else 0.0,
+    }
+
+
 def assess(storage, term: str, promo: Evidence, evidence: list[Evidence],
            config: VNextConfig = DEFAULT, rule: dict | None = None) -> StockUpAssessment:
     d = promo.data or {}
@@ -83,15 +121,10 @@ def assess(storage, term: str, promo: Evidence, evidence: list[Evidence],
     store = promo.store
     reasons: list[str] = []
 
-    prices, promos, source = _price_series(storage, store, name, d.get("barcode"), config.economics_lookback_days)
-    history_days = len(prices)
-    median = statistics.median(prices) if prices else None
-    best = min(prices) if prices else None
-    at_or_below = sum(1 for p in prices if deal and p <= deal * 1.02)
-    routine_share = (at_or_below / history_days) if history_days else None
-    inflated = bool(median and shelf and shelf > median * config.economics_inflated_reference_factor)
-    unusual = bool(best is not None and deal and deal <= best * 1.02 and history_days >= config.economics_min_history_days)
-    reference = median if (median and not inflated) else shelf
+    ref = price_reference(storage, store, name, d.get("barcode"), shelf, deal, config)
+    source, history_days, median = ref["source"], ref["history_days"], ref["median"]
+    best, routine_share, inflated = ref["best"], ref["routine_share"], ref["inflated"]
+    unusual, reference = ref["unusual"], ref["reference"]
     if inflated:
         reasons.append(f"reference {shelf:.2f}₪ is above the {config.economics_lookback_days}d median {median:.2f}₪ — inflated; using the median")
     if routine_share is not None and routine_share >= config.economics_routine_promo_share:
@@ -99,8 +132,8 @@ def assess(storage, term: str, promo: Evidence, evidence: list[Evidence],
     if history_days < config.economics_min_history_days:
         reasons.append(f"only {history_days} recorded price days — cannot call this unusual")
 
-    per_unit_saving = max(0.0, (reference or 0) - deal) if deal else 0.0
-    real_discount = (per_unit_saving / reference) if reference else 0.0
+    per_unit_saving = ref["per_unit_saving"]
+    real_discount = ref["real_discount"]
 
     cadence = max((e for e in evidence if e.type == EvidenceType.purchase_cadence), key=lambda e: e.trust, default=None)
     recency = min((e for e in evidence if e.type == EvidenceType.purchase_recency), key=lambda e: e.value or 0, default=None)
